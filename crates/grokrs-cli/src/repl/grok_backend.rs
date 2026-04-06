@@ -226,12 +226,12 @@ impl GrokChatBackend {
         let cached_tokens = usage
             .get("prompt_tokens_details")
             .and_then(|d| d.get("cached_tokens"))
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .or_else(|| {
                 usage
                     .get("input_tokens_details")
                     .and_then(|d| d.get("cached_tokens"))
-                    .and_then(|v| v.as_u64())
+                    .and_then(serde_json::Value::as_u64)
             });
 
         TokenUsage {
@@ -246,7 +246,7 @@ impl GrokChatBackend {
         response
             .get("id")
             .and_then(|id| id.as_str())
-            .map(|s| s.to_owned())
+            .map(ToOwned::to_owned)
     }
 
     /// Extract encrypted reasoning blobs from a `ResponseCompleted` event's
@@ -328,7 +328,7 @@ impl ChatBackend for GrokChatBackend {
                     let status = response
                         .get("error")
                         .and_then(|e| e.get("code"))
-                        .and_then(|c| c.as_u64())
+                        .and_then(serde_json::Value::as_u64)
                         .unwrap_or(500) as u16;
                     return Err(BackendError::Api {
                         status,

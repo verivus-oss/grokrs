@@ -140,7 +140,7 @@ fn price_color(price: i64, text: &str, use_color: bool) -> String {
 
 /// Format a price value or "-" for missing.
 fn fmt_price(price: Option<i64>) -> String {
-    price.map(|p| format!("{p}")).unwrap_or_else(|| "-".into())
+    price.map_or_else(|| "-".into(), |p| format!("{p}"))
 }
 
 /// Execute the `grokrs models` command.
@@ -209,8 +209,7 @@ async fn run_list(client: &GrokClient, model_type: &str, json_output: bool) -> R
 
                 let context = model
                     .max_prompt_length
-                    .map(|l| format!("{l}"))
-                    .unwrap_or_else(|| "-".into());
+                    .map_or_else(|| "-".into(), |l| format!("{l}"));
 
                 let prompt_str = fmt_price(model.prompt_text_token_price);
                 let completion_str = fmt_price(model.completion_text_token_price);

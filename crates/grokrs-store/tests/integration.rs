@@ -540,7 +540,7 @@ fn wal_concurrent_read_during_write() {
 
         // The reader should see the pre-existing session but NOT the
         // uncommitted "uncommitted" session (it's in an open transaction).
-        let ids: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+        let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
         assert!(
             ids.contains(&"pre-existing"),
             "reader should see committed data"

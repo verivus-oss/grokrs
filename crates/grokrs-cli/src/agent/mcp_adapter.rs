@@ -196,7 +196,7 @@ mod tests {
     fn make_definition(name: &str, desc: Option<&str>) -> McpToolDefinition {
         McpToolDefinition {
             name: name.to_owned(),
-            description: desc.map(|s| s.to_owned()),
+            description: desc.map(ToOwned::to_owned),
             input_schema: json!({
                 "type": "object",
                 "properties": {

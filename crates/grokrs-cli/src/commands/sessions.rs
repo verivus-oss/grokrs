@@ -92,8 +92,7 @@ fn open_store(config: &AppConfig, workspace_root: &Path) -> Result<Store> {
     let store_path = config
         .store
         .as_ref()
-        .map(|s| s.path.as_str())
-        .unwrap_or(".grokrs/state.db");
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
 
     let db_full_path = workspace_root.join(store_path);
 

@@ -33,6 +33,7 @@ use grokrs_api::mcp;
 use grokrs_api::tool_loop::{FunctionExecutor, ToolLoopConfig, ToolLoopError};
 use grokrs_api::transport::policy_bridge::FnPolicyGate;
 use grokrs_api::transport::policy_gate::{PolicyDecision, PolicyGate};
+use grokrs_api::types::builtin_tools::BuiltinTool;
 use grokrs_api::types::common::ContentBlock;
 use grokrs_api::types::responses::{CreateResponseBuilder, OutputItem, ResponseInput};
 use grokrs_cap::WorkspaceRoot;
@@ -314,8 +315,7 @@ fn open_store_best_effort(config: &AppConfig) -> Option<Store> {
     let store_path = config
         .store
         .as_ref()
-        .map(|s| s.path.as_str())
-        .unwrap_or(".grokrs/state.db");
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
     Store::open_with_path(&workspace_root, store_path).ok()
 }
 
@@ -712,7 +712,7 @@ pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
         let search_tool_names: Vec<&str> = search_config
             .builtin_tools()
             .iter()
-            .map(|t| t.type_name())
+            .map(BuiltinTool::type_name)
             .collect();
         eprintln!("[agent] search tools: {}", search_tool_names.join(", "));
     }
@@ -1047,7 +1047,7 @@ async fn connect_single_mcp_server(
 
     let server_name = init_result.server_info.name.clone();
     let effective_label = label
-        .map(|l| l.to_owned())
+        .map(ToOwned::to_owned)
         .or_else(|| Some(server_name.clone()));
 
     // Discover tools.

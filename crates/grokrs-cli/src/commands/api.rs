@@ -220,8 +220,7 @@ fn open_store_best_effort(config: &AppConfig) -> Option<Store> {
     let store_path = config
         .store
         .as_ref()
-        .map(|s| s.path.as_str())
-        .unwrap_or(".grokrs/state.db");
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
     Store::open_with_path(&workspace_root, store_path).ok()
 }
 
@@ -248,12 +247,10 @@ async fn run_models(client: &GrokClient) -> Result<()> {
     for model in &list.models {
         let prompt_price = model
             .prompt_text_token_price
-            .map(|p| format!("{p}"))
-            .unwrap_or_else(|| "-".into());
+            .map_or_else(|| "-".into(), |p| format!("{p}"));
         let completion_price = model
             .completion_text_token_price
-            .map(|p| format!("{p}"))
-            .unwrap_or_else(|| "-".into());
+            .map_or_else(|| "-".into(), |p| format!("{p}"));
 
         println!(
             "{:<30} {:<15} {:<15} {:<15}",
@@ -593,7 +590,7 @@ async fn run_search(
         source: DocumentsSource {
             collection_ids: collection_ids.to_vec(),
         },
-        filter: filter.map(|s| s.to_string()),
+        filter: filter.map(ToString::to_string),
         group_by: None,
         ranking_metric: None,
         retrieval_mode: None,
@@ -646,14 +643,12 @@ async fn run_key_info(client: &GrokClient) -> Result<()> {
     println!(
         "Blocked:  {}",
         info.blocked
-            .map(|b| if b { "yes" } else { "no" })
-            .unwrap_or("(unknown)")
+            .map_or("(unknown)", |b| if b { "yes" } else { "no" })
     );
     println!(
         "Disabled: {}",
         info.disabled
-            .map(|b| if b { "yes" } else { "no" })
-            .unwrap_or("(unknown)")
+            .map_or("(unknown)", |b| if b { "yes" } else { "no" })
     );
 
     match &info.acls {

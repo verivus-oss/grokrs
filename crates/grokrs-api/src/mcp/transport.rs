@@ -150,7 +150,7 @@ impl McpTransport {
     pub fn server_host(&self) -> String {
         url::Url::parse(&self.config.server_url)
             .ok()
-            .and_then(|u| u.host_str().map(|h| h.to_owned()))
+            .and_then(|u| u.host_str().map(ToOwned::to_owned))
             .unwrap_or_else(|| self.config.server_url.clone())
     }
 

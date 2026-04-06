@@ -570,7 +570,7 @@ impl AppConfig {
         }
         if let Some(ref mcp) = self.mcp {
             let server_count = mcp.servers.len();
-            let server_names: Vec<&str> = mcp.servers.keys().map(|k| k.as_str()).collect();
+            let server_names: Vec<&str> = mcp.servers.keys().map(String::as_str).collect();
             s.push_str(&format!(
                 " mcp_servers={} mcp_server_names=[{}]",
                 server_count,

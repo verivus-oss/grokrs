@@ -53,10 +53,10 @@ impl<'a> FilesClient<'a> {
                     message: format!("failed to read file at {}: {e}", path.display()),
                 })?;
 
-        let filename = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "upload".to_string());
+        let filename = path.file_name().map_or_else(
+            || "upload".to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
 
         let file_part = multipart::Part::bytes(file_bytes)
             .file_name(filename)

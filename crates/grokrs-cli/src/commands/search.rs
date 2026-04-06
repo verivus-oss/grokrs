@@ -59,7 +59,10 @@ impl SearchConfig {
     /// suitable for appending to the request's `tools` array.
     #[must_use]
     pub fn tool_values(&self) -> Vec<serde_json::Value> {
-        self.builtin_tools().iter().map(|t| t.to_value()).collect()
+        self.builtin_tools()
+            .iter()
+            .map(BuiltinTool::to_value)
+            .collect()
     }
 
     /// Build `SearchParameters` from this config, or `None` if no parameters
@@ -121,7 +124,7 @@ pub fn extract_citations(response: &serde_json::Value) -> Vec<Citation> {
                     title: item
                         .get("title")
                         .and_then(|v| v.as_str())
-                        .map(|s| s.to_owned()),
+                        .map(ToOwned::to_owned),
                 });
             }
         }
@@ -141,7 +144,7 @@ pub fn extract_citations(response: &serde_json::Value) -> Vec<Citation> {
                         let title = result
                             .get("title")
                             .and_then(|v| v.as_str())
-                            .map(|s| s.to_owned());
+                            .map(ToOwned::to_owned);
                         // Avoid duplicates.
                         let citation = Citation {
                             url: url.to_owned(),
@@ -215,7 +218,7 @@ pub fn extract_citations_from_output(
                     let title = result
                         .get("title")
                         .and_then(|v| v.as_str())
-                        .map(|s| s.to_owned());
+                        .map(ToOwned::to_owned);
                     let citation = Citation {
                         url: url.to_owned(),
                         title,

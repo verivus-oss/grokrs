@@ -355,7 +355,7 @@ async fn run_image(
             model: image_model.to_string(),
             n: Some(1),
             aspect_ratio: ar,
-            quality: quality.map(|s| s.to_string()),
+            quality: quality.map(ToString::to_string),
             resolution: res,
             response_format: Some(response_format),
         };
@@ -467,7 +467,7 @@ async fn run_video(
             prompt: prompt.to_string(),
             video: source.to_string(),
             duration: ext_duration,
-            model: model.map(|s| s.to_string()),
+            model: model.map(ToString::to_string),
         };
 
         eprintln!("[generate] submitting video extension request...");
@@ -485,12 +485,12 @@ async fn run_video(
 
         let request = VideoGenerationRequest {
             prompt: prompt.to_string(),
-            model: model.map(|s| s.to_string()),
+            model: model.map(ToString::to_string),
             image: None,
             reference_images: None,
             duration: vid_duration,
             aspect_ratio: ar,
-            resolution: resolution.map(|s| s.to_string()),
+            resolution: resolution.map(ToString::to_string),
         };
 
         eprintln!("[generate] submitting video generation request...");

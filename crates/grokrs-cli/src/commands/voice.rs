@@ -534,8 +534,7 @@ fn open_store_best_effort(config: &AppConfig) -> Option<Store> {
     let store_path = config
         .store
         .as_ref()
-        .map(|s| s.path.as_str())
-        .unwrap_or(".grokrs/state.db");
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
     Store::open_with_path(&workspace_root, store_path).ok()
 }
 

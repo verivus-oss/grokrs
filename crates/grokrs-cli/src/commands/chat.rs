@@ -511,7 +511,7 @@ fn resolve_resume_session(
                     .and_then(|v| {
                         v.get("message")
                             .or_else(|| v.get("prompt"))
-                            .and_then(|m| m.as_str().map(|s| s.to_owned()))
+                            .and_then(|m| m.as_str().map(ToOwned::to_owned))
                     })
             })
             .unwrap_or_default();
@@ -653,8 +653,7 @@ fn open_store_best_effort(config: &AppConfig) -> Option<Store> {
     let store_path = config
         .store
         .as_ref()
-        .map(|s| s.path.as_str())
-        .unwrap_or(".grokrs/state.db");
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
     Store::open_with_path(&workspace_root, store_path).ok()
 }
 
@@ -943,8 +942,8 @@ mod tests {
             search,
             x_search,
             no_search,
-            search_from_date: from_date.map(|s| s.to_owned()),
-            search_to_date: to_date.map(|s| s.to_owned()),
+            search_from_date: from_date.map(ToOwned::to_owned),
+            search_to_date: to_date.map(ToOwned::to_owned),
             search_max_results: max_results,
             citations,
             cache_key: None,

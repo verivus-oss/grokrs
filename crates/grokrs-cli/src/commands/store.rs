@@ -109,8 +109,7 @@ fn open_store(config: &AppConfig, workspace_root: &Path) -> Result<Option<Store>
     let store_path = config
         .store
         .as_ref()
-        .map(|s| s.path.as_str())
-        .unwrap_or(".grokrs/state.db");
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
 
     let db_full_path = workspace_root.join(store_path);
 
@@ -127,8 +126,7 @@ fn run_status(config: &AppConfig, workspace_root: &Path) -> Result<()> {
     let store_path = config
         .store
         .as_ref()
-        .map(|s| s.path.as_str())
-        .unwrap_or(".grokrs/state.db");
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
 
     match open_store(config, workspace_root)? {
         Some(store) => {
@@ -227,9 +225,9 @@ fn run_cost(
     match open_store(config, workspace_root)? {
         Some(store) => {
             let filter = CostFilter {
-                since: since.map(|s| s.to_owned()),
-                until: until.map(|s| s.to_owned()),
-                session_id: session_id.map(|s| s.to_owned()),
+                since: since.map(ToOwned::to_owned),
+                until: until.map(ToOwned::to_owned),
+                session_id: session_id.map(ToOwned::to_owned),
             };
 
             let rows = store
@@ -277,8 +275,7 @@ pub fn doctor_report(config: &AppConfig, workspace_root: &Path) {
     let store_path = config
         .store
         .as_ref()
-        .map(|s| s.path.as_str())
-        .unwrap_or(".grokrs/state.db");
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
 
     let db_full_path = workspace_root.join(store_path);
 
@@ -293,7 +290,7 @@ pub fn doctor_report(config: &AppConfig, workspace_root: &Path) {
             let total_count = store.sessions().count_total().unwrap_or(0);
             let active_count = store.sessions().list_active().map(|v| v.len()).unwrap_or(0);
             let totals = store.usage().all_totals().ok();
-            let cost_ticks = totals.as_ref().map(|t| t.total_cost_ticks).unwrap_or(0);
+            let cost_ticks = totals.as_ref().map_or(0, |t| t.total_cost_ticks);
 
             println!(
                 "store=ok path={} schema_version={version} total_sessions={total_count} active_sessions={active_count} total_cost_ticks={cost_ticks}",

@@ -156,11 +156,11 @@ pub fn extract_usage_from_bytes(bytes: &[u8]) -> (Option<u64>, Option<u64>) {
     let input = usage
         .get("input_tokens")
         .or_else(|| usage.get("prompt_tokens"))
-        .and_then(|v| v.as_u64());
+        .and_then(serde_json::Value::as_u64);
     let output = usage
         .get("output_tokens")
         .or_else(|| usage.get("completion_tokens"))
-        .and_then(|v| v.as_u64());
+        .and_then(serde_json::Value::as_u64);
     (input, output)
 }
 

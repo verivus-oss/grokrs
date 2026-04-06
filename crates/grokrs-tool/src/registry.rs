@@ -40,7 +40,7 @@ impl ToolRegistry {
         self.tools
             .iter()
             .filter(|t| t.min_trust_rank() <= trust_rank)
-            .map(|t| t.as_ref())
+            .map(AsRef::as_ref)
             .collect()
     }
 
@@ -50,7 +50,7 @@ impl ToolRegistry {
         self.tools
             .iter()
             .find(|t| t.name() == name)
-            .map(|t| t.as_ref())
+            .map(AsRef::as_ref)
     }
 
     /// Generate Responses API function definitions for all tools available at

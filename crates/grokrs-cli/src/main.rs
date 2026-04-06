@@ -365,11 +365,7 @@ fn doctor_features(
     }
 
     // Session management: ready if store works.
-    let store_ok = config
-        .store
-        .as_ref()
-        .map(|s| !s.path.is_empty())
-        .unwrap_or(true); // Default path works
+    let store_ok = config.store.as_ref().map_or(true, |s| !s.path.is_empty()); // Default path works
     if store_ok {
         println!("sessions=ready (list, show, transcript, clean via grokrs sessions)");
     } else {
@@ -431,7 +427,7 @@ fn doctor_features(
     if cfg!(feature = "otel") {
         // Resolve effective endpoint: CLI flag > GROKRS_OTEL_ENDPOINT env var.
         let effective_endpoint = otel_endpoint
-            .map(|s| s.to_owned())
+            .map(ToOwned::to_owned)
             .or_else(|| std::env::var("GROKRS_OTEL_ENDPOINT").ok());
         match effective_endpoint {
             Some(ref ep) => println!("[ok] otel=enabled endpoint={ep}"),
@@ -452,7 +448,7 @@ fn doctor_features(
         Some(mcp) => {
             let count = mcp.servers.len();
             println!("[ok] mcp={count} server(s) configured");
-            let mut names: Vec<&str> = mcp.servers.keys().map(|k| k.as_str()).collect();
+            let mut names: Vec<&str> = mcp.servers.keys().map(String::as_str).collect();
             names.sort_unstable();
             for name in names {
                 let srv = &mcp.servers[name];
@@ -531,8 +527,7 @@ fn doctor_features(
         let store_path = config
             .store
             .as_ref()
-            .map(|s| s.path.as_str())
-            .unwrap_or(".grokrs/state.db");
+            .map_or(".grokrs/state.db", |s| s.path.as_str());
         let db_full_path = workspace_root.join(store_path);
 
         if !db_full_path.exists() {
@@ -548,7 +543,7 @@ fn doctor_features(
             match grokrs_store::Store::open_with_path(workspace_root, store_path) {
                 Ok(store) => {
                     let memory_count = store.memories().count().unwrap_or(0);
-                    let memory_limit = config.agent.as_ref().map(|a| a.memory_limit).unwrap_or(50);
+                    let memory_limit = config.agent.as_ref().map_or(50, |a| a.memory_limit);
                     store.close().ok();
                     println!(
                         "[ok] memory={memory_count}/{memory_limit} entries store_size={size_kb}KB ({})",
