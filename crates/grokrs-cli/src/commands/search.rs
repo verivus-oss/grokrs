@@ -185,7 +185,8 @@ pub fn format_citations(citations: &[Citation]) -> String {
     for (i, cite) in citations.iter().enumerate() {
         match &cite.title {
             Some(title) => {
-                write!(out, "  [{}] {title} — {}\n", i + 1, cite.url).expect("String write is infallible");
+                write!(out, "  [{}] {title} — {}\n", i + 1, cite.url)
+                    .expect("String write is infallible");
             }
             None => {
                 write!(out, "  [{}] {}\n", i + 1, cite.url).expect("String write is infallible");
@@ -251,18 +252,18 @@ pub fn validate_date(date: &str) -> Result<(), String> {
         ));
     }
     let parts: Vec<&str> = date.split('-').collect();
-    if parts.len() != 3 {
+    let [year_s, month_s, day_s] = parts.as_slice() else {
         return Err(format!(
             "invalid date format: '{date}' (expected YYYY-MM-DD)"
         ));
-    }
+    };
     // Validate each part is numeric with correct lengths.
-    if parts[0].len() != 4 || parts[1].len() != 2 || parts[2].len() != 2 {
+    if year_s.len() != 4 || month_s.len() != 2 || day_s.len() != 2 {
         return Err(format!(
             "invalid date format: '{date}' (expected YYYY-MM-DD)"
         ));
     }
-    for part in &parts {
+    for part in [year_s, month_s, day_s] {
         if part.parse::<u32>().is_err() {
             return Err(format!(
                 "invalid date format: '{date}' (expected YYYY-MM-DD)"
@@ -270,12 +271,8 @@ pub fn validate_date(date: &str) -> Result<(), String> {
         }
     }
     // Basic range checks.
-    let month: u32 = parts[1]
-        .parse()
-        .expect("already validated as numeric above");
-    let day: u32 = parts[2]
-        .parse()
-        .expect("already validated as numeric above");
+    let month: u32 = month_s.parse().expect("already validated as numeric above");
+    let day: u32 = day_s.parse().expect("already validated as numeric above");
     if !(1..=12).contains(&month) {
         return Err(format!("invalid month in date: '{date}'"));
     }

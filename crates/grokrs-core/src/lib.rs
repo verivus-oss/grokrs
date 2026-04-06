@@ -568,7 +568,8 @@ impl AppConfig {
                 } else {
                     sys.len()
                 };
-                write!(s, " chat_system_prompt={}...", &sys[..end]).expect("String write is infallible");
+                write!(s, " chat_system_prompt={}...", &sys[..end])
+                    .expect("String write is infallible");
             }
         }
         if let Some(ref mcp) = self.mcp {

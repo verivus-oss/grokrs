@@ -353,7 +353,8 @@ fn build_system_prompt(
             if count == 1 { "y" } else { "ies" }
         );
         for m in &memories {
-            write!(section, "\n- [{}] {}: {}", m.category, m.key, m.value).expect("String write is infallible");
+            write!(section, "\n- [{}] {}: {}", m.category, m.key, m.value)
+                .expect("String write is infallible");
         }
         section.push_str(
             "\n\nYou can use the `remember`, `recall`, and `forget` tools to manage memories.",

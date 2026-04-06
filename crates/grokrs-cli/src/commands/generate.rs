@@ -367,11 +367,10 @@ async fn run_image(
             .context("image generation request failed")?
     };
 
-    if response.data.is_empty() {
-        bail!("API returned no image data");
-    }
-
-    let image_data = &response.data[0];
+    let image_data = response
+        .data
+        .first()
+        .context("API returned no image data")?;
 
     // Resolve output path relative to workspace.
     let output_abs = workspace_root.join(&WorkspacePath::new(
