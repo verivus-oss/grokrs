@@ -264,8 +264,6 @@ async fn sse_retries_on_429_initial_connection() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn policy_gate_deny_blocks_send_json() {
-    let server = MockServer::start().await;
-
     struct DenyGate;
     impl PolicyGate for DenyGate {
         fn evaluate_network(&self, _host: &str) -> PolicyDecision {
@@ -275,6 +273,7 @@ async fn policy_gate_deny_blocks_send_json() {
         }
     }
 
+    let server = MockServer::start().await;
     let client = client_with_gate(&server, Arc::new(DenyGate));
     let body = serde_json::json!({"test": true});
     let err = client
@@ -318,8 +317,6 @@ async fn policy_gate_allow_permits_request() {
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn policy_gate_deny_blocks_send_sse() {
-    let server = MockServer::start().await;
-
     struct DenyGate;
     impl PolicyGate for DenyGate {
         fn evaluate_network(&self, _host: &str) -> PolicyDecision {
@@ -329,6 +326,7 @@ async fn policy_gate_deny_blocks_send_sse() {
         }
     }
 
+    let server = MockServer::start().await;
     let client = client_with_gate(&server, Arc::new(DenyGate));
     let body = serde_json::json!({});
     let result = client.send_sse(Method::POST, "/v1/stream", &body).await;

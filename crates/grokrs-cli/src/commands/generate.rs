@@ -306,6 +306,8 @@ async fn run_image(
             if edit_source.starts_with("http://") || edit_source.starts_with("https://") {
                 edit_source.to_string()
             } else {
+                use base64::Engine as _;
+
                 // Validate as workspace path with FsRead effect.
                 let input_wp = WorkspacePath::new(edit_source).with_context(|| {
                     format!("invalid edit input path '{edit_source}': must be workspace-relative")
@@ -330,7 +332,6 @@ async fn run_image(
                 }
                 let bytes = std::fs::read(&abs_path)
                     .with_context(|| format!("failed to read {}", abs_path.display()))?;
-                use base64::Engine as _;
                 let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
                 format!("data:image/png;base64,{b64}")
             };

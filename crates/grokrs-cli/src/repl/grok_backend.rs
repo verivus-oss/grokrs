@@ -833,6 +833,9 @@ mod tests {
     #[tokio::test]
     async fn send_message_streams_and_returns_response() {
         use grokrs_api::transport::policy_gate::AllowAllGate;
+        use grokrs_core::{
+            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
+        };
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -861,9 +864,6 @@ mod tests {
             .await;
 
         // Build a GrokClient via from_config with the mock server URL.
-        use grokrs_core::{
-            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
-        };
         let env_var = "GROKRS_TEST_STREAM_BACKEND_KEY";
         // SAFETY: Test-only env manipulation; test runner serializes these tests.
         unsafe {
@@ -925,6 +925,9 @@ mod tests {
     #[tokio::test]
     async fn send_message_stateful_updates_previous_response_id() {
         use grokrs_api::transport::policy_gate::AllowAllGate;
+        use grokrs_core::{
+            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
+        };
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -954,10 +957,6 @@ mod tests {
         unsafe {
             std::env::set_var(env_var, "stateful-test-key");
         }
-
-        use grokrs_core::{
-            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
-        };
         let app_config = AppConfig {
             workspace: WorkspaceConfig {
                 name: "test".into(),
@@ -1015,6 +1014,9 @@ mod tests {
     #[tokio::test]
     async fn send_message_transport_error_returns_backend_error() {
         use grokrs_api::transport::policy_gate::AllowAllGate;
+        use grokrs_core::{
+            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
+        };
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -1034,10 +1036,6 @@ mod tests {
         unsafe {
             std::env::set_var(env_var, "error-test-key");
         }
-
-        use grokrs_core::{
-            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
-        };
         let app_config = AppConfig {
             workspace: WorkspaceConfig {
                 name: "test".into(),
@@ -1090,6 +1088,9 @@ mod tests {
     #[tokio::test]
     async fn send_message_response_failed_returns_api_error() {
         use grokrs_api::transport::policy_gate::AllowAllGate;
+        use grokrs_core::{
+            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
+        };
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -1118,10 +1119,6 @@ mod tests {
         unsafe {
             std::env::set_var(env_var, "fail-event-test-key");
         }
-
-        use grokrs_core::{
-            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
-        };
         let app_config = AppConfig {
             workspace: WorkspaceConfig {
                 name: "test".into(),
@@ -1185,6 +1182,9 @@ mod tests {
     #[tokio::test]
     async fn request_includes_system_instructions() {
         use grokrs_api::transport::policy_gate::AllowAllGate;
+        use grokrs_core::{
+            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
+        };
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -1212,10 +1212,6 @@ mod tests {
         unsafe {
             std::env::set_var(env_var, "sys-test-key");
         }
-
-        use grokrs_core::{
-            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
-        };
         let app_config = AppConfig {
             workspace: WorkspaceConfig {
                 name: "test".into(),
@@ -1376,6 +1372,9 @@ mod tests {
     #[tokio::test]
     async fn send_message_with_search_extracts_citations() {
         use grokrs_api::transport::policy_gate::AllowAllGate;
+        use grokrs_core::{
+            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
+        };
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -1406,10 +1405,6 @@ mod tests {
         unsafe {
             std::env::set_var(env_var, "search-cite-test-key");
         }
-
-        use grokrs_core::{
-            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
-        };
         let app_config = AppConfig {
             workspace: WorkspaceConfig {
                 name: "test".into(),
@@ -1471,6 +1466,9 @@ mod tests {
     #[tokio::test]
     async fn request_with_search_includes_tools_in_body() {
         use grokrs_api::transport::policy_gate::AllowAllGate;
+        use grokrs_core::{
+            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
+        };
         use wiremock::matchers::{method, path};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -1498,10 +1496,6 @@ mod tests {
         unsafe {
             std::env::set_var(env_var, "search-body-test-key");
         }
-
-        use grokrs_core::{
-            ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
-        };
         let app_config = AppConfig {
             workspace: WorkspaceConfig {
                 name: "test".into(),

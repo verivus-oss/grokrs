@@ -1,0 +1,1052 @@
+# =============================================================================
+# REUSABLE CLIPPY PEDANTIC REMEDIATION DAG
+# =============================================================================
+# A drop-in template for systematically eliminating clippy::pedantic warnings
+# from any Rust workspace. Includes AI slop gap coverage (P13-P16) for codebases
+# with AI-assisted development.
+#
+# Created: 2026-04-06
+# =============================================================================
+
+[meta]
+title = "Clippy Pedantic Remediation DAG Template"
+description = '''
+A reusable, self-contained DAG for remediating clippy::pedantic warnings in
+any Rust workspace. Covers 12 pedantic lint categories plus 4 AI slop gap
+units (unwrap abuse, unsafe indexing, iterator inefficiencies, unsafe blocks).
+Organized in 4 layers to avoid cross-cutting conflicts: Layer 0 (code
+semantics), Layer 1 (code structure), Layer 2 (documentation), Layer 3
+(final validation). Each unit targets a single lint category or closely
+related cluster so that subagents/developers have clear, focused scope.'''
+version = "1.0.0"
+rust_edition_min = "2021"
+total_units = 16
+tier1_units = ["P01", "P02", "P03", "P13"]
+tier2_units = ["P04", "P05", "P06", "P07", "P14", "P15"]
+tier3_units = ["P08", "P09", "P10", "P11", "P12", "P16"]
+
+# =============================================================================
+# DISCOVERY
+# =============================================================================
+# Run these commands FIRST to measure your baseline. Record the numbers in
+# the [workspace] section below. These numbers drive priority and LOC estimates.
+# =============================================================================
+
+[discovery]
+description = '''
+Before instantiating this template, run the discovery commands below to
+populate your workspace-specific warning counts. Replace placeholder values
+(marked YOUR_*) throughout this file with actual numbers and file paths.'''
+
+[discovery.commands]
+total_warnings = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep '^warning:' | grep -v 'deprecat' | wc -l'''
+
+per_crate_distribution = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep '^warning:' | grep -v 'deprecat' \
+  | sed 's|.*--> ||' | cut -d/ -f1-2 | sort | uniq -c | sort -rn'''
+
+per_category_breakdown = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep '^warning:.*clippy::' | sed 's/.*clippy::/clippy::/' \
+  | cut -d'`' -f1 | sort | uniq -c | sort -rn'''
+
+must_use_candidates = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::must_use_candidate\|clippy::return_self_not_must_use' '''
+
+redundant_closures = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::redundant_closure\|clippy::map_unwrap_or' '''
+
+format_string_issues = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::format_push_string\|clippy::uninlined_format_args\|clippy::format_in_format_args' '''
+
+wildcard_match_arms = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::wildcard_enum_match_arm\|clippy::single_match\|clippy::match_same_arms' '''
+
+cast_warnings = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::cast_' '''
+
+misc_quality = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::unreadable_literal\|clippy::needless_raw_string\|clippy::needless_pass_by_value\|clippy::redundant_clone\|clippy::manual_let_else' '''
+
+items_after_statements = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::items_after_statements' '''
+
+too_many_lines = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::too_many_lines' '''
+
+missing_errors_doc = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::missing_errors_doc' '''
+
+doc_markdown = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -c 'clippy::doc_markdown\|clippy::missing_panics_doc\|clippy::doc_link_with_quotes' '''
+
+unwrap_usage = '''
+grep -rn '\.unwrap()' crates/ --include='*.rs' \
+  | grep -v '#\[cfg(test)\]' | grep -v '/tests/' | wc -l'''
+
+unsafe_indexing = '''
+# Approximate count. Run clippy::indexing_slicing for precise count:
+cargo clippy --workspace -- -W clippy::indexing_slicing 2>&1 \
+  | grep -c 'clippy::indexing_slicing' '''
+
+needless_collect = '''
+cargo clippy --workspace -- -W clippy::needless_collect 2>&1 \
+  | grep -c 'clippy::needless_collect' '''
+
+unsafe_blocks = '''
+grep -rn 'unsafe {' crates/ --include='*.rs' | wc -l'''
+
+files_for_unit = '''
+# Discover which files are affected by a specific lint. Example for must_use:
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep 'clippy::must_use_candidate' | sed 's/.*--> //' | cut -d: -f1 \
+  | sort -u'''
+
+# =============================================================================
+# WORKSPACE (fill in after running discovery commands)
+# =============================================================================
+
+[workspace]
+total_pedantic_warnings = "YOUR_TOTAL_COUNT"
+excluded_warnings = "YOUR_EXCLUDED_COUNT (e.g., deprecated module warnings)"
+# Per-crate distribution (fill from discovery.commands.per_crate_distribution):
+# crate_a   NNN  (XX%)
+# crate_b   NNN  (XX%)
+# ...
+
+# =============================================================================
+# APPROACH PHILOSOPHY (hard-won knowledge from remediation experience)
+# =============================================================================
+#
+# Each unit targets a single lint category or closely related cluster.
+# This ensures subagents have clear, focused scope and avoid cross-cutting
+# conflicts. Units are ordered by dependency:
+#
+# Layer 0: Code semantics (must_use, closures, casts, match arms, format)
+#          These change signatures and expressions -- must land first.
+# Layer 1: Code structure (items_after_statements, long functions, bools)
+#          These move code around -- must land after semantic changes.
+# Layer 2: Documentation (errors_doc, panics_doc, doc_markdown, URLs)
+#          These are additive comments only -- no code changes, safe last.
+# Layer 3: Final validation (all units integrated, zero warnings, green CI)
+#
+# KEY RESEARCH REFERENCES:
+# - Rust std-dev-guide: #[must_use] when "failing to consider the output is
+#   almost certainly a bug". Apply to: pure getters, builders returning Self,
+#   Result-returning methods. Do NOT apply to: fire-and-forget patterns,
+#   methods with useful side effects, Debug/Display impls.
+# - redundant_closure: replace |x| foo(x) with foo when foo is a function
+#   item (not a closure variable). Preserves clarity.
+# - format_push_string: replace s.push_str(&format!(...)) with
+#   write!(s, ...).unwrap() using std::fmt::Write. Avoids intermediate
+#   String allocation.
+# - wildcard_enum_match_arm: enumerate all variants explicitly so new
+#   variants cause compile errors. Use _ only for #[non_exhaustive] enums.
+# - items_after_statements: move inner fn/struct/impl declarations before
+#   the first statement in the block, or extract to module scope.
+# - Casts: use TryFrom/TryInto for fallible conversions, From for infallible
+#   widening. Only #[allow] when the domain guarantees safety (e.g., token
+#   counts that never exceed i64::MAX).
+# - doc_markdown: wrap identifiers, types, and code fragments in backticks.
+#   Wrap bare URLs in angle brackets or proper markdown links.
+# =============================================================================
+
+# ===========================================================================
+# LAYER 0 -- Code semantics: changes to signatures, expressions, types
+# ===========================================================================
+
+[units.P01]
+name = "Add #[must_use] attributes across all crates"
+summary = '''
+Add #[must_use] to methods, functions, and -> Self builders per the
+Rust std-dev-guide policy: apply when "failing to explicitly consider
+the output is almost certainly a bug". This covers: (1) Pure accessor
+methods returning owned values (e.g., fn name() -> &str, fn id() ->
+String). (2) Builder methods returning Self (e.g., fn with_model(self,
+m: &str) -> Self). (3) Functions returning Result where ignoring the
+error is always wrong. (4) Functions returning bool/Option where
+ignoring means lost information. DO NOT apply to: methods with useful
+side effects (e.g., println-like, state mutation), fire-and-forget
+patterns (e.g., spawn), Display/Debug trait impls.'''
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 26
+estimated_loc = "YOUR_MUST_USE_COUNT * 1.1"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "All clippy::return_self_not_must_use warnings resolved",
+  "All clippy::must_use_candidate warnings resolved for methods and functions",
+  "No #[must_use] applied to methods with side effects (e.g., println, state mutation)",
+  "No #[must_use] applied to trait method implementations (Display, Debug, etc.)",
+  "Builder methods returning Self annotated with #[must_use]",
+  "Result-returning public functions annotated with #[must_use]",
+  "Zero test regressions",
+]
+produces = ["ART:must-use"]
+consumes = []
+critical_decisions = [
+  "Follow std-dev-guide: only apply when ignoring output is almost certainly a bug.",
+  "Builders returning Self always get #[must_use] -- discarding a builder mid-chain is always wrong.",
+  "Trait method impls do NOT get #[must_use] -- the trait defines the contract.",
+  "Test helper functions do NOT get #[must_use] -- test assertions handle correctness.",
+]
+rationale = '''
+Typically the single largest category (~26% of all pedantic warnings).
+Mechanically safe -- #[must_use] is additive and never changes runtime behavior.'''
+
+[units.P01.clippy_discovery]
+description = "Find all files affected by must_use warnings"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -E 'clippy::must_use_candidate|clippy::return_self_not_must_use' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P02]
+name = "Replace redundant closures and simplify Option/Result combinators"
+summary = '''
+Fix warnings across two related categories: (1) redundant_closure:
+replace |x| foo(x) with foo, |x| Foo::new(x) with Foo::new, etc.
+Only when the replacement is a direct function/constructor -- not
+when the closure captures variables. (2) map_unwrap_or +
+map_or/map_or_else: replace .map(f).unwrap_or(default) with
+.map_or(default, f) or .map_or_else(default_fn, f). The combined
+form is more idiomatic and avoids an unnecessary intermediate Option.'''
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 7
+estimated_loc = "YOUR_CLOSURE_COUNT * 1.2"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::redundant_closure warnings remain",
+  "Zero clippy::map_unwrap_or warnings remain",
+  "Zero clippy::map_or / clippy::option_map_or_none / clippy::result_map_or_into_option warnings remain",
+  "No closure replacements where the closure captures external variables",
+  "Zero test regressions",
+]
+produces = ["ART:closures-combinators"]
+consumes = []
+critical_decisions = [
+  "Only replace closures with function items, not closure variables -- |x| some_var(x) keeps the closure.",
+  "map_or preferred over map().unwrap_or() for readability and single-evaluation guarantee.",
+  "map_or_else when the default is expensive to compute (closure, not a constant).",
+]
+rationale = '''
+Mechanical refactors that improve idiomatic Rust usage. No behavioral change.
+Typically ~7% of pedantic warnings.'''
+
+[units.P02.clippy_discovery]
+description = "Find all files affected by closure/combinator warnings"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -E 'clippy::redundant_closure|clippy::map_unwrap_or' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P03]
+name = "Fix format string inefficiencies and uninlined format args"
+summary = '''
+Fix warnings in three categories: (1) format_push_string: replace
+s.push_str(&format!(...)) with write!(s, ...).unwrap() using
+std::fmt::Write. This eliminates an intermediate String allocation.
+(2) uninlined_format_args: replace format!("{}", x) with
+format!("{x}") using Rust 2021+ inline format syntax. (3)
+format_in_format_args: replace format!() nested inside another
+format macro with direct interpolation. All are mechanical
+transformations that improve performance and readability.'''
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 5
+estimated_loc = "YOUR_FORMAT_COUNT * 1.3"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::format_push_string warnings remain",
+  "Zero clippy::uninlined_format_args warnings remain",
+  "Zero clippy::format_in_format_args warnings remain",
+  '''All push_str(&format!(...)) replaced with write!(s, ...).unwrap() using std::fmt::Write''',
+  '''All format!("{}", var) replaced with format!("{var}")''',
+  "use std::fmt::Write; import added where write! macro is used on Strings",
+  "Zero test regressions",
+]
+produces = ["ART:format-strings"]
+consumes = []
+critical_decisions = [
+  "write!(s, ...).unwrap() is safe because writing to a String never fails (fmt::Write for String is infallible).",
+  '''Inline format args only when the expression is a simple variable -- format!("{}", foo.bar()) stays expanded for readability.''',
+]
+rationale = '''
+The format_push_string fix has a real performance benefit (avoids allocation).
+Inline args improve readability. Typically ~5% of pedantic warnings.'''
+
+[units.P03.clippy_discovery]
+description = "Find all files affected by format string warnings"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -E 'clippy::format_push_string|clippy::uninlined_format_args|clippy::format_in_format_args' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+# ===========================================================================
+# LAYER 0 continued -- More semantic changes
+# ===========================================================================
+
+[units.P04]
+name = "Fix wildcard match arms and match/if-let simplifications"
+summary = '''
+Fix warnings in match-related categories: (1) wildcard_enum_match_arm:
+enumerate all variants explicitly instead of using _ catch-all. This
+ensures new enum variants added in the future cause compile errors
+rather than silently falling through. Exception: keep _ for
+#[non_exhaustive] external enums. (2) match to if-let simplification:
+replace match with a single non-wildcard arm with if let. (3) match
+to if equality check: replace match on a single value with an if.
+(4) identical match arms: merge arms that have identical bodies.'''
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 3
+estimated_loc = "YOUR_MATCH_COUNT * 3.0"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::wildcard_enum_match_arm warnings remain",
+  "Zero clippy::single_match warnings remain",
+  "Zero clippy::single_match_else warnings remain",
+  "Zero clippy::match_same_arms warnings remain",
+  "All internal enum matches enumerate variants explicitly",
+  "External #[non_exhaustive] enum matches retain _ arm",
+  "Zero test regressions",
+]
+produces = ["ART:match-arms"]
+consumes = []
+critical_decisions = [
+  "Enumerate all variants so future additions are compile errors -- this is a safety improvement, not just style.",
+  "For #[non_exhaustive] external enums (e.g., from reqwest, rusqlite), keep _ with a comment explaining why.",
+  "Merged identical match arms use | syntax: A | B => ...",
+]
+rationale = '''
+The wildcard_enum_match_arm fix is a genuine safety improvement -- it catches
+missed enum variants at compile time. Typically ~3% of pedantic warnings.'''
+
+[units.P04.clippy_discovery]
+description = "Find all files affected by match arm warnings"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -E 'clippy::wildcard_enum_match_arm|clippy::single_match|clippy::match_same_arms' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P05]
+name = "Fix numeric casts with safe conversions"
+summary = '''
+Fix cast-related warnings: (1) cast_possible_wrap: u64 as i64 -- use
+i64::try_from(x).unwrap_or(i64::MAX) or document safety. (2)
+cast_sign_loss: i64 as u64 -- use u64::try_from(x).unwrap_or(0) or
+validate non-negative first. (3) cast_lossless: u32 as u64, i32 as
+i64 -- use u64::from(x) or i64::from(x). (4) cast_possible_truncation:
+u64 as u32 -- use try_into() with fallback or document safety with
+#[allow] + comment. (5) cast_precision_loss: i64 as f64 -- use
+#[allow] with a justification comment (precision loss is inherent
+to f64 display).'''
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 3
+estimated_loc = "YOUR_CAST_COUNT * 2.2"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::cast_lossless warnings -- all widening casts use From::from()",
+  "Zero clippy::cast_possible_wrap warnings -- wrapping casts use try_from or documented #[allow]",
+  "Zero clippy::cast_sign_loss warnings -- sign-changing casts use try_from or validated inputs",
+  "Zero clippy::cast_possible_truncation warnings -- truncating casts use try_into or documented #[allow]",
+  "Zero clippy::cast_precision_loss warnings -- precision-losing casts have #[allow] with justification",
+  "Every #[allow(clippy::cast_*)] has a // SAFETY or // RATIONALE comment",
+  "Zero test regressions",
+]
+produces = ["ART:safe-casts"]
+consumes = []
+critical_decisions = [
+  "Widening casts (u32->u64, i32->i64): always use From::from(). No exceptions.",
+  "Wrapping casts (u64->i64): use i64::try_from() where overflow is possible; #[allow] with comment where domain guarantees safety (e.g., token counts).",
+  "Truncating casts (u64->u32): use u32::try_from().unwrap_or(u32::MAX) for graceful degradation.",
+  "Precision loss (i64->f64): #[allow] with comment -- this is inherent to floating-point display/computation.",
+  "Do not use nightly-only methods (.cast_signed()/.cast_unsigned()) unless your MSRV includes them.",
+]
+rationale = '''
+Cast safety is a real correctness concern. Using From/TryFrom makes intent
+explicit and catches overflow bugs. Typically ~3% of pedantic warnings.'''
+
+[units.P05.clippy_discovery]
+description = "Find all files affected by cast warnings"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -E 'clippy::cast_' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P06]
+name = "Fix miscellaneous code quality warnings"
+summary = '''
+Fix scattered warnings across many small categories: (1)
+unreadable_literal: add _ separators to long numeric literals (e.g.,
+1000000 -> 1_000_000). (2) needless_raw_string_hashes: remove
+unnecessary # from raw strings. (3) needless_pass_by_value: change
+fn(s: String) to fn(s: &str) where the string is only borrowed.
+(4) manual_let_else: rewrite if-let-else to let...else. (5)
+redundant_continue: remove continue at end of loop body. (6)
+single_char_pattern: replace "x" with 'x' in str methods. (7)
+bool params/struct fields: group bools where appropriate. (8)
+redundant_clone: remove .clone() calls where the value is not used
+after the clone point. (9) option_as_ref: use Option<&T> instead of
+&Option<T>. (10) Other misc: clone_on_ref, unnecessary_wraps,
+explicit_iter, needless_bool.'''
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 13
+estimated_loc = "YOUR_MISC_COUNT * 1.0"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::unreadable_literal warnings -- all numeric literals >=10_000 have _ separators",
+  "Zero clippy::needless_raw_string_hashes warnings",
+  "Zero clippy::redundant_clone warnings",
+  "Zero clippy::needless_pass_by_value warnings",
+  "Zero clippy::manual_let_else warnings",
+  "Zero clippy::redundant_continue warnings",
+  "Zero clippy::single_char_pattern warnings",
+  "All bool struct field groupings documented if #[allow] is used",
+  "Zero test regressions",
+]
+produces = ["ART:misc-quality"]
+consumes = []
+critical_decisions = [
+  "unreadable_literal: use idiomatic grouping (1_000_000, 0xFF_FF, 100_000).",
+  "needless_pass_by_value: only change public API signatures if no downstream callers exist. If you have published crates, this is a breaking change.",
+  "struct bools (more_than_3_bools): #[allow] with comment when the bools are independent flags, not a state machine.",
+  "manual Debug: add #[allow(clippy::missing_fields_in_debug)] with comment when fields are intentionally redacted (e.g., API keys).",
+]
+rationale = '''
+Mixed bag of mechanical fixes. unreadable_literal alone is often the largest
+subcategory. Typically ~13% of pedantic warnings combined.'''
+
+[units.P06.clippy_discovery]
+description = "Find all files affected by miscellaneous quality warnings"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -E 'clippy::unreadable_literal|clippy::needless_raw_string|clippy::needless_pass_by_value|clippy::redundant_clone|clippy::manual_let_else|clippy::redundant_continue|clippy::single_char_pattern' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+# ===========================================================================
+# LAYER 1 -- Code structure: moving items, splitting functions
+# ===========================================================================
+
+[units.P07]
+name = "Fix items_after_statements: hoist inner items to block/module scope"
+summary = '''
+Fix items_after_statements warnings. In Rust, items (fn, struct, impl,
+const) defined inside a function body are visible from the start of the
+enclosing block, not from their textual position. Placing them after
+executable statements is confusing because it suggests they depend on
+prior state. Fix by: (1) Moving inner helper functions to before the
+first statement in the block. (2) For complex helpers, extracting to
+module scope as pub(crate) or private functions. (3) For const items,
+moving to the top of the function or to module scope.'''
+layer = 1
+tier = 2
+status = "pending"
+depends_on = ["P01", "P02", "P03"]
+blocks = ["P12"]
+estimated_warnings_pct = 7
+estimated_loc = "YOUR_ITEMS_AFTER_COUNT * 1.5"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::items_after_statements warnings remain",
+  "No inner function hoisted above a statement it logically depends on (e.g., captures a local)",
+  "Helper functions extracted to module scope where they exceed 10 lines",
+  "Const items moved to module scope or top of function",
+  "Zero test regressions",
+]
+produces = ["ART:items-hoisted"]
+consumes = ["ART:must-use", "ART:closures-combinators", "ART:format-strings"]
+critical_decisions = [
+  "Items that capture locals via closure must stay inside the function -- move them above the first statement, not outside.",
+  "Items used only in tests (#[cfg(test)]) stay in the test module, just hoisted to before the first statement.",
+  "Prefer module-scope extraction for helpers >10 lines to reduce function body size.",
+]
+rationale = '''
+Moving items is a structural change that can conflict with semantic changes
+in P01-P03, hence Layer 1 (depends on Layer 0 completing). Typically ~7%
+of pedantic warnings.'''
+
+[units.P07.clippy_discovery]
+description = "Find all files affected by items_after_statements"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep 'clippy::items_after_statements' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P08]
+name = "Refactor long functions: extract helpers for functions >100 lines"
+summary = '''
+Fix too_many_lines warnings. Functions exceeding clippy's 100-line
+threshold should be decomposed. Strategy: extract logical sections into
+private helper functions with descriptive names. Each extraction should
+represent a coherent responsibility. Target: every function under 120
+lines (allow some flexibility above 100 for cohesive blocks). For
+functions barely over (100-120 lines), tightening existing code
+(removing blank lines, combining declarations) may suffice.'''
+layer = 1
+tier = 3
+status = "pending"
+depends_on = ["P07"]
+blocks = ["P12"]
+estimated_warnings_pct = 2
+estimated_loc = "YOUR_LONG_FN_COUNT * 15"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::too_many_lines warnings remain (or each has documented #[allow] with justification)",
+  "Extracted helper functions have descriptive names that explain WHAT, not HOW",
+  "Each extracted function has a single clear responsibility",
+  "No function exceeds 150 lines (hard ceiling)",
+  "Extracted functions are private (not pub) unless needed by other modules",
+  "Zero test regressions",
+]
+produces = ["ART:short-functions"]
+consumes = ["ART:items-hoisted"]
+critical_decisions = [
+  '''Extract by logical section, not arbitrary line count. A 130-line function that is one coherent state machine is better than 3 confusing 45-line helpers.''',
+  "Naming: build_X, parse_X, emit_X, validate_X -- verb + noun describing the responsibility.",
+  "Functions at 100-120 lines: try tightening first (remove blank lines, combine let chains). Only extract if the function has clear logical sections.",
+  "#[allow(clippy::too_many_lines)] with comment for functions that are genuinely one cohesive block (e.g., test setup, serialization logic).",
+]
+rationale = '''
+Function length is the most subjective lint. Prioritize clarity over hitting
+the 100-line target. Typically ~2% of pedantic warnings.'''
+
+[units.P08.clippy_discovery]
+description = "Find all functions triggering too_many_lines"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep 'clippy::too_many_lines' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+# ===========================================================================
+# LAYER 2 -- Documentation: additive comments only, no code changes
+# ===========================================================================
+
+[units.P09]
+name = "Add # Errors documentation sections to public Result-returning functions"
+summary = '''
+Fix missing_errors_doc warnings. Every public function that returns
+Result<T, E> should document what errors it can return and under what
+conditions. Format: add a `# Errors` section to the doc comment listing
+each error variant and when it occurs. Example:
+/// # Errors
+/// Returns `ConfigError::Read` if the file cannot be read.
+/// Returns `ConfigError::Parse` if the TOML is invalid.'''
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08"]
+blocks = ["P12"]
+estimated_warnings_pct = 17
+estimated_loc = "YOUR_ERRORS_DOC_COUNT * 2.2"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::missing_errors_doc warnings remain",
+  "Every # Errors section lists specific error types and conditions",
+  "Error descriptions match the actual error variants returned by the function",
+  "No generic 'Returns an error if something goes wrong' -- be specific",
+  "Zero test regressions",
+]
+produces = ["ART:errors-doc"]
+consumes = ["ART:must-use"]
+critical_decisions = [
+  '''List each error variant explicitly: 'Returns `TransportError::Http` if the server returns a non-2xx status.' ''',
+  "For functions that propagate errors via ?, list the error types that can come through.",
+  "For functions returning anyhow::Result or Box<dyn Error>, describe the error conditions even though the type is erased.",
+  "Private functions (not pub) do not need # Errors sections.",
+]
+rationale = '''
+Typically the second largest category (~17% of pedantic warnings). Good
+documentation is a feature, not decoration. Errors docs help users handle
+failures correctly.'''
+
+[units.P09.clippy_discovery]
+description = "Find all files affected by missing_errors_doc"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep 'clippy::missing_errors_doc' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P10]
+name = "Add # Panics documentation and fix doc_markdown backticks"
+summary = '''
+Fix two doc-related warning categories: (1) missing_panics_doc: add
+# Panics section to functions that can panic (unwrap, expect, assert,
+array indexing). List the condition that triggers the panic. (2)
+doc_markdown: wrap code identifiers in backticks in doc comments.
+Identifiers like type names, function names, field names, CLI flags
+should be `backticked`. (3) bare URLs: wrap bare URLs in angle brackets
+<URL> or make proper markdown links. (4) doc_link_with_quotes: use
+backticks instead of quotes for code references in docs.'''
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08"]
+blocks = ["P12"]
+estimated_warnings_pct = 16
+estimated_loc = "YOUR_DOC_MARKDOWN_COUNT * 1.5"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::missing_panics_doc warnings remain",
+  "Zero clippy::doc_markdown warnings remain",
+  "Zero clippy::doc_link_with_quotes warnings remain",
+  "Every # Panics section describes the specific condition that triggers the panic",
+  "All identifiers in doc comments wrapped in backticks (types, functions, field names, CLI flags)",
+  "All bare URLs wrapped in angle brackets or markdown links",
+  "Zero test regressions",
+]
+produces = ["ART:panics-doc-markdown"]
+consumes = []
+critical_decisions = [
+  "For unwrap() on values guaranteed to be Some/Ok by construction, add # Panics with the invariant explanation.",
+  "For expect() messages, the # Panics section should expand on the message with more context.",
+  "doc_markdown: backtick anything that is code -- type names, function names, field names, CLI flags, file paths.",
+  "URLs: prefer angle brackets <https://example.com> for inline URLs, markdown links [text](url) for descriptive ones.",
+]
+rationale = '''
+Documentation quality directly impacts usability. Backtick consistency is
+especially important for rustdoc rendering. Typically ~16% of pedantic
+warnings combined.'''
+
+[units.P10.clippy_discovery]
+description = "Find all files affected by doc_markdown and panics_doc"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -E 'clippy::doc_markdown|clippy::missing_panics_doc|clippy::doc_link_with_quotes' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P11]
+name = "Fix return_self_not_must_use and remaining str lifetime warnings"
+summary = '''
+Fix warnings for returning a str unnecessarily tied to the lifetime of
+arguments. These are cases where a function returns &'a str but the
+returned value is actually a string literal or comes from self, not from
+the input parameter's lifetime. Fix by: (1) Returning &'static str when
+the value is a literal. (2) Removing unnecessary lifetime parameter when
+the str comes from &self. Also fix any straggler return_self_not_must_use
+warnings that P01 did not catch.'''
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08"]
+blocks = ["P12"]
+estimated_warnings_pct = 1
+estimated_loc = "YOUR_STR_LIFETIME_COUNT * 2.5"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::unnecessary_wraps warnings remain",
+  "Zero clippy::ref_option warnings (Option<&T> vs &Option<T>) remain",
+  "String literals returned as &'static str, not &'a str",
+  "Zero test regressions",
+]
+produces = ["ART:str-lifetimes"]
+consumes = ["ART:must-use"]
+critical_decisions = [
+  "Trait methods that return &str: if the trait defines fn name(&self) -> &str and the impl returns a literal, the return type is constrained by the trait. Use &'static str only if the trait permits it.",
+  "If the trait constrains the lifetime, #[allow] with a comment explaining the trait constraint.",
+]
+rationale = '''
+Small unit but may touch a repeated trait pattern across many files (e.g.,
+a ToolSpec-like trait). Typically ~1% of pedantic warnings.'''
+
+[units.P11.clippy_discovery]
+description = "Find all files affected by str lifetime and wraps warnings"
+command = '''
+cargo clippy --workspace --all-targets -- -W clippy::pedantic 2>&1 \
+  | grep -E 'clippy::unnecessary_wraps|clippy::ref_option' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+# ===========================================================================
+# AI SLOP GAP COVERAGE -- Units identified by cross-referencing common
+# AI code generation failure modes against the pedantic DAG.
+# These apply to ANY Rust project with AI-assisted development.
+# ===========================================================================
+
+[units.P13]
+name = "Prohibit unwrap() and expect() in production code"
+summary = '''
+Systematically remove .unwrap() and .expect() from all production code
+(crates/ excluding tests/). Replace with proper Result handling (?,
+map_err, ok_or_else) or, in rare justified cases, keep expect() with a
+detailed message that passes the 'useless message' test. Test code may
+retain .unwrap()/.expect() but expect() messages must be descriptive.
+Enable clippy::unwrap_used and clippy::expect_used as workspace-level
+deny lints in clippy.toml or lib.rs.
+(AI Slop: 'Unwrap Abuse' and 'Expect With Useless Messages'.)'''
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 0
+estimated_loc = "YOUR_UNWRAP_COUNT * 3.0"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero .unwrap() calls in production code (non-test crate sources)",
+  "Every remaining .expect() has a message explaining the invariant, not just repeating the type",
+  "No expect messages like 'should be Some', 'failed to parse', 'cannot fail' -- explain WHY it cannot fail",
+  "All replaced unwraps use ?, map_err, ok_or_else, or unwrap_or_default as appropriate",
+  "clippy::unwrap_used = 'deny' configured for non-test code",
+  "Zero test regressions",
+]
+produces = ["ART:no-unwrap"]
+consumes = []
+critical_decisions = [
+  "write!(s, ...).unwrap() is exempt -- fmt::Write for String is infallible, but use write!(s, ...).expect('String write is infallible') for clarity.",
+  "Test code (.rs files in tests/ directories and #[cfg(test)] modules) is exempt from unwrap_used.",
+  "Constructors that validate invariants (e.g., Path::new) may use expect() with the invariant as the message.",
+  "Regex::new() on compile-time-known patterns: use expect('regex is valid') -- this is a legitimate use.",
+]
+rationale = '''
+Unwrap abuse is the #1 AI code generation failure mode. Replacing with
+proper error handling improves robustness. Not a pedantic lint, but critical
+for production quality.'''
+
+[units.P13.clippy_discovery]
+description = "Find all unwrap/expect usage in production code"
+command = '''
+grep -rn '\.unwrap()\|\.expect(' crates/ --include='*.rs' \
+  | grep -v '#\[cfg(test)\]' | grep -v '/tests/' \
+  | cut -d: -f1 | sort -u'''
+
+[units.P14]
+name = "Replace unsafe indexing with bounds-checked access"
+summary = '''
+Replace direct slice/vector indexing foo[i] with .get(i) or .get_mut(i)
+where the index is not statically guaranteed to be in bounds. .get()
+returns Option<&T> forcing bounds checking. Keep direct indexing only
+where: (1) The index is a compile-time constant and the collection size
+is known (e.g., args[0] after checking args.len()). (2) The code is in
+a hot loop where the bounds check is provably redundant. Enable
+clippy::indexing_slicing as a workspace warning.
+(AI Slop: 'Index-Based Access Without Bounds Checking'.)'''
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 0
+estimated_loc = "YOUR_INDEXING_COUNT * 3.0"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::indexing_slicing warnings in production code (or each has documented #[allow] with bounds proof)",
+  "All replaced indexing uses .get()/.get_mut() with proper None handling",
+  "No panic-on-out-of-bounds possible in production code paths",
+  "Every #[allow(clippy::indexing_slicing)] has a comment proving the index is always in bounds",
+  "Zero test regressions",
+]
+produces = ["ART:safe-indexing"]
+consumes = []
+critical_decisions = [
+  "Test code is exempt -- panicking on bad test data is acceptable.",
+  "Pattern: if let Some(item) = vec.get(i) { ... } else { return Err(...) }",
+  "For iteration: prefer .iter()/.iter_mut() over index-based loops entirely.",
+  "first()/last() preferred over [0]/[len-1].",
+]
+rationale = '''
+Index panics are a top-5 Rust runtime error. Bounds-checked access eliminates
+them. Not a pedantic lint but critical for production safety.'''
+
+[units.P14.clippy_discovery]
+description = "Find all unsafe indexing in production code"
+command = '''
+cargo clippy --workspace -- -W clippy::indexing_slicing 2>&1 \
+  | grep 'clippy::indexing_slicing' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P15]
+name = "Fix iterator collection inefficiencies and string conversions"
+summary = '''
+Fix two AI slop gap categories: (1) needless_collect: remove
+.collect::<Vec<_>>() followed by .iter()/.into_iter() -- iterate
+directly without the intermediate allocation. (2) str_to_string /
+string_to_string: standardize &str-to-String conversions. Prefer
+.to_owned() over .to_string() for &str (avoids Display trait
+indirection). Replace String::from(s) with s.to_owned() for
+consistency.
+(AI Slop: 'Collecting When Iterating' and 'to_string() vs Into'.)'''
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_warnings_pct = 0
+estimated_loc = "YOUR_COLLECT_COUNT * 2.0"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Zero clippy::needless_collect warnings remain",
+  "Zero clippy::str_to_string warnings remain (if enabled)",
+  "No .collect::<Vec<_>>() immediately followed by .iter() or .into_iter()",
+  "Consistent string conversion pattern across codebase (.to_owned() for &str -> String)",
+  "Zero test regressions",
+]
+produces = ["ART:iter-strings"]
+consumes = []
+critical_decisions = [
+  "collect() is legitimate when: the collection is used multiple times, or the iterator borrows data that changes.",
+  "to_owned() preferred over to_string() for &str because it avoids the Display trait vtable dispatch.",
+  "String::from() and to_owned() are equivalent for &str -- pick one for consistency (to_owned()).",
+  "Do not change .to_string() on non-str types (e.g., i32.to_string()) -- that is the correct method.",
+]
+rationale = '''
+Iterator inefficiencies and inconsistent string conversions are hallmarks of
+AI-generated Rust. Not pedantic lints but critical for idiomatic code.'''
+
+[units.P15.clippy_discovery]
+description = "Find all needless collect and string conversion issues"
+command = '''
+cargo clippy --workspace -- -W clippy::needless_collect -W clippy::str_to_string 2>&1 \
+  | grep -E 'clippy::needless_collect|clippy::str_to_string' \
+  | sed 's/.*--> //' | cut -d: -f1 | sort -u'''
+
+[units.P16]
+name = "Audit unsafe blocks and ensure SAFETY comments"
+summary = '''
+Audit every unsafe block in the codebase. Each must have a // SAFETY:
+comment immediately above explaining why the unsafe operation is sound.
+If no justification exists, rewrite to use safe alternatives. This
+covers both edition 2024 unsafe env operations (set_var/remove_var in
+tests) and any other unsafe blocks.
+(AI Slop: 'Unsafe Without Justification'.)'''
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["P13"]
+blocks = ["P12"]
+estimated_warnings_pct = 0
+estimated_loc = "YOUR_UNSAFE_COUNT * 3.0"
+files_create = []
+files_modify = ["DISCOVER_VIA_CLIPPY"]
+acceptance = [
+  "Every unsafe block has a // SAFETY: comment on the line(s) immediately preceding it",
+  "Each SAFETY comment explains the specific invariant that makes the operation sound",
+  "No SAFETY comments that just say 'safe' or 'trust me' -- explain the invariant",
+  "Any unsafe block without a valid justification has been rewritten to use safe code",
+  "grep -rn 'unsafe' across all .rs files shows zero blocks without preceding SAFETY comment",
+  "Zero test regressions",
+]
+produces = ["ART:safe-unsafe"]
+consumes = ["ART:no-unwrap"]
+critical_decisions = [
+  "set_var/remove_var in tests: SAFETY comment explains single-threaded test execution or #[serial] annotation.",
+  "If a test uses set_var without #[serial], consider refactoring to avoid env mutation entirely.",
+  "No new unsafe blocks should be added -- prefer safe abstractions.",
+]
+rationale = '''
+Unjustified unsafe is a critical safety gap. Every unsafe block must prove
+its soundness. Not a pedantic lint but critical for Rust safety guarantees.'''
+
+[units.P16.clippy_discovery]
+description = "Find all unsafe blocks in the codebase"
+command = '''
+grep -rn 'unsafe {' crates/ --include='*.rs' | cut -d: -f1 | sort -u
+# Then verify each has a preceding SAFETY comment:
+# grep -B2 'unsafe {' crates/ --include='*.rs' | grep -v 'SAFETY:' '''
+
+# ===========================================================================
+# LAYER 3 -- Final validation
+# ===========================================================================
+
+[units.P12]
+name = "Final validation: zero pedantic warnings, full test suite"
+summary = '''
+Run the complete validation suite to confirm all pedantic warnings are
+resolved. Steps: (1) cargo clippy --workspace --all-targets --
+-W clippy::pedantic -- zero warnings (excluding any intentionally
+deprecated modules). (2) cargo test --workspace -- all tests pass. (3)
+cargo build --release -- clean build. (4) cargo fmt --all --check -- no
+formatting drift. Fix any cross-unit conflicts or regressions discovered
+during validation.'''
+layer = 3
+tier = 3
+status = "pending"
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P13", "P14", "P15", "P16"]
+blocks = []
+estimated_warnings_pct = 0
+estimated_loc = 20
+files_create = []
+files_modify = []
+acceptance = [
+  "cargo clippy --workspace --all-targets -- -W clippy::pedantic reports zero warnings (excluding any intentionally deprecated modules)",
+  "cargo clippy --workspace -- -W clippy::unwrap_used -W clippy::indexing_slicing reports zero warnings in non-test code",
+  "cargo test --workspace passes with all tests green",
+  "cargo build --release completes successfully",
+  "cargo fmt --all --check reports no formatting issues",
+  "No #[allow(clippy::*)] without an accompanying justification comment",
+  "grep -rn 'unsafe' shows zero blocks without preceding // SAFETY: comment",
+]
+produces = ["ART:pedantic-clean"]
+consumes = ["ART:must-use", "ART:closures-combinators", "ART:format-strings", "ART:match-arms", "ART:safe-casts", "ART:misc-quality", "ART:items-hoisted", "ART:short-functions", "ART:errors-doc", "ART:panics-doc-markdown", "ART:str-lifetimes", "ART:no-unwrap", "ART:safe-indexing", "ART:iter-strings", "ART:safe-unsafe"]
+critical_decisions = [
+  "Intentionally deprecated modules may be excluded from the zero-warning target -- document which and why.",
+  "Any new #[allow] added during P01-P16 must have a justification comment.",
+]
+rationale = '''
+Final gate. Ensures all units integrate cleanly and no regressions from the
+full remediation effort.'''
+
+# =============================================================================
+# USAGE GUIDE
+# =============================================================================
+
+[usage]
+description = '''
+How to instantiate this template for a new Rust workspace.'''
+
+[usage.steps]
+step_1 = "Copy this file into your repo (e.g., docs/clippy-pedantic-dag.toml)."
+
+step_2 = '''
+Run the discovery commands in [discovery.commands] to measure your baseline.
+Record the total warning count and per-category breakdown.'''
+
+step_3 = "Fill in the [workspace] section with your actual numbers."
+
+step_4 = '''
+For each unit P01-P16, run the command in [units.PXX.clippy_discovery] to
+get the list of affected files. Replace files_modify = ["DISCOVER_VIA_CLIPPY"]
+with the actual file list.'''
+
+step_5 = '''
+Replace estimated_loc formulas (e.g., "YOUR_MUST_USE_COUNT * 1.1") with
+actual numbers. The multiplier is a rule of thumb: ~1.1x for additive
+annotations like #[must_use], ~2-3x for refactors that change control flow,
+~2.2x for doc additions (each doc section is ~2 lines per warning).'''
+
+step_6 = '''
+Assign tiers based on your project priorities. The default tier assignments
+work well for most projects: Tier 1 = highest ROI and safest to land first,
+Tier 2 = important but more complex, Tier 3 = large volume or subjective.'''
+
+step_7 = '''
+Execute units in layer order (0 -> 1 -> 2 -> 3), respecting depends_on
+edges. Within a layer, units without dependencies on each other can run
+in parallel.'''
+
+step_8 = '''
+After each unit, verify acceptance criteria. Run the unit's clippy_discovery
+command -- the count should be zero.'''
+
+step_9 = '''
+After all units complete, execute P12 (final validation) to confirm
+everything integrates cleanly.'''
+
+# =============================================================================
+# CUSTOMIZATION GUIDE
+# =============================================================================
+
+[customization]
+description = "Which units can be skipped or modified, and when."
+
+[customization.skippable_units]
+P08 = '''
+Skip if your codebase has no functions over 100 lines, or if you have a
+higher too-many-lines-threshold in clippy.toml. Also reasonable to skip
+if you prefer the 'one cohesive block' style for complex state machines.'''
+
+P11 = '''
+Skip if your codebase has no trait patterns returning &str from impls.
+This unit exists specifically for the pattern where a trait defines
+fn name(&self) -> &str and implementations return string literals.'''
+
+P13 = '''
+Skip ONLY if you have no AI-assisted code in the project, or if you
+already enforce clippy::unwrap_used at the workspace level. This is the
+single highest-impact unit for AI-generated codebases.'''
+
+P14 = '''
+Skip ONLY if you already enforce clippy::indexing_slicing at the workspace
+level. Otherwise, keep it -- index panics are a top runtime failure mode.'''
+
+P15 = '''
+Skip if your codebase already has consistent string conversion patterns
+and no needless_collect warnings. Check with the discovery command first.'''
+
+P16 = '''
+Skip if your codebase has zero unsafe blocks (run discovery command).
+If you have any unsafe blocks at all, this unit is mandatory.'''
+
+[customization.always_keep]
+description = '''
+These units should NEVER be skipped. They represent the core pedantic
+remediation work and the highest-ROI improvements.'''
+units = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P09", "P10", "P12"]
+
+[customization.layer_dependencies]
+description = '''
+Layer ordering is critical. Layer 0 changes signatures and expressions.
+Layer 1 moves code around. Layer 2 adds documentation. If you land
+Layer 1 before Layer 0, you will have merge conflicts when Layer 0
+changes the expressions that Layer 1 moved. Layer 2 is purely additive
+and safe to run last. Layer 3 (P12) is always last -- it validates
+everything.'''
+
+[customization.adding_units]
+description = '''
+If your workspace has additional pedantic warnings not covered here,
+add new units with IDs P17+ following the same structure. Common
+additions: (1) clippy::module_name_repetitions -- rename types that
+repeat the module name (e.g., config::ConfigError -> config::Error).
+(2) clippy::similar_names -- rename variables with confusingly similar
+names. (3) clippy::option_option -- flatten Option<Option<T>> to a
+clearer type. (4) clippy::implicit_hasher -- add type parameter for
+HashMap/HashSet arguments. Place new units in the appropriate layer
+based on whether they change code semantics (Layer 0), structure
+(Layer 1), or documentation (Layer 2).'''
+
+[customization.ci_integration]
+description = '''
+After completing all units, add pedantic enforcement to CI. Options:
+(1) Add -W clippy::pedantic to your CI clippy invocation. (2) Add
+#![warn(clippy::pedantic)] to each crate's lib.rs/main.rs. (3) Use
+clippy.toml for workspace-wide configuration. Option 2 is preferred
+because it makes the policy visible in the source code and allows
+per-crate overrides via #![allow(clippy::some_lint)].'''
