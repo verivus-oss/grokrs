@@ -42,7 +42,7 @@ impl ToolSpec for GitAddTool {
         "git_add"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Stage specified files in the git index (equivalent to 'git add'). \
          Accepts a list of workspace-relative paths. Each path is validated \
          before staging."

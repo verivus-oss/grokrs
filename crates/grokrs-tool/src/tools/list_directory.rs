@@ -31,7 +31,7 @@ impl ToolSpec for ListDirectoryTool {
         "list_directory"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "List the contents of a directory relative to the workspace root. \
          Returns a sorted, newline-separated list of entry names."
     }

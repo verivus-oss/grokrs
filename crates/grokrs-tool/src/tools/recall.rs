@@ -51,7 +51,7 @@ impl ToolSpec for RecallTool {
         "recall"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Search and retrieve memories from the cross-session store. \
          Finds memories by substring match on key or value. \
          Results are ranked by access frequency and recency."

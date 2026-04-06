@@ -38,7 +38,7 @@ impl ToolSpec for GitStatusTool {
         "git_status"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Show the working tree status of the git repository at the workspace root. \
          Reports modified, staged, untracked, deleted, renamed, and conflicted files."
     }

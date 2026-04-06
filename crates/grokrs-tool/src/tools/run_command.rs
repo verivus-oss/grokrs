@@ -120,7 +120,7 @@ impl ToolSpec for RunCommandTool {
         "run_command"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Execute a command in the workspace root directory. \
          The environment is sanitized to prevent secret leakage. \
          Returns combined stdout and stderr with the exit code."

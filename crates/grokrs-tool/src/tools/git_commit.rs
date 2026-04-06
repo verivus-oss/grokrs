@@ -47,7 +47,7 @@ impl ToolSpec for GitCommitTool {
         "git_commit"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Create a git commit from staged changes. The commit message is \
          automatically prefixed with '[grokrs-agent]' for auditability. \
          Fails if there are no staged changes."

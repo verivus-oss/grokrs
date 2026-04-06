@@ -34,7 +34,7 @@ impl ToolSpec for WriteFileTool {
         "write_file"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Write content to a file relative to the workspace root. \
          Creates parent directories if they do not exist."
     }

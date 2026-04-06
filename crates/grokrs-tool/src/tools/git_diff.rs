@@ -42,7 +42,7 @@ impl ToolSpec for GitDiffTool {
         "git_diff"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Show the diff of changes in the git repository. \
          Set 'staged' to true for staged (index) changes, \
          or false (default) for unstaged (working directory) changes."

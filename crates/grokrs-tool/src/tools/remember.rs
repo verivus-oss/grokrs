@@ -47,7 +47,7 @@ impl ToolSpec for RememberTool {
         "remember"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Save a memory (key-value pair) to the cross-session store. \
          Use this to persist facts, decisions, or preferences that should \
          be recalled in future sessions. Categories: fact, decision, preference."

@@ -37,7 +37,7 @@ impl ToolSpec for ForgetTool {
         "forget"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Delete a memory from the cross-session store by its exact key. \
          Use this to remove outdated or incorrect memories."
     }

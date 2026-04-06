@@ -36,7 +36,7 @@ pub trait ToolSpec {
     fn name(&self) -> &'static str;
 
     /// Human-readable description for model consumption.
-    fn description(&self) -> &str;
+    fn description(&self) -> &'static str;
 
     /// JSON Schema describing the expected input structure.
     fn input_schema(&self) -> serde_json::Value;

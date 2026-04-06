@@ -34,7 +34,7 @@ impl ToolSpec for ReadFileTool {
         "read_file"
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "Read the contents of a file relative to the workspace root. \
          Returns the file content as a UTF-8 string."
     }
