@@ -1,0 +1,32 @@
+# Development profile for grokrs.
+#
+# Usage:
+#   grokrs --profile dev chat
+#   GROKRS_PROFILE=dev grokrs agent 'task'
+#   grokrs show-config --profile dev
+#
+# This profile is merged on top of the base config (configs/grokrs.example.toml).
+# Only values specified here override the base; all other settings are inherited.
+
+[policy]
+# Allow network and shell access in development.
+allow_network = true
+allow_shell = true
+
+[session]
+# Auto-approve Ask decisions in development.
+# WARNING: bypasses the approval boundary entirely — acceptable only in trusted,
+# non-production environments.
+approval_mode = "allow"
+
+[agent]
+# Higher iteration limit for complex dev tasks.
+max_iterations = 25
+# Admin trust unlocks all tools (read, write, shell) in development.
+default_trust = "admin"
+# Enable search tools by default.
+enable_search = true
+
+[chat]
+# Server-side conversation chaining for development continuity.
+stateful = true

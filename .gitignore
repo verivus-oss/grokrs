@@ -1,0 +1,7 @@
+target/
+.sqry/
+.sqry-index/
+.sqry-cache/
+.aivcs/
+.pytest_cache/
+.grokrs/

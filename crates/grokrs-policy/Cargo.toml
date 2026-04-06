@@ -1,0 +1,10 @@
+[package]
+name = "grokrs-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+grokrs-cap = { path = "../grokrs-cap" }
+grokrs-core = { path = "../grokrs-core" }
+

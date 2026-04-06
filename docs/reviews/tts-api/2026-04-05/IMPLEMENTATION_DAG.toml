@@ -1,0 +1,180 @@
+[meta]
+title = "Text-to-speech REST API"
+spec = "docs/specs/01_XAI_API_CLIENT.md"
+decomposition = "docs/reviews/tts-api/2026-04-05/IMPLEMENTATION_DAG.toml"
+created = "2026-04-05"
+total_units = 3
+tier1_units = ["U80", "U81", "U82"]
+tier2_units = []
+tier3_units = []
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — TTS types
+# ---------------------------------------------------------------------------
+
+[units.U80]
+name = "TTS wire types"
+summary = """
+Serde types for the text-to-speech REST endpoints. TtsRequest: text \
+(up to 15,000 chars), voice_id (enum: eve/ara/rex/sal/leo), \
+output_format (enum: mp3/wav/pcm/mulaw/alaw), sample_rate \
+(Option<u32>), bit_rate (Option<u32>), language (BCP-47 string). \
+TtsVoice: voice_id, name, language. TtsVoiceList: voices Vec. \
+TTS response is raw audio bytes, not JSON."""
+layer = 0
+tier = 1
+status = "planned"
+depends_on = []
+blocks = ["U81", "U82"]
+estimated_loc = 90
+spec_sections = []
+spec_anchors = []
+files_create = [
+  "crates/grokrs-api/src/types/tts.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "TtsRequest with text, voice_id, output_format, sample_rate, bit_rate, language",
+  "VoiceId enum with Eve, Ara, Rex, Sal, Leo variants and serde rename_all = lowercase",
+  "TtsOutputFormat enum with Mp3, Wav, Pcm, Mulaw, Alaw variants",
+  "TtsVoice struct with voice_id, name, language",
+  "TtsVoiceList struct with voices: Vec<TtsVoice>",
+  "serde round-trip tests for request and voice types",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:tts-types"]
+consumes = []
+critical_decisions = [
+  "VoiceId and TtsOutputFormat as enums for compile-time validation.",
+  "TTS response is raw bytes — no response serde type needed for audio.",
+]
+constraints = [
+  "text max length (15,000 chars) enforced at builder, not type level.",
+]
+failure_modes = [
+  "Voice ID serde rename doesn't match xAI wire format.",
+]
+rationale = "TTS types are the foundation for the text-to-speech endpoint client."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 — Endpoint client + CLI
+# ---------------------------------------------------------------------------
+
+[units.U81]
+name = "TTS endpoint client"
+summary = """
+Endpoint client for POST /v1/tts (generate audio), GET /v1/tts/voices \
+(list voices), GET /v1/tts/voices/{voice_id} (get voice). The generate \
+endpoint returns raw audio bytes (Content-Type: audio/*), not JSON. \
+Use send_json_raw for the audio response. Add to GrokClient as \
+client.tts()."""
+layer = 1
+tier = 1
+status = "planned"
+depends_on = ["U80"]
+blocks = ["U82"]
+estimated_loc = 100
+spec_sections = []
+spec_anchors = []
+files_create = [
+  "crates/grokrs-api/src/endpoints/tts.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/client.rs",
+]
+acceptance = [
+  "TtsClient with generate() returning Vec<u8> (raw audio bytes)",
+  "TtsClient with list_voices() returning TtsVoiceList",
+  "TtsClient with get_voice(voice_id) returning TtsVoice",
+  "generate() uses send_json_raw for binary response",
+  "GrokClient gains tts() accessor returning TtsClient",
+  "wiremock integration test for list_voices",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:tts-client"]
+consumes = ["ART:tts-types", "ART:http-transport"]
+critical_decisions = [
+  "Use send_json_raw (existing transport method) for binary audio response.",
+  "generate() returns Vec<u8> — caller decides output format (file, stdout, pipe).",
+]
+constraints = [
+  "Must go through policy gate like all other endpoints.",
+]
+failure_modes = [
+  "Content-Type mismatch — reqwest may reject non-JSON response if headers are wrong.",
+]
+rationale = "TTS endpoint enables voice output from CLI workflows."
+
+[units.U82]
+name = "TTS CLI subcommands"
+summary = """
+Add CLI subcommands: grokrs api tts '<text>' --voice eve --format mp3 \
+--output file.mp3 (generate and save audio), grokrs api voices (list \
+available voices). The generate command writes raw audio to the \
+specified output file or stdout if no --output is given."""
+layer = 1
+tier = 1
+status = "planned"
+depends_on = ["U81"]
+blocks = []
+estimated_loc = 80
+spec_sections = []
+spec_anchors = []
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/api.rs",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "grokrs api tts 'text' --voice eve --format mp3 generates audio",
+  "grokrs api tts 'text' --output file.mp3 writes audio to file",
+  "grokrs api tts 'text' without --output writes binary to stdout only if stdout is NOT a TTY",
+  "grokrs api tts 'text' without --output fails with helpful error if stdout IS a TTY (use --output or pipe)",
+  "grokrs api voices lists available voices with id, name, language",
+  "both subcommands respect policy engine (network must be allowed)",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["OUT:tts-cli"]
+consumes = ["ART:tts-client"]
+critical_decisions = [
+  "Default output to stdout for piping (e.g., grokrs api tts 'hello' | mpv -).",
+  "Default voice and format if not specified.",
+]
+constraints = [
+  "Binary audio output to stdout must not include any text framing.",
+]
+failure_modes = [
+  "Binary audio garbles terminal if TTY detection fails or is bypassed.",
+]
+rationale = "CLI surface for TTS enables voice workflows from the terminal."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U80"]
+leaf_nodes = ["U82"]
+critical_path = ["U80", "U81", "U82"]
+critical_path_loc = 270
+
+[computed.max_parallel]
+layer0 = 1
+layer1 = 1
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/endpoints/mod.rs", "crates/grokrs-api/src/client.rs"]
+units = ["U81"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/api.rs"]
+units = ["U82"]
+
+[computed.loc_totals]
+tier1 = 270
+tier2 = 0
+tier3 = 0
+all = 270

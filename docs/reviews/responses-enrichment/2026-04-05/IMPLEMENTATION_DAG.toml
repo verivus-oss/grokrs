@@ -1,0 +1,169 @@
+[meta]
+title = "Responses API type enrichments"
+spec = "docs/specs/01_XAI_API_CLIENT.md"
+decomposition = "docs/reviews/responses-enrichment/2026-04-05/IMPLEMENTATION_DAG.toml"
+created = "2026-04-05"
+total_units = 3
+tier1_units = ["U50", "U51", "U52"]
+tier2_units = []
+tier3_units = []
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Independent type-level additions (no shared files between units)
+# ---------------------------------------------------------------------------
+
+[units.U50]
+name = "Enrich Responses API request types"
+summary = """
+Merged unit covering all CreateResponseRequest and ReasoningConfig \
+enrichments. ReasoningConfig gains generate_summary (bool) and \
+summary (ReasoningSummary enum: auto/concise/detailed). \
+CreateResponseRequest gains include (Vec<String>), \
+context_management (Vec<Value>), and prompt_cache_key (String). \
+CreateResponseBuilder gains setter methods for all new fields. \
+Also verify search_parameters is properly typed."""
+layer = 0
+tier = 1
+status = "planned"
+depends_on = []
+blocks = []
+estimated_loc = 65
+spec_sections = ["Responses API"]
+spec_anchors = ["responses-create"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+]
+acceptance = [
+  "ReasoningConfig gains generate_summary: Option<bool> and summary: Option<ReasoningSummary>",
+  "ReasoningSummary enum with Auto, Concise, Detailed variants and correct serde rename",
+  "CreateResponseRequest gains include: Option<Vec<String>>",
+  "CreateResponseRequest gains context_management: Option<Vec<serde_json::Value>>",
+  "CreateResponseRequest gains prompt_cache_key: Option<String>",
+  "CreateResponseBuilder gains setter methods for all new fields",
+  "existing ReasoningConfig and CreateResponseRequest usage unchanged — all new fields are Option",
+  "serde round-trip tests for ReasoningConfig with all fields",
+  "serde round-trip with and without include/context_management/prompt_cache_key",
+  "skip_serializing_if on all new Option fields (especially Vec to avoid empty arrays)",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:enriched-responses"]
+consumes = []
+critical_decisions = [
+  "Merge reasoning enrichment and forward-compat fields into one unit — both modify responses.rs.",
+  "include as Vec<String> rather than typed enum — values may evolve.",
+  "context_management as Vec<Value> — schema not yet finalized by xAI.",
+]
+constraints = [
+  "Must not break existing callers or builder usage.",
+]
+failure_modes = [
+  "Wrong serde rename on ReasoningSummary variants.",
+  "Missing skip_serializing_if on Vec fields causes empty arrays in wire output.",
+]
+rationale = "Consolidates all responses.rs changes into a single unit to avoid file conflicts."
+
+[units.U51]
+name = "Enrich usage structs with call counts and nano-USD cost"
+summary = """
+The xAI API returns per-tool call counts in usage: \
+code_interpreter_calls, document_search_calls, file_search_calls, \
+mcp_calls, web_search_calls, x_search_calls. We already have \
+ServerSideToolUsageDetails wired as Option<Vec<...>> on the usage \
+structs. This unit adds the typed per-call-count fields to \
+ServerSideToolUsageDetails and verifies the existing wiring. \
+Also add cost_in_nano_usd: Option<i64> to ResponsesUsage and Usage."""
+layer = 0
+tier = 1
+status = "planned"
+depends_on = []
+blocks = []
+estimated_loc = 35
+spec_sections = ["Wire Types"]
+spec_anchors = ["usage-object"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/usage.rs",
+]
+acceptance = [
+  "ServerSideToolUsageDetails gains typed call-count fields (code_interpreter_calls, etc.) as Option<u64>",
+  "ResponsesUsage and Usage gain cost_in_nano_usd: Option<i64>",
+  "serde round-trip tests for the new fields",
+  "existing usage deserialization from xAI wire format still works",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:enriched-usage"]
+consumes = []
+critical_decisions = [
+  "Add call-count fields to existing ServerSideToolUsageDetails rather than a new struct.",
+  "cost_in_nano_usd as i64 (integer nano-USD), never floating point.",
+]
+constraints = [
+  "Must not break existing usage struct construction in tests (new fields are Option).",
+]
+failure_modes = [
+  "Missing skip_serializing_if on new Option fields.",
+]
+rationale = "Per-tool usage tracking is essential for cost attribution and observability."
+
+[units.U52]
+name = "Add output_files field to Chat Completions response"
+summary = """
+The xAI Chat Completions response can include output_files when \
+code_execution generates files. Add output_files: Option<Vec<OutputFile>> \
+to ChatCompletion. OutputFile struct is defined in chat.rs as a \
+chat-specific type (scoped to Chat Completions for now — can be \
+extracted to a shared module later if Responses API adds the same)."""
+layer = 0
+tier = 1
+status = "planned"
+depends_on = []
+blocks = []
+estimated_loc = 30
+spec_sections = ["Chat Completions API"]
+spec_anchors = ["chat-completions"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/chat.rs",
+]
+acceptance = [
+  "ChatCompletion gains output_files: Option<Vec<OutputFile>>",
+  "OutputFile struct defined in chat.rs with file_id: String, name: String, mime_type: Option<String>, size_bytes: Option<u64>",
+  "deserialization from JSON with and without output_files works",
+  "OutputFile marked #[deprecated] alongside the rest of the chat module",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:chat-output-files"]
+consumes = []
+critical_decisions = [
+  "Define OutputFile in chat.rs (scoped to Chat Completions). Extract to shared module if Responses API adds the same later.",
+]
+constraints = [
+  "Must not break existing ChatCompletion deserialization.",
+]
+failure_modes = [
+  "None — straightforward Optional field addition.",
+]
+rationale = "Code execution file outputs are needed for downstream tool processing."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U50", "U51", "U52"]
+leaf_nodes = ["U50", "U51", "U52"]
+critical_path = ["U50"]
+critical_path_loc = 65
+
+[computed.max_parallel]
+layer0 = 3
+
+# No conflict groups — each unit modifies a different file:
+# U50 → responses.rs, U51 → usage.rs, U52 → chat.rs
+
+[computed.loc_totals]
+tier1 = 130
+tier2 = 0
+tier3 = 0
+all = 130

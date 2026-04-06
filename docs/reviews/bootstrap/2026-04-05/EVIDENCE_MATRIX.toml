@@ -1,0 +1,115 @@
+[meta]
+title = "grokrs bootstrap evidence matrix"
+template_kind = "evidence-matrix"
+release_version = "1.0.0"
+source = "docs/reviews/bootstrap/2026-04-05/README.md"
+created = "2026-04-05"
+review_subject = "grokrs bootstrap scaffold"
+status = "ready"
+artifact_root = "."
+
+[[claims]]
+id = "E01"
+claim = "The repository contains a coherent Rust-only bootstrap scaffold."
+status = "supported"
+
+[[claims]]
+id = "E02"
+claim = "The initial delivery encodes a deny-by-default safety posture."
+status = "supported"
+
+[[claims]]
+id = "E03"
+claim = "The repository is packaged with machine-readable planning and review artifacts."
+status = "supported"
+
+[[evidence]]
+id = "EV01"
+artifact_path = "Cargo.toml"
+summary = "Workspace manifest for the Rust-only crate structure."
+
+[[evidence]]
+id = "EV02"
+artifact_path = "crates/grokrs-policy/src/lib.rs"
+summary = "Effect model and deny-by-default policy decisions."
+
+[[evidence]]
+id = "EV03"
+artifact_path = "crates/grokrs-cap/src/lib.rs"
+summary = "Trust level markers and rooted workspace path validation."
+
+[[evidence]]
+id = "EV04"
+artifact_path = "docs/reviews/bootstrap/2026-04-05/IMPLEMENTATION_DAG.toml"
+summary = "Machine-readable implementation decomposition."
+
+[[evidence]]
+id = "EV05"
+artifact_path = "docs/reviews/bootstrap/2026-04-05/TRACEABILITY.toml"
+summary = "Machine-readable intent-to-code lineage."
+
+[[evidence]]
+id = "EV06"
+artifact_path = "docs/reviews/bootstrap/2026-04-05/REVIEW_READINESS.toml"
+summary = "Bootstrap readiness gate."
+
+[[matrix]]
+id = "M01"
+claim_id = "E01"
+evidence_id = "EV01"
+scope_covered = "workspace and crate structure"
+known_exclusions = [
+  "does not prove long-term crate boundaries are final",
+]
+
+[[matrix]]
+id = "M02"
+claim_id = "E01"
+evidence_id = "EV04"
+scope_covered = "bootstrap implementation scope"
+known_exclusions = [
+  "does not prove future phases are implemented",
+]
+
+[[matrix]]
+id = "M03"
+claim_id = "E02"
+evidence_id = "EV02"
+scope_covered = "default deny for network and process spawn effects"
+known_exclusions = [
+  "does not prove future policy overrides are safe",
+]
+
+[[matrix]]
+id = "M04"
+claim_id = "E02"
+evidence_id = "EV03"
+scope_covered = "workspace-relative path validation"
+known_exclusions = [
+  "does not prove future cap-std integration",
+]
+
+[[matrix]]
+id = "M05"
+claim_id = "E03"
+evidence_id = "EV05"
+scope_covered = "traceability artifact presence"
+known_exclusions = [
+  "does not prove downstream process adoption",
+]
+
+[[matrix]]
+id = "M06"
+claim_id = "E03"
+evidence_id = "EV06"
+scope_covered = "readiness gate presence"
+known_exclusions = [
+  "does not prove future changes maintain artifact consistency",
+]
+
+[computed]
+claim_ids = ["E01", "E02", "E03"]
+supported_claims = ["E01", "E02", "E03"]
+partial_claims = []
+blocked_claims = []
+

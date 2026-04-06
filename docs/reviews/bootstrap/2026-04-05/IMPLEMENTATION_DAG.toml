@@ -1,0 +1,225 @@
+[meta]
+title = "grokrs bootstrap scaffold"
+spec = "docs/development/grokrs/01_SPEC.md"
+decomposition = "docs/development/grokrs/03_IMPLEMENTATION_PLAN.md"
+created = "2026-04-05"
+total_units = 5
+tier1_units = ["U01", "U02", "U03", "U04", "U05"]
+tier2_units = []
+tier3_units = []
+
+[units.U01]
+name = "Establish Cargo workspace"
+summary = "Create the Rust-only workspace, crate boundaries, and shared configuration types."
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U02", "U03", "U04"]
+estimated_loc = 220
+spec_sections = ["Functional Requirements"]
+spec_anchors = ["workspace/bootstrap"]
+files_create = [
+  "Cargo.toml",
+  "crates/grokrs-core/Cargo.toml",
+  "crates/grokrs-core/src/lib.rs",
+]
+files_modify = []
+acceptance = [
+  "cargo test builds the workspace successfully",
+  "configs/grokrs.example.toml loads through grokrs-core",
+]
+produces = ["ART:workspace-foundation"]
+consumes = []
+critical_decisions = [
+  "Use a small layered Cargo workspace instead of a monolithic binary crate.",
+]
+constraints = [
+  "Keep the scaffold Rust-only for core implementation files.",
+]
+failure_modes = [
+  "Workspace members drift and stop compiling together.",
+]
+rationale = "All downstream crates and docs depend on a stable workspace shape."
+
+[units.U02]
+name = "Add safety primitives"
+summary = "Implement trust levels, workspace path validation, and default effect policy."
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U01"]
+blocks = ["U05"]
+estimated_loc = 260
+spec_sections = ["Safety Requirements"]
+spec_anchors = ["typed-trust", "rooted-paths", "deny-default-policy"]
+files_create = [
+  "crates/grokrs-cap/Cargo.toml",
+  "crates/grokrs-cap/src/lib.rs",
+  "crates/grokrs-policy/Cargo.toml",
+  "crates/grokrs-policy/src/lib.rs",
+]
+files_modify = []
+acceptance = [
+  "absolute and escaping paths are rejected by tests",
+  "network and spawn effects are denied under the sample config",
+]
+produces = ["ART:safety-model"]
+consumes = ["ART:workspace-foundation"]
+critical_decisions = [
+  "Encode trust level as a type parameter instead of a runtime boolean.",
+]
+constraints = [
+  "All path handling remains workspace-relative and non-escaping.",
+]
+failure_modes = [
+  "Unchecked paths or ambient trust create privilege bypasses.",
+]
+rationale = "Safety primitives are the core differentiator of the repo and must land before operator-facing commands."
+
+[units.U03]
+name = "Add operator CLI"
+summary = "Expose doctor, config summary, and policy evaluation commands."
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U01"]
+blocks = ["U05"]
+estimated_loc = 170
+spec_sections = ["Functional Requirements", "Deliverables"]
+spec_anchors = ["cli-surface", "operator-feedback"]
+files_create = [
+  "crates/grokrs-session/Cargo.toml",
+  "crates/grokrs-session/src/lib.rs",
+  "crates/grokrs-tool/Cargo.toml",
+  "crates/grokrs-tool/src/lib.rs",
+  "crates/grokrs-cli/Cargo.toml",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/tests/cli_smoke.rs",
+]
+files_modify = []
+acceptance = [
+  "cargo run -p grokrs-cli -- doctor prints the repo posture",
+  "cargo run -p grokrs-cli -- eval network api.x.ai returns a deny decision",
+]
+produces = ["ART:cli-surface"]
+consumes = ["ART:workspace-foundation"]
+critical_decisions = [
+  "Keep the first CLI focused on visibility and policy, not execution.",
+]
+constraints = [
+  "Do not add shell execution in the bootstrap phase.",
+]
+failure_modes = [
+  "The CLI implies unsafe execution features that the scaffold does not actually gate.",
+]
+rationale = "The repo needs a minimal user-facing entrypoint without outrunning the safety model."
+
+[units.U04]
+name = "Add docs and review artifacts"
+summary = "Document scope, architecture, operations, and machine-readable review surfaces."
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U01"]
+blocks = ["U05"]
+estimated_loc = 280
+spec_sections = ["Summary", "Deliverables"]
+spec_anchors = ["docs", "review-bundle"]
+files_create = [
+  "README.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "ARCHITECTURE.md",
+  "docs/specs/00_SPEC.md",
+  "docs/design/00_ARCHITECTURE.md",
+  "docs/ops/00_BOOTSTRAP.md",
+  "docs/development/grokrs/01_SPEC.md",
+  "docs/development/grokrs/03_IMPLEMENTATION_PLAN.md",
+  "docs/reviews/bootstrap/2026-04-05/README.md",
+  "docs/reviews/bootstrap/2026-04-05/IMPLEMENTATION_DAG.toml",
+  "docs/reviews/bootstrap/2026-04-05/TRACEABILITY.toml",
+  "docs/reviews/bootstrap/2026-04-05/REVIEW_READINESS.toml",
+  "docs/reviews/bootstrap/2026-04-05/CONTRACT_DECLARATION.toml",
+  "docs/reviews/bootstrap/2026-04-05/EVIDENCE_MATRIX.toml",
+]
+files_modify = []
+acceptance = [
+  "review artifacts reference existing repo files",
+  "bootstrap instructions cover cargo, aivcs, and sqry flows",
+]
+produces = ["ART:docs-and-artifacts"]
+consumes = ["ART:workspace-foundation"]
+critical_decisions = [
+  "Check in machine-readable review artifacts at bootstrap instead of deferring them.",
+]
+constraints = [
+  "Artifacts must remain consistent with the repo surface they describe.",
+]
+failure_modes = [
+  "Docs drift from code and the review bundle stops being trustworthy.",
+]
+rationale = "The repo should be reviewable and agent-friendly on day one."
+
+[units.U05]
+name = "Register local tool surfaces"
+summary = "Add local settings, aivcs readiness, bootstrap script, and validation flow."
+layer = 2
+tier = 1
+status = "done"
+depends_on = ["U02", "U03", "U04"]
+blocks = []
+estimated_loc = 120
+spec_sections = ["Goals", "Deliverables"]
+spec_anchors = ["local-registration", "validation"]
+files_create = [
+  ".gitignore",
+  ".aivcsignore",
+  ".claude/settings.local.json",
+  "scripts/bootstrap_repo.sh",
+  "configs/grokrs.example.toml",
+  "examples/effects.md",
+]
+files_modify = []
+acceptance = [
+  "bootstrap script runs fmt, test, and optional aivcs init",
+  "local settings mirror useful shipctl-style permissions and add aivcs/sqry affordances",
+]
+produces = ["OUT:bootstrap-ready-repo"]
+consumes = ["ART:safety-model", "ART:cli-surface", "ART:docs-and-artifacts"]
+critical_decisions = [
+  "Carry forward the local agent settings shape from shipctl and add aivcs-cli plus sqry access.",
+]
+constraints = [
+  "Local metadata remains ignorable and safe to regenerate.",
+]
+failure_modes = [
+  "Missing local tooling surfaces force every operator to rediscover the bootstrap process.",
+]
+rationale = "A usable repo needs its local guidance and registration surfaces wired in after the scaffold exists."
+
+[computed]
+entry_points = ["U01"]
+leaf_nodes = ["U05"]
+critical_path = ["U01", "U04", "U05"]
+critical_path_loc = 620
+
+[computed.max_parallel]
+layer0 = 1
+layer1 = 3
+layer2 = 1
+
+[[computed.conflict_groups]]
+files = ["Cargo.toml"]
+units = ["U01", "U03"]
+
+[[computed.conflict_groups]]
+files = ["README.md", "AGENTS.md", "CLAUDE.md"]
+units = ["U04", "U05"]
+
+[computed.loc_totals]
+tier1 = 1050
+tier2 = 0
+tier3 = 0
+all = 1050
+

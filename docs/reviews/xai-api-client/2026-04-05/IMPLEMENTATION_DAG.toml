@@ -1,0 +1,775 @@
+[meta]
+title = "xAI API client integration"
+spec = "docs/specs/01_XAI_API_CLIENT.md"
+decomposition = "docs/development/grokrs/04_XAI_API_IMPLEMENTATION_PLAN.md"
+created = "2026-04-05"
+total_units = 14
+tier1_units = ["U10", "U11", "U12", "U13", "U14", "U15", "U16", "U17"]
+tier2_units = ["U20", "U21", "U22", "U23"]
+tier3_units = ["U30", "U31"]
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Foundation types and HTTP transport
+# ---------------------------------------------------------------------------
+
+[units.U10]
+name = "API wire types: common"
+summary = """
+Serde types for shared xAI API primitives: message roles, content blocks \
+(text, image_url, input_image), tool definitions, tool calls, tool results, \
+usage objects (prompt_tokens_details, completion_tokens_details, \
+cost_in_usd_ticks), model metadata, error envelope. These are the atoms \
+that every endpoint request/response is built from."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U12", "U13", "U14", "U15", "U17", "U21", "U22", "U23"]
+estimated_loc = 550
+spec_sections = ["Wire Types"]
+spec_anchors = ["common-types", "usage-object", "error-envelope"]
+files_create = [
+  "crates/grokrs-api/Cargo.toml",
+  "crates/grokrs-api/src/lib.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+  "crates/grokrs-api/src/types/common.rs",
+  "crates/grokrs-api/src/types/message.rs",
+  "crates/grokrs-api/src/types/tool.rs",
+  "crates/grokrs-api/src/types/usage.rs",
+  "crates/grokrs-api/src/types/error.rs",
+  "crates/grokrs-api/src/types/model.rs",
+]
+files_modify = ["Cargo.toml"]
+acceptance = [
+  "all common types round-trip through serde_json without data loss",
+  "optional fields serialize with skip_serializing_if = Option::is_none",
+  "cost_in_usd_ticks is i64, not f64",
+  "message content supports both string and array-of-content-block forms",
+]
+produces = ["ART:api-common-types"]
+consumes = []
+critical_decisions = [
+  "Hand-write serde types instead of depending on xai-openapi or code-gen; gives full control and avoids external churn.",
+  "Put all API types in a dedicated grokrs-api crate that does not depend on grokrs-cap or grokrs-policy.",
+]
+constraints = [
+  "Types must not depend on any HTTP client — they are pure data.",
+  "Enum variants use serde rename to match xAI wire names exactly.",
+]
+failure_modes = [
+  "Divergence between local types and actual xAI wire format causes silent deserialization failures.",
+]
+rationale = "Every endpoint shares these building blocks. Getting them right first avoids cascading rework."
+
+[units.U11]
+name = "HTTP transport layer"
+summary = """
+A thin async HTTP client wrapper around reqwest that handles: base URL \
+(https://api.x.ai), bearer auth from XAI_API_KEY or config, request \
+signing, retry with exponential backoff on 429/503, timeout, and \
+structured error mapping into grokrs-core error types. Exposes \
+send_json / send_sse / send_multipart primitives. Does NOT know about \
+specific endpoints."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U12", "U13", "U14", "U15", "U17", "U21", "U22", "U23"]
+estimated_loc = 380
+spec_sections = ["Transport"]
+spec_anchors = ["http-client", "auth", "retry", "error-handling"]
+files_create = [
+  "crates/grokrs-api/src/transport/mod.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-api/src/transport/auth.rs",
+  "crates/grokrs-api/src/transport/retry.rs",
+  "crates/grokrs-api/src/transport/error.rs",
+  "crates/grokrs-api/src/transport/sse.rs",
+]
+files_modify = ["crates/grokrs-api/Cargo.toml"]
+acceptance = [
+  "client reads XAI_API_KEY from environment or AppConfig",
+  "requests include Authorization: Bearer header",
+  "429 and 503 responses trigger exponential backoff up to configurable max retries",
+  "non-2xx responses deserialize into ApiError with status code, message, and request_id",
+  "SSE transport returns an async Stream of raw event strings",
+]
+produces = ["ART:http-transport"]
+consumes = []
+critical_decisions = [
+  "Use reqwest as the HTTP backend — well-maintained, async, TLS built-in.",
+  "SSE parsing is a thin line-protocol layer, not a full eventsource crate.",
+]
+constraints = [
+  "Transport must pass through grokrs-policy for NetworkConnect before any outbound request.",
+  "No endpoint-specific logic leaks into the transport layer.",
+]
+failure_modes = [
+  "Retry logic without jitter causes thundering herd on rate limits.",
+  "Unchecked SSE reconnect loops consume unbounded memory.",
+]
+rationale = "A shared, policy-gated transport ensures all API calls go through the same auth, retry, and audit path."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 — Endpoint clients
+# ---------------------------------------------------------------------------
+
+[units.U12]
+name = "Responses API client"
+summary = """
+Typed client for the Responses API — the recommended xAI endpoint. \
+POST /v1/responses (create), GET /v1/responses/{id} (retrieve), \
+DELETE /v1/responses/{id} (delete). Request types: model, input \
+(string | message array), instructions, tools, tool_choice, \
+previous_response_id, store, stream, temperature, top_p, \
+max_output_tokens, max_turns, reasoning (effort), text (format / \
+json_schema), search_parameters. Response types: id, status, output \
+(typed message/reasoning/tool_call items), usage with \
+server_side_tool_usage_details. Supports stateful conversation \
+chaining via previous_response_id."""
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U10", "U11"]
+blocks = ["U16", "U20", "U30"]
+estimated_loc = 620
+spec_sections = ["Responses API"]
+spec_anchors = ["responses-create", "responses-retrieve", "responses-delete", "stateful-conversations"]
+files_create = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/endpoints/responses.rs",
+  "crates/grokrs-api/src/types/responses.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/types/mod.rs",
+  "crates/grokrs-api/src/lib.rs",
+]
+acceptance = [
+  "create_response with a simple text input returns a parsed ResponseObject",
+  "store defaults to false in request builder (overriding xAI default of true)",
+  "previous_response_id chains two requests into a stateful conversation when store=true",
+  "structured output with json_schema format returns parseable JSON",
+  "tool calls in output are deserialized with function name and arguments",
+  "usage includes input_tokens, output_tokens, reasoning_tokens, server_side_tool_usage_details",
+]
+produces = ["ART:responses-client"]
+consumes = ["ART:api-common-types", "ART:http-transport"]
+critical_decisions = [
+  "Target the Responses API as the primary surface; Chat Completions is deprecated.",
+  "Model input as an enum: InputString(String) | InputMessages(Vec<Message>) to match the xAI spec.",
+]
+constraints = [
+  "All requests go through the policy-gated transport.",
+  "Response IDs must be opaque strings, not parsed.",
+]
+failure_modes = [
+  "Responses API evolves faster than local types — need a versioning or compat strategy.",
+]
+rationale = "The Responses API is where xAI delivers all new features. It is the correct primary integration target."
+
+[units.U13]
+name = "Chat Completions API client (legacy)"
+summary = """
+Typed client for the legacy Chat Completions endpoint. \
+POST /v1/chat/completions. Request types: model, messages, tools, \
+tool_choice, stream, temperature, top_p, max_completion_tokens, n, \
+stop, seed, frequency_penalty, presence_penalty, response_format, \
+reasoning_effort, search_parameters, deferred. Response types: id, \
+choices (message with content, reasoning_content, refusal, tool_calls), \
+usage, system_fingerprint, citations. Also: \
+GET /v1/chat/deferred-completion/{request_id} for deferred polling."""
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U10", "U11"]
+blocks = ["U16", "U20", "U30"]
+estimated_loc = 480
+spec_sections = ["Chat Completions API"]
+spec_anchors = ["chat-completions", "deferred-completions"]
+files_create = [
+  "crates/grokrs-api/src/endpoints/chat.rs",
+  "crates/grokrs-api/src/types/chat.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "basic chat completion with system + user messages returns parsed ChatCompletion",
+  "tool_calls in response include function name and JSON arguments string",
+  "deferred=true returns a request_id; polling endpoint returns 202 or 200 with result",
+  "reasoning_content is present for reasoning model responses",
+  "finish_reason correctly deserializes stop, length, end_turn variants",
+]
+produces = ["ART:chat-client"]
+consumes = ["ART:api-common-types", "ART:http-transport"]
+critical_decisions = [
+  "Include legacy endpoint for backward compat and for features not yet on Responses API.",
+]
+constraints = [
+  "Mark the module and public types with #[deprecated] doc attributes pointing to Responses API.",
+]
+failure_modes = [
+  "Maintaining two chat surfaces doubles the type surface area.",
+]
+rationale = "Some users and tooling still target Chat Completions. Providing it ensures migration is optional."
+
+[units.U14]
+name = "Streaming support"
+summary = """
+SSE-based streaming for both Responses and Chat Completions endpoints. \
+Parse data: lines, handle data: [DONE] terminator, deserialize deltas \
+into typed stream events. For Chat Completions: stream delta chunks \
+with partial content, tool_call fragments, and optional usage in final \
+chunk (stream_options.include_usage). For Responses: stream response \
+events with output items. Expose as async Stream<Item = Result<Event>>. \
+Function calls arrive as complete chunks, not streamed token-by-token."""
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U10", "U11"]
+blocks = ["U16", "U30"]
+estimated_loc = 420
+spec_sections = ["Streaming"]
+spec_anchors = ["sse-transport", "stream-events", "chat-stream-deltas", "responses-stream-events"]
+files_create = [
+  "crates/grokrs-api/src/streaming/mod.rs",
+  "crates/grokrs-api/src/streaming/events.rs",
+  "crates/grokrs-api/src/streaming/parser.rs",
+  "crates/grokrs-api/src/types/stream.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/responses.rs",
+  "crates/grokrs-api/src/endpoints/chat.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "streaming response yields typed events as an async Stream",
+  "data: [DONE] terminates the stream cleanly",
+  "partial content deltas accumulate into a complete message",
+  "function call chunks arrive whole, not fragmented",
+  "stream_options.include_usage surfaces usage in the final chunk for Chat Completions",
+  "connection drop mid-stream surfaces as a typed StreamError, not a panic",
+]
+produces = ["ART:streaming-support"]
+consumes = ["ART:api-common-types", "ART:http-transport"]
+critical_decisions = [
+  "Expose streaming as futures::Stream rather than callback-based consumer pattern.",
+  "SSE parsing is internal; callers receive typed Rust events.",
+]
+constraints = [
+  "Stream must be cancellable — dropping the stream must not leak the HTTP connection.",
+  "Memory-bounded: no unbounded buffering of events.",
+]
+failure_modes = [
+  "Partial JSON in SSE data fields causes deserialization panics instead of errors.",
+]
+rationale = "Streaming is critical for interactive CLI use. Token-by-token output is expected for an agent shell."
+
+[units.U15]
+name = "Models API client"
+summary = """
+Typed clients for model discovery endpoints. \
+GET /v1/models, GET /v1/models/{model_id}, \
+GET /v1/language-models, GET /v1/language-models/{model_id}, \
+GET /v1/image-generation-models, GET /v1/image-generation-models/{model_id}, \
+GET /v1/video-generation-models, GET /v1/video-generation-models/{model_id}. \
+Response types include id, created, owned_by, aliases, input_modalities, \
+output_modalities, pricing fields (prompt_text_token_price, \
+completion_text_token_price, cached_prompt_text_token_price), fingerprint, \
+version. Pricing is in USD cents per 100 million tokens (integer)."""
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U10", "U11"]
+blocks = ["U17", "U30"]
+estimated_loc = 320
+spec_sections = ["Models API"]
+spec_anchors = ["models-list", "language-models", "image-models", "video-models", "model-aliases"]
+files_create = [
+  "crates/grokrs-api/src/endpoints/models.rs",
+  "crates/grokrs-api/src/types/models.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "list_models returns a Vec<Model> with id, created, owned_by",
+  "list_language_models returns extended model info with modalities, pricing, aliases, fingerprint",
+  "pricing fields are integer types (i64), not floats",
+  "aliases field is Vec<String> and may be empty",
+  "get_language_model by ID returns the same shape as the list item",
+]
+produces = ["ART:models-client"]
+consumes = ["ART:api-common-types", "ART:http-transport"]
+critical_decisions = [
+  "Separate LanguageModel (full) from Model (minimal) types to match the two API shapes.",
+]
+constraints = [
+  "Pricing fields must be integer cents-per-100M-tokens, never floating point.",
+]
+failure_modes = [
+  "New model fields from xAI cause deserialization failures if deny_unknown_fields is set.",
+]
+rationale = "Model discovery is needed for config validation, cost estimation, and runtime model selection."
+
+[units.U16]
+name = "Function calling and tool use"
+summary = """
+Typed support for the xAI tool system. Function definitions with name, \
+description, JSON Schema parameters (max 128 tools). Tool choice: auto, \
+required, none, or specific function. Parallel tool calls toggle. \
+Client-side function calling loop: model returns tool_call -> caller \
+executes -> caller returns tool_result -> model continues. Built-in \
+server-side tools: web_search, x_search, code_execution / code_interpreter, \
+collections_search / file_search, attachment_search. Tool type enum, \
+search_parameters (mode, sources, from_date, to_date, max_search_results, \
+return_citations). Structured output via response_format json_schema or \
+text.format json_schema."""
+layer = 2
+tier = 1
+status = "done"
+depends_on = ["U12", "U13", "U14"]
+blocks = ["U20", "U30"]
+estimated_loc = 480
+spec_sections = ["Tools", "Function Calling", "Structured Outputs"]
+spec_anchors = ["tool-definitions", "tool-choice", "function-calling-loop", "builtin-tools", "structured-outputs", "search-parameters"]
+files_create = [
+  "crates/grokrs-api/src/types/function_call.rs",
+  "crates/grokrs-api/src/types/builtin_tools.rs",
+  "crates/grokrs-api/src/types/structured_output.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/types/mod.rs",
+  "crates/grokrs-api/src/types/tool.rs",
+]
+acceptance = [
+  "function definition with JSON Schema parameters serializes to correct wire format",
+  "tool_choice variants auto, required, none, and named-function all serialize correctly",
+  "tool_call response includes function name and JSON arguments string",
+  "tool_result message round-trips through serde",
+  "built-in tool types (web_search, x_search, code_execution, etc.) serialize as {type: name}",
+  "search_parameters with mode, sources, date range serialize correctly",
+  "json_schema response_format produces valid structured output request",
+  "tool_loop helper drives the call-execute-return cycle for function calling",
+]
+produces = ["ART:tool-use"]
+consumes = ["ART:responses-client", "ART:chat-client", "ART:streaming-support"]
+critical_decisions = [
+  "Model built-in tools as unit-struct enum variants, not raw JSON objects.",
+  "Tool loop is a helper, not mandatory — callers can drive the loop themselves.",
+]
+constraints = [
+  "Max 128 tools per request — validate at construction time.",
+  "Function call execution is the caller's responsibility; the API crate only handles wire format.",
+]
+failure_modes = [
+  "Mixing Chat Completions tool format with Responses API tool format.",
+]
+rationale = "Tool use is the core agentic capability. Type-safe tool definitions prevent wire-format bugs."
+
+[units.U17]
+name = "Media generation clients"
+summary = """
+Typed clients for image and video generation/editing endpoints. \
+Images: POST /v1/images/generations (prompt, model, n, aspect_ratio, \
+quality, resolution, response_format), POST /v1/images/edits (prompt, \
+image/images, mask, model). Videos: POST /v1/videos/generations \
+(prompt, image, reference_images, duration 1-15s, aspect_ratio, \
+resolution), POST /v1/videos/edits (prompt, video), \
+POST /v1/videos/extensions (prompt, video, duration 1-10s), \
+GET /v1/videos/{request_id} (poll: status, progress 0-100, video.url). \
+Videos are async — submit returns request_id, poll for result."""
+layer = 2
+tier = 1
+status = "done"
+depends_on = ["U10", "U11", "U15"]
+blocks = ["U30"]
+estimated_loc = 440
+spec_sections = ["Image Generation", "Video Generation"]
+spec_anchors = ["image-gen", "image-edit", "video-gen", "video-edit", "video-extend", "video-poll"]
+files_create = [
+  "crates/grokrs-api/src/endpoints/images.rs",
+  "crates/grokrs-api/src/endpoints/videos.rs",
+  "crates/grokrs-api/src/types/images.rs",
+  "crates/grokrs-api/src/types/videos.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "image generation request with prompt and model returns parsed response with url or b64_json",
+  "image edit with single image and prompt returns parsed response",
+  "image edit with multiple reference images serializes images array correctly",
+  "video generation returns request_id",
+  "video poll returns status pending with progress 0-99 or done with video url",
+  "video edit and extension requests serialize correctly",
+  "aspect_ratio and resolution enums match xAI spec values exactly",
+  "response_format url vs b64_json controls image delivery",
+]
+produces = ["ART:media-clients"]
+consumes = ["ART:api-common-types", "ART:http-transport", "ART:models-client"]
+critical_decisions = [
+  "Video polling uses a typed async helper that yields progress updates, not raw poll loops.",
+  "Image response_format defaults to url; b64_json is opt-in.",
+]
+constraints = [
+  "Video duration bounds are enforced at construction: 1-15s for generation, 1-10s for extension.",
+  "Aspect ratio and resolution are enums, not free-form strings.",
+]
+failure_modes = [
+  "Polling loop without backoff hammers the xAI API.",
+  "Video URL expiry not communicated to caller.",
+]
+rationale = "Media generation is a distinct xAI capability that separates it from text-only LLM APIs."
+
+# ---------------------------------------------------------------------------
+# LAYER 2 — Auxiliary endpoints and integration
+# ---------------------------------------------------------------------------
+
+[units.U20]
+name = "Batch API client"
+summary = """
+Typed client for the Batch API. POST /v1/batches (create), \
+POST /v1/batches/{id}/requests (add requests), \
+GET /v1/batches/{id} (status: num_pending, num_success, num_error), \
+GET /v1/batches/{id}/results (paginated results), \
+POST /v1/batches/{id}:cancel, GET /v1/batches (list). \
+50% token discount. Requests are Chat Completions or Responses payloads. \
+Results include full response objects plus per-request cost_in_usd_ticks."""
+layer = 2
+tier = 2
+status = "done"
+depends_on = ["U12", "U13", "U16"]
+blocks = ["U30"]
+estimated_loc = 360
+spec_sections = ["Batch API"]
+spec_anchors = ["batch-create", "batch-add-requests", "batch-status", "batch-results", "batch-cancel"]
+files_create = [
+  "crates/grokrs-api/src/endpoints/batches.rs",
+  "crates/grokrs-api/src/types/batches.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "create batch returns batch_id",
+  "add requests accepts Vec of chat or responses request payloads",
+  "batch status returns num_pending, num_success, num_error counts",
+  "results pagination via pagination_token yields all results",
+  "cancel batch transitions state to cancelled",
+]
+produces = ["ART:batch-client"]
+consumes = ["ART:responses-client", "ART:chat-client", "ART:tool-use"]
+critical_decisions = [
+  "Batch requests reuse the same typed request builders as the realtime endpoints.",
+]
+constraints = [
+  "Batch results are paginated — client must handle pagination_token.",
+]
+failure_modes = [
+  "Polling batch status without backoff wastes API quota.",
+]
+rationale = "Batch API is essential for cost-effective bulk operations in production workflows."
+
+[units.U21]
+name = "Files API client"
+summary = """
+Typed client for file management. POST /v1/files (upload single), \
+POST /v1/files:initialize + POST /v1/files:uploadChunks (multipart), \
+GET /v1/files (list), GET /v1/files/{file_id} (metadata), \
+PUT /v1/files/{file_id} (update), POST /v1/files:download. \
+Files are used for document understanding in chat and for collections. \
+team_id is derived from credentials unless explicitly set."""
+layer = 2
+tier = 2
+status = "done"
+depends_on = ["U10", "U11"]
+blocks = ["U30"]
+estimated_loc = 300
+spec_sections = ["Files API"]
+spec_anchors = ["file-upload", "file-multipart", "file-list", "file-download"]
+files_create = [
+  "crates/grokrs-api/src/endpoints/files.rs",
+  "crates/grokrs-api/src/types/files.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "single file upload returns file metadata with file_id",
+  "multipart upload initializes then uploads chunks",
+  "upload functions accept &Path from caller (pre-validated via WorkspacePath by caller)",
+  "list files returns paginated file metadata",
+  "download file returns file content",
+  "file_id is opaque string, not parsed",
+]
+produces = ["ART:files-client"]
+consumes = ["ART:api-common-types", "ART:http-transport"]
+critical_decisions = [
+  "Use multipart/form-data for single upload, chunked protocol for large files.",
+  "Upload accepts &Path, not WorkspacePath — grokrs-api does NOT depend on grokrs-cap. Caller validates.",
+]
+constraints = [
+  "grokrs-api does not depend on grokrs-cap — path validation is the caller's responsibility.",
+  "Policy FsRead evaluation for reading local files is also the caller's responsibility.",
+]
+failure_modes = [
+  "Large file upload without chunking exceeds memory limits.",
+  "Caller passes unvalidated path, bypassing WorkspacePath safety — mitigated by documenting the contract.",
+]
+rationale = "File upload is required for document understanding and collection-based RAG."
+
+[units.U22]
+name = "Tokenizer and utility clients"
+summary = """
+Typed clients for remaining utility endpoints. \
+POST /v1/tokenize-text (text, model -> token_ids with token_id, \
+string_token, token_bytes). GET /v1/api-key (key info: name, status, \
+acls, team_id, blocked/disabled flags)."""
+layer = 2
+tier = 2
+status = "done"
+depends_on = ["U10", "U11"]
+blocks = ["U30"]
+estimated_loc = 160
+spec_sections = ["Utility Endpoints"]
+spec_anchors = ["tokenize-text", "api-key-info"]
+files_create = [
+  "crates/grokrs-api/src/endpoints/tokenize.rs",
+  "crates/grokrs-api/src/endpoints/api_key.rs",
+  "crates/grokrs-api/src/types/tokenize.rs",
+  "crates/grokrs-api/src/types/api_key.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "tokenize returns token_ids with token_id (u32), string_token, and token_bytes",
+  "api_key endpoint returns key metadata including acls and blocked status",
+]
+produces = ["ART:utility-clients"]
+consumes = ["ART:api-common-types", "ART:http-transport"]
+critical_decisions = [
+  "Token IDs are u32, token_bytes are Vec<u8>.",
+]
+constraints = [
+  "Tokenizer model parameter must match a valid model ID.",
+]
+failure_modes = [
+  "Token byte arrays with invalid UTF-8 cause panics if unwrapped as String.",
+]
+rationale = "Tokenization is needed for context window management and cost estimation."
+
+[units.U23]
+name = "Policy bridge: NetworkConnect gating"
+summary = """
+Define the PolicyGate trait, wire it into the transport, add ApiConfig \
+to grokrs-core, and update the example config. The PolicyGate trait \
+has a single method: fn evaluate(&self, effect: &Effect) -> Decision. \
+The transport calls this before every outbound HTTP request with a \
+NetworkConnect { host } effect. If the gate returns Deny, the request \
+fails with PolicyDenied. If the gate returns Ask, the request fails \
+with ApprovalRequired (approval broker does not exist yet). The CLI \
+wires the real PolicyEngine; tests wire a stub that returns Allow. \
+AppConfig gains api: Option<ApiConfig> with api_key_env (env var \
+name, NOT the secret), base_url, timeout_secs, max_retries. Existing \
+configs without [api] continue to load. summary() and show-config \
+updated. Embedded test config updated."""
+layer = 2
+tier = 2
+status = "done"
+depends_on = ["U10", "U11"]
+blocks = ["U30"]
+estimated_loc = 280
+spec_sections = ["Policy Integration", "API Configuration"]
+spec_anchors = ["network-gating", "policy-bridge", "api-config"]
+files_create = [
+  "crates/grokrs-api/src/transport/policy_gate.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-core/src/lib.rs",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "PolicyGate trait defined with fn evaluate(&self, effect: &Effect) -> Decision",
+  "outbound request with Deny gate returns PolicyDenied error",
+  "outbound request with Ask gate returns ApprovalRequired error with message about missing broker",
+  "outbound request with Allow gate proceeds normally",
+  "NetworkConnect effect includes the target host from the request URL",
+  "AppConfig gains api: Option<ApiConfig> — existing configs without [api] still load",
+  "ApiConfig contains api_key_env, base_url, timeout_secs, max_retries — no actual secrets",
+  "AppConfig::summary() includes API config fields when api.is_some()",
+  "embedded test config in grokrs-core updated with [api] section",
+  "configs/grokrs.example.toml updated with [api] section and comments explaining env-var-only auth",
+]
+produces = ["ART:policy-bridge"]
+consumes = ["ART:api-common-types", "ART:http-transport"]
+critical_decisions = [
+  "Gate at the transport layer, not at each endpoint client.",
+  "PolicyGate is a trait, not a compile-time dependency on grokrs-policy — injected at runtime.",
+  "Ask is treated as a blocking denial until the approval broker crate exists.",
+  "ApiConfig is Option so existing configs are backward-compatible.",
+  "Config stores only the env var name for the API key, never the actual secret.",
+]
+constraints = [
+  "Must not bypass the policy gate even in test — tests wire a stub that returns Allow.",
+  "API key must never appear in logs, error messages, Debug output, or on-disk state.",
+  "grokrs-api must NOT depend on grokrs-policy at compile time.",
+]
+failure_modes = [
+  "Policy gate accidentally blocks localhost/loopback in integration tests.",
+  "Adding [api] as required (not Option) breaks existing config loading.",
+  "Storing actual API key in config instead of env var name leaks credentials.",
+]
+rationale = "This is the integration point where grokrs safety model meets the API client. The trait-based gate keeps grokrs-api decoupled from the policy crate while still enforcing deny-by-default."
+
+# ---------------------------------------------------------------------------
+# LAYER 3 — Unified client facade and CLI integration
+# ---------------------------------------------------------------------------
+
+[units.U30]
+name = "Unified GrokClient facade"
+summary = """
+A single GrokClient struct that composes all endpoint clients and \
+provides a coherent API surface. Constructed from AppConfig. Holds \
+the shared HTTP transport and policy gate. Exposes: \
+client.responses().create(...), client.chat().create(...), \
+client.models().list(), client.images().generate(...), \
+client.videos().generate(...), client.files().upload(...), \
+client.batches().create(...), client.tokenize(...), client.api_key(). \
+Session-aware: associates requests with the current Session<T>."""
+layer = 3
+tier = 3
+status = "done"
+depends_on = ["U12", "U13", "U14", "U15", "U16", "U17", "U20", "U21", "U22", "U23"]
+blocks = ["U31"]
+estimated_loc = 280
+spec_sections = ["Client Facade"]
+spec_anchors = ["grok-client", "session-integration"]
+files_create = [
+  "crates/grokrs-api/src/client.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/lib.rs",
+]
+acceptance = [
+  "GrokClient::from_config(AppConfig) constructs without error when config is valid",
+  "all endpoint sub-clients are accessible via builder-style methods",
+  "client respects policy gate for all outbound requests",
+  "client can be associated with a Session<T> for trust-level-aware operations",
+]
+produces = ["ART:grok-client"]
+consumes = [
+  "ART:responses-client", "ART:chat-client", "ART:streaming-support",
+  "ART:models-client", "ART:media-clients", "ART:batch-client",
+  "ART:files-client", "ART:utility-clients", "ART:policy-bridge",
+  "ART:tool-use",
+]
+critical_decisions = [
+  "Single facade instead of requiring callers to construct each endpoint client separately.",
+  "Session association is optional — the client works without a session for simple scripts.",
+]
+constraints = [
+  "Facade must not add behavior beyond delegation — no hidden retries or caching.",
+]
+failure_modes = [
+  "Facade becomes a god object that obscures endpoint-specific options.",
+]
+rationale = "Callers should not need to know the internal crate structure to make API calls."
+
+[units.U31]
+name = "CLI integration: api subcommands"
+summary = """
+Add api subcommand group to grokrs-cli. Subcommands: \
+api models (list models), api chat (one-shot prompt), \
+api tokenize (count tokens), api key-info (show API key metadata). \
+All subcommands respect the policy engine and require explicit \
+allow_network=true in config. Streaming output for chat. \
+Uses GrokClient constructed from config path."""
+layer = 3
+tier = 3
+status = "done"
+depends_on = ["U30"]
+blocks = []
+estimated_loc = 350
+spec_sections = ["CLI Surface"]
+spec_anchors = ["cli-api-commands"]
+files_create = [
+  "crates/grokrs-cli/src/commands/mod.rs",
+  "crates/grokrs-cli/src/commands/api.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/Cargo.toml",
+]
+acceptance = [
+  "grokrs api models lists available models with id and pricing",
+  "grokrs api chat 'prompt' streams response tokens to stdout",
+  "grokrs api tokenize 'text' prints token count and IDs",
+  "grokrs api key-info shows redacted key, team, and acl info",
+  "all api subcommands fail gracefully when allow_network=false",
+  "config path is configurable via --config flag",
+]
+produces = ["OUT:api-cli"]
+consumes = ["ART:grok-client"]
+critical_decisions = [
+  "Stream chat output token-by-token to match interactive agent shell UX.",
+]
+constraints = [
+  "CLI must not store or log the API key.",
+  "Error messages for policy denials must explain how to enable network access in config.",
+]
+failure_modes = [
+  "Streaming output garbles on non-UTF-8 terminal.",
+]
+rationale = "The CLI is the operator-facing proof that the API client works end-to-end through the safety model."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U10", "U11"]
+leaf_nodes = ["U31"]
+critical_path = ["U10", "U12", "U16", "U30", "U31"]
+critical_path_loc = 2280
+
+[computed.max_parallel]
+layer0 = 2
+layer1 = 4
+layer2 = 4
+layer3 = 2
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/Cargo.toml"]
+units = ["U10", "U11"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/types/mod.rs"]
+units = ["U12", "U13", "U14", "U15", "U16", "U17", "U20", "U21", "U22"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/endpoints/mod.rs"]
+units = ["U12", "U13", "U15", "U17", "U20", "U21", "U22"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/lib.rs"]
+units = ["U10", "U12", "U30"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/main.rs"]
+units = ["U31"]
+
+[computed.loc_totals]
+tier1 = 3690
+tier2 = 1100
+tier3 = 630
+all = 5420

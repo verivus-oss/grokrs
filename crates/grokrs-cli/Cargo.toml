@@ -1,0 +1,63 @@
+[package]
+name = "grokrs-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "grokrs_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "grokrs"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+base64 = "0.22"
+clap.workspace = true
+grokrs-api = { path = "../grokrs-api" }
+grokrs-cap = { path = "../grokrs-cap" }
+grokrs-core = { path = "../grokrs-core" }
+grokrs-policy = { path = "../grokrs-policy" }
+grokrs-session = { path = "../grokrs-session" }
+grokrs-tool = { path = "../grokrs-tool" }
+grokrs-store = { path = "../grokrs-store" }
+futures.workspace = true
+reqwest.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+url.workspace = true
+uuid = { version = "1", features = ["v4"] }
+libc = "0.2"
+rustyline = "15"
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread", "io-util", "io-std"] }
+
+# Optional: OpenTelemetry instrumentation (behind `otel` feature)
+tracing = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+
+[features]
+default = []
+audio = []
+otel = [
+    "tracing",
+    "tracing-subscriber",
+    "tracing-opentelemetry",
+    "opentelemetry",
+    "opentelemetry_sdk",
+    "opentelemetry-otlp",
+    "grokrs-api/otel",
+    "grokrs-tool/otel",
+    "grokrs-session/otel",
+]
+
+[dev-dependencies]
+tempfile = "3"
+wiremock = "0.6"
+

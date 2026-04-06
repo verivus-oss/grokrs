@@ -1,0 +1,75 @@
+[meta]
+title = "grokrs bootstrap review readiness gate"
+release_version = "1.0.0"
+template_kind = "readiness-gate"
+source = "docs/reviews/bootstrap/2026-04-05/README.md"
+created = "2026-04-05"
+review_subject = "grokrs bootstrap scaffold"
+status = "ready"
+artifact_root = "."
+
+[[artifact_classes]]
+id = "A01"
+name = "implementation_rereview"
+description = "Bootstrap repo scaffold ready for architecture and safety review."
+
+[[gates]]
+id = "G01"
+artifact_class = "A01"
+name = "Bootstrap scaffold gate"
+purpose = "Confirm the initial repository scaffold is coherent, buildable, and reviewable."
+required_documents = [
+  "README.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "ARCHITECTURE.md",
+  "docs/specs/00_SPEC.md",
+  "docs/design/00_ARCHITECTURE.md",
+  "docs/ops/00_BOOTSTRAP.md",
+  "docs/reviews/bootstrap/2026-04-05/IMPLEMENTATION_DAG.toml",
+  "docs/reviews/bootstrap/2026-04-05/TRACEABILITY.toml",
+]
+required_contracts = [
+  "typed trust is preserved",
+  "paths remain workspace-rooted",
+  "network and shell remain deny-by-default until explicit policy exists",
+  "machine-readable review artifacts stay aligned with the scaffold",
+]
+required_evidence = [
+  "cargo test output",
+  "policy and path validation tests",
+]
+summary = "The bootstrap repo is present, documented, and ready for follow-on implementation."
+status = "ready"
+
+[[checks]]
+id = "CHK:GRR-01"
+assertion = "The Cargo workspace and CLI exist."
+file_path = "Cargo.toml"
+evidence_paths = [
+  "Cargo.toml",
+  "crates/grokrs-cli/src/main.rs",
+]
+result = "pass"
+
+[[checks]]
+id = "CHK:GRR-02"
+assertion = "Safety primitives are implemented in dedicated crates."
+file_path = "crates/grokrs-cap/src/lib.rs"
+evidence_paths = [
+  "crates/grokrs-cap/src/lib.rs",
+  "crates/grokrs-policy/src/lib.rs",
+]
+result = "pass"
+
+[[checks]]
+id = "CHK:GRR-03"
+assertion = "Docs and review artifacts reference the actual repo surface."
+file_path = "docs/reviews/bootstrap/2026-04-05/README.md"
+evidence_paths = [
+  "docs/reviews/bootstrap/2026-04-05/README.md",
+  "docs/reviews/bootstrap/2026-04-05/IMPLEMENTATION_DAG.toml",
+  "docs/reviews/bootstrap/2026-04-05/TRACEABILITY.toml",
+]
+result = "pass"
+

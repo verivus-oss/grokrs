@@ -1,0 +1,1167 @@
+[meta]
+title = "MCP server surface"
+spec = "docs/specs/04_MCP_SERVER.md"
+adr = "docs/design/01_SQLITE_STATE.md"
+created = "2026-04-05"
+total_units = 14
+tier1_units = ["U10", "U11", "U12", "U13", "U14", "U15", "U16"]
+tier2_units = ["U20", "U21", "U22", "U23"]
+tier3_units = ["U30", "U31", "U32"]
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Foundation: crate scaffold, protocol types, transports
+# ---------------------------------------------------------------------------
+
+[units.U10]
+name = "Crate scaffold, MCP config in grokrs-core, ToolSpec extensions"
+summary = """
+Create the grokrs-mcp crate with Cargo.toml (depends on grokrs-core, \
+grokrs-cap, grokrs-policy, grokrs-session, grokrs-tool, serde, \
+serde_json, tokio, tracing, uuid, thiserror). Register it as a workspace \
+member. Add McpConfig struct to grokrs-core as mcp: Option<McpConfig> on \
+AppConfig: transport (String, default "stdio"), trust_level (String, \
+default "Untrusted"), host (String, default "127.0.0.1"), port (u16, \
+default 3000), exposed_tools (Vec<String>, default empty), \
+tool_timeout_secs (u64, default 60), resource_max_depth (u32, default 5), \
+resource_max_files (u32, default 1000), bearer_token_env (String, default \
+"GROKRS_MCP_TOKEN"). Update configs/grokrs.example.toml with a \
+commented-out [mcp] section showing all fields with defaults. Extend \
+ToolSpec trait in grokrs-tool with description() -> &'static str (default \
+"") and input_schema() -> serde_json::Value (default empty object). Add \
+schemars dependency to grokrs-tool. Create grokrs-mcp src/lib.rs with \
+crate root (re-exports, MCP server builder stub) and src/error.rs with \
+McpError enum covering JSON-RPC error codes: ParseError (-32700), \
+MethodNotFound (-32601), InvalidParams (-32602), InternalError (-32603), \
+PolicyDenied (-32001), ToolExecutionError (-32002), ApprovalTimeout \
+(-32003). McpError implements Into<JsonRpcError> for structured \
+serialization with human-readable messages. Tests: McpConfig \
+deserialization with and without [mcp] section, existing configs still \
+load, ToolSpec default methods return expected values, all McpError \
+variants produce correct JSON-RPC error codes."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["U11", "U12", "U13", "U14", "U15", "U16", "U20", "U21", "U22", "U23", "U30", "U31", "U32"]
+estimated_loc = 420
+files_create = [
+  "crates/grokrs-mcp/Cargo.toml",
+  "crates/grokrs-mcp/src/lib.rs",
+  "crates/grokrs-mcp/src/error.rs",
+]
+files_modify = [
+  "Cargo.toml",
+  "crates/grokrs-core/src/lib.rs",
+  "crates/grokrs-tool/src/lib.rs",
+  "crates/grokrs-tool/Cargo.toml",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "grokrs-mcp crate compiles and is registered as workspace member",
+  "AppConfig with [mcp] section deserializes correctly with all fields",
+  "AppConfig without [mcp] section deserializes with mcp = None",
+  "McpConfig defaults: transport='stdio', trust_level='Untrusted', host='127.0.0.1', port=3000, tool_timeout_secs=60",
+  "McpConfig defaults: resource_max_depth=5, resource_max_files=1000, bearer_token_env='GROKRS_MCP_TOKEN'",
+  "ToolSpec::description() returns empty string by default",
+  "ToolSpec::input_schema() returns empty JSON object by default",
+  "McpError::ParseError produces JSON-RPC error code -32700",
+  "McpError::MethodNotFound produces JSON-RPC error code -32601",
+  "McpError::PolicyDenied produces JSON-RPC error code -32001 with effect and reason in data",
+  "McpError::ToolExecutionError produces JSON-RPC error code -32002 with tool name and error in data",
+  "McpError::ApprovalTimeout produces JSON-RPC error code -32003 with effect and timeout in data",
+  "configs/grokrs.example.toml includes commented-out [mcp] section with all fields documented",
+  "existing test configs continue to load without modification",
+]
+produces = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:toolspec-mcp-extensions", "ART:mcp-error-types"]
+consumes = []
+critical_decisions = [
+  "McpConfig lives in grokrs-core following the established pattern where config types are in grokrs-core and consumed by downstream crates.",
+  "ToolSpec extensions use default method implementations so existing tools compile without changes.",
+  "Error codes follow MCP spec for standard JSON-RPC errors and use custom range (-32001 to -32003) for grokrs-specific errors.",
+  "schemars added to grokrs-tool for JSON Schema generation from Rust types — tools can derive JsonSchema on their input types.",
+]
+constraints = [
+  "Must not break deserialization of existing configs — Option<McpConfig> handles absent [mcp] section.",
+  "ToolSpec trait changes must be backward-compatible — default implementations only.",
+  "grokrs-mcp does not depend on grokrs-api — the MCP server and xAI client are separate concerns.",
+]
+failure_modes = [
+  "Serde defaults not applied when [mcp] section is present but fields are absent — must use #[serde(default)] on McpConfig.",
+  "ToolSpec default input_schema returning empty object may confuse MCP clients expecting a typed schema — acceptable for tools that have not opted into MCP exposure.",
+  "Adding schemars to grokrs-tool increases compile time — acceptable trade-off for automatic JSON Schema generation.",
+]
+rationale = "The crate scaffold, config surface, ToolSpec extensions, and error types are the foundation every other unit builds on. Getting these right first prevents cascading rework."
+
+[units.U11]
+name = "MCP protocol types and JSON-RPC 2.0 message framing"
+summary = """
+Implement the MCP protocol types in src/protocol/ module. JSON-RPC 2.0 \
+message types: JsonRpcRequest (with method, params, id), JsonRpcResponse \
+(result or error, id), JsonRpcNotification (method, params, no id), \
+JsonRpcError (code, message, data). Request IDs are an enum of \
+String | i64 to handle opaque client IDs. MCP-specific types: \
+InitializeRequest (protocolVersion, capabilities, clientInfo), \
+InitializeResult (protocolVersion, capabilities, serverInfo with \
+name='grokrs' and version from crate), ServerCapabilities (tools, \
+resources, prompts as optional capability objects), \
+ToolDefinition (name, description, inputSchema), \
+ToolCallRequest (name, arguments as serde_json::Value), \
+ToolCallResult (content array with text/image items, isError flag), \
+ResourceDefinition (uri, name, description, mimeType), \
+ResourceReadRequest (uri), ResourceContent (uri, text or blob), \
+PromptDefinition (name, description, arguments as list of PromptArgument), \
+PromptArgument (name, description, required flag), \
+PromptGetRequest (name, arguments map), PromptGetResult (description, \
+messages array). PingRequest and PingResponse (empty). \
+NotificationCancelled (params with requestId and optional reason). \
+Protocol version constant: '2024-11-05'. Version negotiation logic: \
+if client requests unsupported version, respond with latest supported. \
+Implement Serialize/Deserialize for all types. Implement a dispatch \
+function that routes incoming JsonRpcRequest by method string to typed \
+handlers. Tests: round-trip serialization for all message types, version \
+negotiation (supported version accepted, unsupported returns latest), \
+dispatch routes initialize/ping/tools-list/tools-call/resources-list/ \
+resources-read/prompts-list/prompts-get to correct handler stubs, \
+unknown method returns MethodNotFound error, malformed JSON returns \
+ParseError."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = ["U10"]
+blocks = ["U12", "U13", "U14", "U15", "U16", "U20", "U21", "U22", "U23", "U30", "U31", "U32"]
+estimated_loc = 650
+files_create = [
+  "crates/grokrs-mcp/src/protocol/mod.rs",
+  "crates/grokrs-mcp/src/protocol/jsonrpc.rs",
+  "crates/grokrs-mcp/src/protocol/types.rs",
+  "crates/grokrs-mcp/src/protocol/dispatch.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/lib.rs",
+]
+acceptance = [
+  "JsonRpcRequest serializes/deserializes with method, params, and id fields",
+  "JsonRpcResponse serializes with either result or error, never both",
+  "JsonRpcNotification has no id field",
+  "Request IDs handle both string and integer values (opaque client IDs)",
+  "InitializeResult includes serverInfo with name='grokrs' and crate version",
+  "ServerCapabilities advertises tools, resources, and prompts",
+  "ToolDefinition includes name, description, and inputSchema (JSON Schema object)",
+  "Protocol version constant is '2024-11-05'",
+  "Version negotiation: client sends supported version, server accepts",
+  "Version negotiation: client sends unsupported version, server responds with latest supported",
+  "Dispatch routes 'initialize' to initialize handler",
+  "Dispatch routes 'ping' to ping handler (returns empty result)",
+  "Dispatch routes 'tools/list' to tool list handler",
+  "Dispatch routes 'tools/call' to tool call handler",
+  "Dispatch routes 'resources/list' to resource list handler",
+  "Dispatch routes 'resources/read' to resource read handler",
+  "Dispatch routes 'prompts/list' to prompt list handler",
+  "Dispatch routes 'prompts/get' to prompt get handler",
+  "Unknown method returns JsonRpcError with code -32601",
+  "Malformed JSON input returns JsonRpcError with code -32700",
+  "Batch requests are rejected (per MCP spec — no batch support)",
+  "All types implement Clone, Debug, Serialize, Deserialize",
+]
+produces = ["ART:protocol-types", "ART:dispatch-framework"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-error-types"]
+critical_decisions = [
+  "Request ID is an untagged enum (String | i64) — matches JSON-RPC 2.0 spec where ID is opaque.",
+  "Dispatch is a function, not a trait — simpler than trait-based routing for a fixed protocol.",
+  "Protocol types are their own module (src/protocol/) — clean separation from handler logic.",
+  "No batch support — the MCP spec explicitly forbids batch JSON-RPC requests.",
+]
+constraints = [
+  "All protocol types must match the MCP specification (2024-11-05 revision).",
+  "Serialization must produce spec-compliant JSON — field names match MCP wire format exactly (camelCase).",
+  "Dispatch must be extensible for future MCP methods without modifying existing handler signatures.",
+]
+failure_modes = [
+  "Serde rename attributes missing causes snake_case field names instead of camelCase — must use #[serde(rename_all = 'camelCase')] or explicit renames.",
+  "Untagged enum for request ID can cause ambiguous deserialization — mitigated by trying integer first, then string.",
+  "Missing optional fields serialized as null instead of being omitted — must use #[serde(skip_serializing_if = 'Option::is_none')].",
+]
+rationale = "Protocol types and dispatch are the wire-level foundation. Every transport and handler depends on correct serialization and routing. Getting camelCase, optionality, and ID handling right here prevents protocol-level bugs."
+
+[units.U12]
+name = "Stdio transport: newline-delimited JSON message loop"
+summary = """
+Implement the stdio transport in src/transport/stdio.rs. The transport \
+reads JSON-RPC messages from stdin (one per line, newline-delimited) and \
+writes responses to stdout (one per line). Diagnostic output goes to \
+stderr exclusively. The StdioTransport struct wraps a tokio BufReader on \
+stdin and a tokio BufWriter on stdout. read_message() reads a line, \
+parses it as JsonRpcRequest or JsonRpcNotification, returns the parsed \
+message or a ParseError. write_message() serializes a JsonRpcResponse to \
+JSON and writes it followed by a newline. The main loop: read message, \
+dispatch to handler, write response (if request, not notification), \
+repeat until stdin EOF. Handle notifications/cancelled by signaling \
+cancellation to any in-flight tool call via a CancellationToken \
+(tokio_util). The loop is async (tokio runtime). Graceful shutdown on \
+stdin EOF: log session end to stderr, return. Integration with the \
+McpServer builder: StdioTransport::run(server: McpServer) consumes the \
+server and enters the loop. Tests: message round-trip via in-memory \
+pipes (replace stdin/stdout with Vec<u8> or tokio duplex), multiple \
+messages in sequence, malformed line returns parse error and continues, \
+EOF terminates cleanly, notification does not produce a response, \
+stderr output does not appear on stdout."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = ["U10", "U11"]
+blocks = ["U20", "U21", "U22", "U23", "U30", "U31", "U32"]
+estimated_loc = 320
+files_create = [
+  "crates/grokrs-mcp/src/transport/mod.rs",
+  "crates/grokrs-mcp/src/transport/stdio.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/lib.rs",
+]
+acceptance = [
+  "StdioTransport reads newline-delimited JSON from stdin",
+  "StdioTransport writes newline-delimited JSON to stdout",
+  "Each message is one complete JSON object per line (no multi-line messages)",
+  "Malformed JSON line produces a JsonRpcError response and continues reading",
+  "EOF on stdin terminates the transport loop cleanly",
+  "Notifications (no id) do not produce a response on stdout",
+  "Diagnostic output (tracing) goes to stderr, never stdout",
+  "notifications/cancelled signals cancellation to in-flight operations via CancellationToken",
+  "Transport loop processes multiple sequential messages correctly",
+  "StdioTransport::run integrates with McpServer dispatch",
+  "In-memory pipe test verifies full request-response round-trip",
+]
+produces = ["ART:stdio-transport"]
+consumes = ["ART:mcp-crate-scaffold", "ART:protocol-types", "ART:dispatch-framework"]
+critical_decisions = [
+  "Async via tokio — consistent with the rest of the crate's async model and required for tool timeout enforcement.",
+  "CancellationToken from tokio_util for cooperative cancellation — allows in-flight tool calls to be cancelled on notifications/cancelled.",
+  "Diagnostic output to stderr — matches existing grokrs convention and MCP spec requirement.",
+  "In-memory pipe tests via tokio::io::duplex — avoids spawning real processes in unit tests.",
+]
+constraints = [
+  "stdout is exclusively for MCP protocol messages — no tracing, no panic output.",
+  "Must handle arbitrarily long lines (large tool call arguments) without truncation.",
+  "Transport must not panic on malformed input — all parse errors are handled and reported as JSON-RPC errors.",
+]
+failure_modes = [
+  "Tokio stdin/stdout blocking on large messages — mitigated by BufReader/BufWriter with adequate buffer size.",
+  "Panic in tool handler writes to stdout, corrupting the protocol stream — mitigated by catch_unwind in dispatch.",
+  "Line ending differences (CRLF vs LF) across platforms — mitigated by trimming before parse.",
+]
+rationale = "Stdio is the primary transport for MCP clients like Claude Code that launch grokrs as a subprocess. Correctness here means the integration 'just works' for the most common use case."
+
+[units.U13]
+name = "HTTP+SSE transport: axum server with bearer token auth"
+summary = """
+Implement the HTTP+SSE transport in src/transport/sse.rs. Built on axum \
+(already a transitive dependency via tokio). Routes: GET /sse establishes \
+an SSE connection (server-to-client stream), POST /message receives \
+client-to-server JSON-RPC messages. Bearer token authentication as an \
+axum middleware layer: extract Authorization header, compare against the \
+token from the environment variable named in mcp.bearer_token_env using \
+constant-time equality (subtle crate or ring::constant_time::verify_slices_are_equal). \
+Missing or invalid token returns 401 Unauthorized. \
+SseTransport struct holds the axum Router, a SessionMap \
+(Arc<RwLock<HashMap<SessionId, SessionContext>>>), and a shutdown signal. \
+On GET /sse: generate a UUID session ID, create a Session<T> from config \
+trust level, insert into SessionMap, send an initial 'endpoint' SSE event \
+with the POST URL (including session_id query param), then keep the stream \
+open sending server-to-client messages. On POST /message: extract \
+session_id from query params, look up the session, dispatch the JSON-RPC \
+message, send the response back via the SSE stream (not as HTTP response \
+body — the POST returns 202 Accepted). On SSE disconnect: transition \
+session to Closed, remove from SessionMap. Configurable host:port from \
+McpConfig. Server refuses to start if bearer_token_env is set but the \
+environment variable is not defined (clear error message). SseTransport::run \
+binds the axum server and runs until shutdown signal. Tests: bearer token \
+accepted (200 on /sse), missing token rejected (401), invalid token \
+rejected (401), constant-time comparison (no timing side-channel — \
+documented, not tested), SSE connection receives endpoint event, POST \
+/message dispatches and response appears on SSE stream, session cleanup \
+on SSE disconnect, multiple concurrent SSE connections get independent \
+sessions, server refuses to start without bearer token env var set."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = ["U10", "U11"]
+blocks = ["U20", "U21", "U22", "U23", "U30", "U31", "U32"]
+estimated_loc = 580
+files_create = [
+  "crates/grokrs-mcp/src/transport/sse.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/transport/mod.rs",
+  "crates/grokrs-mcp/Cargo.toml",
+]
+acceptance = [
+  "GET /sse with valid bearer token returns 200 and opens SSE stream",
+  "GET /sse without bearer token returns 401 Unauthorized",
+  "GET /sse with invalid bearer token returns 401 Unauthorized",
+  "SSE stream sends initial 'endpoint' event with POST URL containing session_id",
+  "POST /message with valid session_id dispatches JSON-RPC message and returns 202",
+  "POST /message response appears on the corresponding SSE stream",
+  "POST /message with unknown session_id returns 404",
+  "SSE disconnect transitions session to Closed and removes from SessionMap",
+  "Multiple concurrent SSE connections get independent session IDs and session state",
+  "Server binds to configured host:port from McpConfig",
+  "Server refuses to start when bearer_token_env is set but env var is not defined",
+  "Server refuses to start when bearer_token_env env var is empty",
+  "Bearer token comparison uses constant-time equality",
+  "Server gracefully shuts down on shutdown signal (all SSE streams closed)",
+]
+produces = ["ART:sse-transport"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:protocol-types", "ART:dispatch-framework"]
+critical_decisions = [
+  "axum is the HTTP framework — already a transitive dependency, well-maintained, async-native.",
+  "Constant-time token comparison via subtle or ring — prevents timing attacks on bearer token.",
+  "POST /message returns 202, not the JSON-RPC response — response goes via SSE stream per MCP spec.",
+  "SessionMap uses Arc<RwLock<HashMap>> — simple concurrent access for moderate client counts.",
+  "Server refuses to start without bearer token — fail-safe over fail-open.",
+]
+constraints = [
+  "Must require allow_network = true in policy config (the server itself is a network listener) — enforced at CLI level in U31.",
+  "Bearer token is read from an environment variable, never from config files or command-line arguments.",
+  "SSE stream must remain open for the duration of the session — no premature close on idle.",
+  "No OAuth 2.1 / PKCE in this implementation — shared bearer token only.",
+]
+failure_modes = [
+  "SSE connection dropped by proxy/load balancer — client sees disconnect, creates new session. No reconnection to existing session.",
+  "SessionMap grows unbounded if clients disconnect without proper SSE close — mitigated by periodic cleanup sweep or TTL on idle sessions.",
+  "Large JSON-RPC messages in POST body exceed axum's default body limit — must configure body size limit explicitly.",
+  "Env var read at startup only — token rotation requires server restart.",
+]
+rationale = "HTTP+SSE is the multi-client transport enabling IDE integrations and custom agents. Bearer token auth provides a minimum security boundary while OAuth is deferred."
+
+[units.U14]
+name = "MCP server builder and initialize/ping handshake"
+summary = """
+Implement the McpServer builder in src/lib.rs. McpServer holds: \
+registered tools (Vec<Box<dyn ToolSpec>>), PolicyEngine reference, \
+WorkspaceRoot, McpConfig, optional Store handle. McpServer::builder() \
+creates a McpServerBuilder with methods: config(McpConfig), \
+workspace(WorkspaceRoot), policy(PolicyEngine), tool(impl ToolSpec), \
+store(Store). build() validates config and returns McpServer. \
+Implement the initialize handler: receives InitializeRequest, negotiates \
+protocol version, returns InitializeResult with ServerCapabilities \
+advertising tools (if any registered), resources (always — workspace \
+files), prompts (always — at minimum the system prompt). Handles the \
+initialized notification (client confirms handshake). Implement ping \
+handler: returns empty result. The server tracks connection state: \
+Uninitialized -> Initialized. Requests other than initialize received \
+before initialization return an error. Multiple initialize requests on \
+the same connection return an error. Tests: build server with config + \
+policy + workspace, initialize handshake returns correct serverInfo and \
+capabilities, protocol version negotiation, ping returns empty result, \
+pre-initialize request rejected, double-initialize rejected."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = ["U10", "U11"]
+blocks = ["U15", "U16", "U20", "U21", "U22", "U23", "U30", "U31", "U32"]
+estimated_loc = 350
+files_create = [
+  "crates/grokrs-mcp/src/server.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/lib.rs",
+  "crates/grokrs-mcp/src/protocol/dispatch.rs",
+]
+acceptance = [
+  "McpServer::builder() creates a builder that accepts config, workspace, policy, tools, and store",
+  "build() returns McpServer with all registered components",
+  "build() fails if config is missing or invalid",
+  "Initialize handler returns InitializeResult with name='grokrs' and crate version",
+  "Initialize handler advertises tools capability when tools are registered",
+  "Initialize handler advertises resources capability (always)",
+  "Initialize handler advertises prompts capability (always)",
+  "Protocol version negotiation: supported version accepted, unsupported returns latest",
+  "initialized notification transitions connection to Initialized state",
+  "Ping handler returns empty result after initialization",
+  "Request received before initialize returns JSON-RPC error",
+  "Second initialize request on same connection returns JSON-RPC error",
+  "McpServer holds tool registry, policy engine, workspace root, config",
+]
+produces = ["ART:mcp-server-builder", "ART:initialize-handshake"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:protocol-types", "ART:dispatch-framework", "ART:mcp-error-types"]
+critical_decisions = [
+  "Builder pattern for McpServer — matches Rust conventions and allows incremental configuration.",
+  "Connection state tracked per-session, not globally — each connection has its own initialized flag.",
+  "Resources and prompts are always advertised — resources always available (workspace files), prompts always available (system prompt at minimum).",
+  "Store is optional in the builder — MCP server works without persistence.",
+]
+constraints = [
+  "McpServer must be Send + Sync for use across tokio tasks.",
+  "Tool registry is immutable after build() — tools cannot be added or removed at runtime.",
+  "The builder must validate that WorkspaceRoot and PolicyEngine are provided (not optional).",
+]
+failure_modes = [
+  "Builder called without required components (workspace, policy) — must return a typed error, not panic.",
+  "Connection state not isolated per session in HTTP+SSE causes one client's initialize to affect another — mitigated by per-session state in SessionMap.",
+]
+rationale = "The server builder is the central orchestrator that wires everything together. The initialize handshake is the first thing any MCP client does, so it must be correct and spec-compliant."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 — Handlers: tools, resources, prompts, session management
+# ---------------------------------------------------------------------------
+
+[units.U15]
+name = "Tool handler: ToolSpec to MCP tools/list and tools/call with effect gating"
+summary = """
+Implement the tool handler in src/tools.rs. tools/list: iterate registered \
+ToolSpec instances, filter by mcp.exposed_tools config (if non-empty), \
+build ToolDefinition for each (name from ToolSpec::name(), description \
+from ToolSpec::description(), inputSchema from ToolSpec::input_schema()), \
+return the list. tools/call: deserialize arguments JSON into the tool's \
+Input type, call input.classify() to get Vec<Effect>, evaluate each \
+effect through PolicyEngine::evaluate(). If any effect returns Deny, \
+return McpError::PolicyDenied with the effect description and denial \
+reason. If any effect returns Ask, invoke the approval broker if \
+configured; if no broker available, return McpError::PolicyDenied \
+stating interactive approval required but no broker available; if broker \
+returns Denied or Timeout, return McpError::PolicyDenied or \
+McpError::ApprovalTimeout respectively. If all effects are Allow (or \
+approved), call tool.execute() with a configurable timeout \
+(mcp.tool_timeout_secs). On timeout, cancel execution and return \
+McpError::ToolExecutionError with timeout message. On success, serialize \
+the result as ToolCallResult with content items. On execution error, \
+return McpError::ToolExecutionError. Tool execution is bounded by \
+tokio::time::timeout. Log tool calls at info level (tool name + effects), \
+log policy denials at warn level. If grokrs-store is available, log tool \
+calls to transcripts with endpoint 'mcp://tools/call'. Tests: tools/list \
+returns registered tools with correct definitions, exposed_tools config \
+filters the list, tools/call with Allow effects executes tool and returns \
+result, tools/call with Deny effect returns -32001 error with denial \
+reason, tools/call with Ask effect and no broker returns error, tools/call \
+with unknown tool name returns error, tools/call with invalid arguments \
+returns -32602 error, tool timeout returns -32002 error, tool execution \
+error returns -32002 error."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U10", "U11", "U14"]
+blocks = ["U20", "U23", "U30", "U31", "U32"]
+estimated_loc = 480
+files_create = [
+  "crates/grokrs-mcp/src/tools.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/lib.rs",
+  "crates/grokrs-mcp/src/protocol/dispatch.rs",
+]
+acceptance = [
+  "tools/list returns all registered ToolSpec instances as ToolDefinitions",
+  "tools/list filters by mcp.exposed_tools when the config list is non-empty",
+  "tools/list with empty exposed_tools returns all tools",
+  "ToolDefinition includes name, description, and inputSchema from ToolSpec",
+  "tools/call deserializes arguments into the tool's Input type",
+  "tools/call classifies input effects via Classify trait before execution",
+  "tools/call evaluates all effects through PolicyEngine before execution",
+  "tools/call with all Allow effects executes the tool and returns ToolCallResult",
+  "tools/call with any Deny effect returns -32001 error with denial reason",
+  "tools/call with Ask effect and no broker returns error stating interactive approval required",
+  "tools/call with Ask effect and broker Denied returns -32001 error",
+  "tools/call with Ask effect and broker Timeout returns -32003 error",
+  "tools/call with unknown tool name returns error",
+  "tools/call with invalid arguments (deserialization failure) returns -32602 error",
+  "Tool execution respects tool_timeout_secs from config (timeout returns -32002 error)",
+  "Tool calls logged at info level with tool name and effect classification",
+  "Policy denials logged at warn level",
+  "Tool calls logged to grokrs-store transcripts when store is available",
+]
+produces = ["ART:tool-handler"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:protocol-types", "ART:mcp-server-builder", "ART:mcp-error-types", "ART:toolspec-mcp-extensions"]
+critical_decisions = [
+  "Effects are classified and evaluated before any tool execution — no partial execution if any effect is denied.",
+  "tokio::time::timeout for tool execution — forcible cancellation prevents hung tools from blocking the server.",
+  "Approval broker is optional — MCP server works without interactive approval, but Ask effects fail explicitly.",
+  "exposed_tools filter is whitelist-based — empty means all, non-empty means only named tools.",
+]
+constraints = [
+  "Tool execution must not bypass PolicyEngine under any circumstance — the security model is uniform.",
+  "Tool timeout is mandatory and cannot be disabled (minimum 1 second).",
+  "Deserialization errors must be distinguishable from policy denials in error responses.",
+]
+failure_modes = [
+  "Tool panics during execution — mitigated by catch_unwind wrapper, reported as -32002 error.",
+  "Tool timeout fires but the tool holds resources (file handles, network connections) — mitigated by tokio cancellation dropping the future.",
+  "Approval broker hangs indefinitely — mitigated by separate broker timeout (not the tool timeout).",
+]
+rationale = "Tool exposure is the core value proposition of the MCP server. The effect gating pipeline must be identical to the CLI path — this is the critical security invariant."
+
+[units.U16]
+name = "Resource handler: workspace file listing, reading, subscriptions"
+summary = """
+Implement the resource handler in src/resources.rs. resources/list: walk \
+the workspace root up to mcp.resource_max_depth, collect files up to \
+mcp.resource_max_files, validate each path through WorkspacePath::new(), \
+respect .gitignore patterns (use ignore crate for gitignore parsing), \
+build ResourceDefinition for each file (uri as file:///<relative-path>, \
+name as filename, mimeType guessed from extension). Binary files (detected \
+by extension: common binary extensions list) are included in listing. \
+resources/read: parse URI, extract relative path, validate through \
+WorkspacePath::new() (reject absolute paths, .. traversal, empty paths \
+with MCP error), read file content. Text files return text content. \
+Binary files return base64-encoded blob content. Read-only — no write \
+endpoint exposed. resources/subscribe: register a subscription for a \
+resource URI. Use the notify crate to watch the workspace root for \
+filesystem changes. On change to a subscribed file, send \
+notifications/resources/updated via the transport. File watching is \
+bounded to workspace root (does not follow symlinks outside workspace). \
+Debounce interval configurable (default 500ms) via notify \
+debounced watcher. resources/unsubscribe: remove subscription, stop \
+watching if no remaining subscriptions. Tests: resources/list returns \
+workspace files with correct URIs, respects max_depth and max_files \
+limits, excludes gitignored files, resources/read returns text content \
+for text files, returns base64 blob for binary files, rejects absolute \
+paths with error, rejects .. traversal with error, rejects empty path \
+with error, subscription receives notification on file change, \
+unsubscribe stops notifications, file watcher does not follow symlinks \
+outside workspace."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U10", "U11", "U14"]
+blocks = ["U20", "U23", "U30", "U31", "U32"]
+estimated_loc = 520
+files_create = [
+  "crates/grokrs-mcp/src/resources.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/lib.rs",
+  "crates/grokrs-mcp/src/protocol/dispatch.rs",
+  "crates/grokrs-mcp/Cargo.toml",
+]
+acceptance = [
+  "resources/list returns files under workspace root as ResourceDefinitions",
+  "Resource URIs follow file:///<relative-path> pattern",
+  "resources/list respects resource_max_depth config (does not descend beyond limit)",
+  "resources/list respects resource_max_files config (stops after limit)",
+  "resources/list excludes files matching .gitignore patterns when .gitignore exists",
+  "resources/list includes binary files in listing",
+  "resources/read validates path through WorkspacePath::new()",
+  "resources/read rejects absolute paths with MCP error",
+  "resources/read rejects paths with .. traversal with MCP error",
+  "resources/read rejects empty paths with MCP error",
+  "resources/read returns text content for text files",
+  "resources/read returns base64-encoded blob content for binary files",
+  "resources/read for nonexistent file returns MCP error",
+  "resources/subscribe registers subscription and watches for changes",
+  "File change to subscribed resource sends notifications/resources/updated",
+  "resources/unsubscribe removes subscription",
+  "File watcher is bounded to workspace root (no symlink escape)",
+  "File watcher debounces rapid changes (default 500ms)",
+  "No write endpoint is exposed through resources",
+]
+produces = ["ART:resource-handler"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:protocol-types", "ART:mcp-server-builder"]
+critical_decisions = [
+  "ignore crate for .gitignore parsing — well-maintained, same library used by ripgrep.",
+  "notify crate for filesystem watching — standard Rust filesystem notification library, cross-platform.",
+  "Binary detection by extension (not content sniffing) — simpler, deterministic, avoids reading file content for listing.",
+  "Debounced watcher — prevents resource exhaustion from rapid filesystem changes (build output, git operations).",
+]
+constraints = [
+  "All paths validated through WorkspacePath::new() — the security boundary for filesystem access.",
+  "Read-only — no file mutation through resources. Writes require tools with FsWrite effects.",
+  "File watcher must not follow symlinks outside the workspace root.",
+  "Resource listing must complete in reasonable time even for large workspaces — bounded by max_depth and max_files.",
+]
+failure_modes = [
+  "Large workspace with many files causes slow listing — mitigated by max_files limit and early termination.",
+  "File watcher fails to start (permissions, platform limitations) — must not crash, degrade gracefully with warning.",
+  "Race condition: file deleted between list and read — resources/read returns file-not-found error.",
+  "Symlinks pointing outside workspace — WorkspacePath validation catches canonicalized path if it escapes, but raw path may pass. Must canonicalize before validation.",
+]
+rationale = "Resource exposure makes workspace files accessible to MCP clients for context gathering. WorkspacePath validation ensures the security boundary holds."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 (continued) — Prompts, session management
+# ---------------------------------------------------------------------------
+
+[units.U20]
+name = "Prompt handler: system, workspace-context, and custom prompts"
+summary = """
+Implement the prompt handler in src/prompts.rs. prompts/list: return \
+available prompts. Default prompts always present: 'system' (system \
+instruction text from model config or default grokrs system prompt) and \
+'workspace-context' (summary of workspace: name, root, available tools, \
+policy posture, trust level). Custom prompts loaded from configs/prompts/ \
+directory: each Markdown file becomes a prompt with filename (minus .md \
+extension) as the name. File content is the prompt text. Arguments \
+supported via {{arg_name}} template syntax — scan the file for {{...}} \
+patterns to build the PromptArgument list for each prompt. prompts/get: \
+look up prompt by name, substitute arguments into {{arg_name}} \
+placeholders. Unknown arguments are left as-is (not stripped), and a \
+warning is included in the response metadata. 'system' prompt: returns \
+the model system instruction from config, or a default prompt describing \
+grokrs, the workspace, and safety posture. 'workspace-context' prompt: \
+dynamically generates workspace summary including workspace name and \
+root, list of available tools (names and descriptions), policy posture \
+(what effect types are allowed/denied/ask), current trust level from \
+config. Must never include API keys, bearer tokens, or secrets. Tests: \
+prompts/list includes 'system' and 'workspace-context', custom prompts \
+from configs/prompts/ appear in list, prompts/get for 'system' returns \
+system instruction, prompts/get for 'workspace-context' includes trust \
+level and tool names, prompts/get with arguments substitutes correctly, \
+prompts/get with unknown arguments leaves placeholders and includes \
+warning, prompts/get for nonexistent prompt returns error, workspace- \
+context prompt does not include any secrets."""
+layer = 1
+tier = 2
+status = "pending"
+depends_on = ["U10", "U11", "U14", "U15", "U16"]
+blocks = ["U23", "U30", "U31", "U32"]
+estimated_loc = 380
+files_create = [
+  "crates/grokrs-mcp/src/prompts.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/lib.rs",
+  "crates/grokrs-mcp/src/protocol/dispatch.rs",
+]
+acceptance = [
+  "prompts/list returns at least 'system' and 'workspace-context' prompts",
+  "prompts/list includes custom prompts from configs/prompts/ directory",
+  "Custom prompt names derived from Markdown filenames (minus .md extension)",
+  "Custom prompt arguments extracted from {{arg_name}} template patterns",
+  "prompts/get for 'system' returns system instruction text",
+  "prompts/get for 'workspace-context' includes workspace name and root",
+  "prompts/get for 'workspace-context' includes available tool names and descriptions",
+  "prompts/get for 'workspace-context' includes policy posture (allowed/denied effect types)",
+  "prompts/get for 'workspace-context' includes trust level from config",
+  "prompts/get for 'workspace-context' does NOT include API keys, bearer tokens, or secrets",
+  "prompts/get with arguments substitutes {{arg_name}} placeholders",
+  "prompts/get with unknown arguments leaves placeholders as-is and includes warning",
+  "prompts/get for nonexistent prompt returns MCP error",
+  "prompts/list returns empty list for custom prompts when configs/prompts/ does not exist",
+]
+produces = ["ART:prompt-handler"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:protocol-types", "ART:mcp-server-builder", "ART:tool-handler", "ART:resource-handler"]
+critical_decisions = [
+  "Two built-in prompts (system, workspace-context) are always available — MCP clients always have a baseline context.",
+  "Custom prompts from filesystem use simple {{arg}} template syntax — no full template engine, keeps it predictable.",
+  "Unknown arguments left as-is rather than stripped — makes template errors visible rather than silently dropping content.",
+  "workspace-context is dynamically generated, not cached — reflects current state of tools and policy.",
+]
+constraints = [
+  "Prompts must never expose secrets (API keys, bearer tokens, credentials).",
+  "configs/prompts/ directory is optional — missing directory is not an error.",
+  "Template substitution is simple string replacement, not a Turing-complete template engine.",
+]
+failure_modes = [
+  "configs/prompts/ contains non-Markdown files — must skip them or handle gracefully.",
+  "Template with nested braces (e.g., {{json_{{field}}}}) breaks naive regex — mitigated by matching only {{[a-zA-Z_][a-zA-Z0-9_]*}}.",
+  "Very large prompt file causes memory pressure — acceptable for config files which are expected to be small.",
+]
+rationale = "Prompts give MCP clients context about the environment they are operating in. The system and workspace-context prompts are essential for any agent to understand grokrs's safety model."
+
+[units.U21]
+name = "Per-connection session management and trust level mapping"
+summary = """
+Implement session management in src/session.rs. McpSessionManager holds \
+the session map and manages per-connection Session<T> instances. Trust \
+level mapping: read mcp.trust_level from config, create Session<Untrusted>, \
+Session<InteractiveTrusted>, or Session<AdminTrusted> based on the string \
+value. Since trust level is a type parameter, use an enum dispatch pattern: \
+McpTrustSession enum with variants Untrusted(Session<Untrusted>), \
+InteractiveTrusted(Session<InteractiveTrusted>), \
+AdminTrusted(Session<AdminTrusted>). This enum provides methods that \
+delegate to the inner session regardless of trust level. \
+SessionContext struct wraps McpTrustSession with metadata: session_id \
+(UUID v4), transport type (stdio/sse), client info (from initialize \
+request), connected_at timestamp. For stdio: single session, created \
+on process start, transitions Created -> Ready after initialize, \
+RunningTurn during tool calls, WaitingApproval during broker, Closed on \
+EOF. For HTTP+SSE: one session per SSE connection, same lifecycle, \
+independent state. Concurrent session map for SSE uses \
+Arc<RwLock<HashMap<SessionId, SessionContext>>>. Session persistence: \
+if grokrs-store is available, create a session record on connection, \
+log state transitions. Tests: session created with correct trust level \
+from config, session lifecycle transitions through all states, session \
+metadata includes transport type and client info, concurrent sessions \
+are independent (state change in one does not affect another), session \
+persistence to store (when available), session operates without store \
+(graceful degradation)."""
+layer = 1
+tier = 2
+status = "pending"
+depends_on = ["U10", "U11", "U14"]
+blocks = ["U23", "U30", "U31", "U32"]
+estimated_loc = 420
+files_create = [
+  "crates/grokrs-mcp/src/session.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/lib.rs",
+]
+acceptance = [
+  "McpSessionManager creates sessions with correct trust level from mcp.trust_level config",
+  "Trust level 'Untrusted' creates Session<Untrusted>",
+  "Trust level 'InteractiveTrusted' creates Session<InteractiveTrusted>",
+  "Trust level 'AdminTrusted' creates Session<AdminTrusted>",
+  "Invalid trust level string in config produces a clear error",
+  "McpTrustSession enum delegates session methods regardless of trust variant",
+  "SessionContext includes session_id (UUID v4), transport type, client_info, connected_at",
+  "Session lifecycle: Created -> Ready (after initialize) -> RunningTurn (during tool call) -> Ready (after tool) -> Closed (on disconnect)",
+  "Session lifecycle: any state -> WaitingApproval (during broker) -> RunningTurn (after approval)",
+  "Session lifecycle: any state -> Failed (on unrecoverable error)",
+  "Concurrent sessions in SSE transport have independent state",
+  "Session record created in grokrs-store on connection (when store available)",
+  "Session state transitions logged to grokrs-store (when store available)",
+  "Session management works without grokrs-store (graceful degradation)",
+  "Single session for stdio transport (no session map needed)",
+]
+produces = ["ART:session-management"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:protocol-types", "ART:mcp-server-builder"]
+critical_decisions = [
+  "McpTrustSession enum dispatch rather than dyn TrustLevel — preserves compile-time trust level typing while allowing runtime dispatch from config string.",
+  "Trust level is per-server-instance, not per-client — all clients get the same trust level. Per-client differentiation deferred to OAuth follow-up.",
+  "Store integration is best-effort — session management works without persistence.",
+  "SessionContext wraps the typed session with transport metadata — clean separation of protocol and session concerns.",
+]
+constraints = [
+  "Trust level mapping must cover all three TrustLevel types — missing a variant is a compile error.",
+  "Session IDs are UUID v4, generated by the MCP server, not by the client.",
+  "Session state isolation: one client's session cannot access another's state, batch approvals, or effect history.",
+]
+failure_modes = [
+  "Config string does not match any trust level — must produce a clear error at server startup, not at connection time.",
+  "Enum dispatch adds boilerplate for every Session<T> method — acceptable trade-off for type safety.",
+  "Store write failure during session transition — log warning, do not fail the session operation.",
+]
+rationale = "Session management maps MCP connections to grokrs's typed trust model. The enum dispatch pattern preserves the compile-time safety guarantee while allowing runtime configuration."
+
+[units.U22]
+name = "Logging and observability: request/response logging, store transcripts"
+summary = """
+Implement observability integration across the MCP server. MCP \
+request/response pairs logged to grokrs-store transcripts (if configured) \
+with endpoint 'mcp://<method>' (e.g., 'mcp://tools/call', \
+'mcp://resources/read'). Logging middleware or wrapper: for each request, \
+call store.transcripts().log_request(session_id, endpoint, method, \
+request_body) before dispatch; after dispatch, call \
+store.transcripts().log_response(transcript_id, status, response_body, \
+usage) or log_error(transcript_id, error). Connection events (connect, \
+disconnect, initialize) logged to stderr at info level via tracing. Tool \
+calls logged at info level with tool name and effect classification. \
+Policy denials logged at warn level. No MCP message content at info \
+level or below — full request/response bodies at debug/trace only. \
+Implement as a LoggingLayer that wraps the dispatch function, extracting \
+method and session from the request, logging before and after. Tests: \
+tool call creates transcript record with endpoint 'mcp://tools/call', \
+resource read creates transcript with 'mcp://resources/read', connection \
+events appear at info level, policy denial appears at warn level, \
+message content not present at info level, logging works without store \
+(tracing only, no persistence error)."""
+layer = 1
+tier = 2
+status = "pending"
+depends_on = ["U10", "U11", "U14", "U15"]
+blocks = ["U23", "U30", "U31", "U32"]
+estimated_loc = 280
+files_create = [
+  "crates/grokrs-mcp/src/logging.rs",
+]
+files_modify = [
+  "crates/grokrs-mcp/src/lib.rs",
+  "crates/grokrs-mcp/src/protocol/dispatch.rs",
+]
+acceptance = [
+  "Tool call logged to store with endpoint 'mcp://tools/call'",
+  "Resource read logged to store with endpoint 'mcp://resources/read'",
+  "Prompt get logged to store with endpoint 'mcp://prompts/get'",
+  "Connection events logged to stderr at info level",
+  "Tool calls logged at info level with tool name and effects",
+  "Policy denials logged at warn level with effect and reason",
+  "Full request/response bodies logged only at debug/trace level",
+  "No message content appears at info level or below",
+  "Logging operates without store (tracing-only mode, no error)",
+  "LoggingLayer wraps dispatch and logs before/after for each request",
+  "Store transcript includes session_id linking to session record",
+]
+produces = ["ART:logging-observability"]
+consumes = ["ART:mcp-crate-scaffold", "ART:protocol-types", "ART:mcp-server-builder", "ART:tool-handler"]
+critical_decisions = [
+  "Endpoint format is 'mcp://<method>' — follows existing grokrs convention for transcript endpoints.",
+  "LoggingLayer wraps dispatch rather than being embedded in each handler — single point of logging control.",
+  "Store logging is best-effort — failure to log does not fail the request.",
+  "Message content at debug/trace only — prevents accidental exposure of sensitive tool arguments in production logs.",
+]
+constraints = [
+  "Must not log bearer tokens, API keys, or secrets at any log level.",
+  "Logging must not measurably slow down request processing — async store writes if needed.",
+  "tracing macros used consistently (info!, warn!, debug!, trace!) — no println! or eprintln! directly.",
+]
+failure_modes = [
+  "Store write blocks request processing — mitigated by fire-and-forget async writes or batched logging.",
+  "Tracing subscriber not configured causes silent log loss — acceptable, tracing's default behavior.",
+  "Debug-level logging with large message bodies causes log storage bloat — operator responsibility to configure log levels.",
+]
+rationale = "Observability is essential for debugging MCP integrations and auditing tool usage. Store transcripts provide the persistent audit trail; tracing provides the real-time view."
+
+# ---------------------------------------------------------------------------
+# LAYER 2 — CLI integration, end-to-end tests
+# ---------------------------------------------------------------------------
+
+[units.U23]
+name = "Comprehensive test suite: protocol, transport, handlers, security"
+summary = """
+Integration and unit tests covering all MCP server functionality. Tests \
+organized in crates/grokrs-mcp/tests/. Protocol tests: initialize \
+handshake round-trip, tools/list returns registered tools, tools/call \
+with policy allow (effect classified, Allow, tool executes, result \
+returned), tools/call with policy deny (-32001 error), tools/call with \
+approval broker (Ask -> broker -> Approved -> execute), resource listing \
+(workspace files listed, no workspace escape), resource read (valid path \
+returns content, invalid path returns error), prompt listing and \
+retrieval. Transport tests: stdio message framing (newline-delimited \
+JSON round-trip via in-memory pipes), HTTP+SSE bearer token validation \
+(valid accepted, missing rejected, invalid rejected). Session tests: \
+lifecycle (Created -> Ready -> RunningTurn -> Closed), concurrent \
+sessions (independent state). Security tests: tool call goes through \
+PolicyEngine (no bypass path), resource read rejects .. traversal, \
+resource read rejects absolute paths, bearer token comparison is \
+constant-time (documented), tool timeout enforcement (slow tool \
+cancelled after timeout), session isolation (one session cannot access \
+another's state). Config tests: McpConfig loading with all fields, \
+defaults applied for missing fields, absent [mcp] section handled. \
+All tests use tempdir for workspace isolation."""
+layer = 2
+tier = 2
+status = "pending"
+depends_on = ["U10", "U11", "U12", "U13", "U14", "U15", "U16", "U20", "U21", "U22"]
+blocks = ["U30", "U31", "U32"]
+estimated_loc = 750
+files_create = [
+  "crates/grokrs-mcp/tests/protocol_test.rs",
+  "crates/grokrs-mcp/tests/transport_test.rs",
+  "crates/grokrs-mcp/tests/handler_test.rs",
+  "crates/grokrs-mcp/tests/security_test.rs",
+  "crates/grokrs-mcp/tests/session_test.rs",
+]
+files_modify = []
+acceptance = [
+  "Protocol: initialize handshake returns correct serverInfo and capabilities",
+  "Protocol: ping returns empty result",
+  "Protocol: unknown method returns -32601",
+  "Protocol: malformed JSON returns -32700",
+  "Transport: stdio round-trip via in-memory pipes succeeds",
+  "Transport: stdio malformed line returns error and continues",
+  "Transport: HTTP+SSE valid bearer token accepted",
+  "Transport: HTTP+SSE missing bearer token returns 401",
+  "Transport: HTTP+SSE invalid bearer token returns 401",
+  "Handler: tools/list returns registered tools with names, descriptions, schemas",
+  "Handler: tools/call with Allow effects executes tool and returns result",
+  "Handler: tools/call with Deny effect returns -32001 with denial reason",
+  "Handler: tools/call with Ask and no broker returns error",
+  "Handler: tools/call timeout cancels execution and returns -32002",
+  "Handler: resources/list returns workspace files bounded by limits",
+  "Handler: resources/read returns text content for valid path",
+  "Handler: resources/read rejects .. traversal",
+  "Handler: resources/read rejects absolute paths",
+  "Handler: prompts/list includes system and workspace-context",
+  "Handler: prompts/get substitutes arguments correctly",
+  "Session: lifecycle transitions through all states",
+  "Session: concurrent sessions have independent state",
+  "Security: tool call always goes through PolicyEngine",
+  "Security: resource read bounded by WorkspacePath validation",
+  "Security: session isolation verified",
+  "Config: McpConfig with all fields loads correctly",
+  "Config: McpConfig with defaults loads correctly",
+  "All tests use tempdir for workspace isolation",
+]
+produces = ["ART:test-suite"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:protocol-types", "ART:dispatch-framework", "ART:stdio-transport", "ART:sse-transport", "ART:mcp-server-builder", "ART:initialize-handshake", "ART:tool-handler", "ART:resource-handler", "ART:prompt-handler", "ART:session-management", "ART:logging-observability", "ART:mcp-error-types"]
+critical_decisions = [
+  "Integration tests in tests/ directory — exercise the public API surface end-to-end.",
+  "tempfile::tempdir for workspace isolation — each test gets a fresh workspace.",
+  "Separate test files by concern (protocol, transport, handler, security, session) for maintainability.",
+  "Security tests are explicit and named as such — makes the security invariant visible in the test suite.",
+]
+constraints = [
+  "Tests must not depend on external services, databases, or network — fully self-contained.",
+  "HTTP+SSE tests must use ephemeral ports (port 0) to avoid conflicts.",
+  "Tests must not leave zombie processes or leaked file descriptors.",
+]
+failure_modes = [
+  "Port binding failures in HTTP+SSE tests on CI — mitigated by ephemeral ports.",
+  "Async test timeout on slow CI — must set adequate test timeouts.",
+  "File watcher tests are timing-sensitive — use explicit notification channels instead of sleep.",
+]
+rationale = "The test suite is the primary evidence that the MCP server is spec-compliant, secure, and correct. Security tests specifically validate the invariant that the MCP server enforces the same policy as the CLI."
+
+[units.U30]
+name = "CLI integration: grokrs mcp subcommand group"
+summary = """
+Add the mcp subcommand group to grokrs-cli. Subcommands: \
+'grokrs mcp stdio' loads config, validates [mcp] section present, \
+constructs PolicyEngine + WorkspaceRoot + tools, builds McpServer, \
+creates a Session via McpSessionManager, runs StdioTransport::run. \
+'grokrs mcp serve [--host <host>] [--port <port>]' does the same but \
+uses SseTransport, overriding host/port from CLI args if provided. \
+Requires allow_network = true in policy config (the server itself is \
+a network listener) — fails with clear error if not set. \
+'grokrs mcp tools' dry-run: loads config, registers tools, prints \
+the list that would be exposed via MCP (name, description) without \
+starting a server. 'grokrs mcp resources [--depth <n>]' dry-run: lists \
+workspace resources that would be exposed, optionally overriding depth. \
+'grokrs mcp prompts' dry-run: lists prompts that would be available. \
+All subcommands require [mcp] config section and fail with a clear \
+error if absent. Update 'grokrs doctor' to report MCP configuration \
+when [mcp] section is present: transport, trust level, number of exposed \
+tools, resource limits. Add grokrs-mcp dependency to grokrs-cli. Tests: \
+each subcommand can be invoked (argument parsing), missing [mcp] section \
+produces clear error, mcp serve without allow_network produces clear \
+error, doctor reports MCP config when present."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["U10", "U11", "U12", "U13", "U14", "U15", "U16", "U20", "U21", "U22", "U23"]
+blocks = ["U32"]
+estimated_loc = 380
+files_create = [
+  "crates/grokrs-cli/src/commands/mcp.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/Cargo.toml",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/mod.rs",
+]
+acceptance = [
+  "grokrs mcp stdio starts MCP server on stdio transport",
+  "grokrs mcp stdio fails with clear error when [mcp] section is absent",
+  "grokrs mcp serve starts HTTP+SSE server on configured host:port",
+  "grokrs mcp serve --host 0.0.0.0 --port 8080 overrides config values",
+  "grokrs mcp serve fails with clear error when allow_network is not true in policy",
+  "grokrs mcp serve fails with clear error when bearer token env var is not set",
+  "grokrs mcp tools lists tools that would be exposed (dry-run, no server started)",
+  "grokrs mcp tools respects exposed_tools filter from config",
+  "grokrs mcp resources lists workspace resources (dry-run)",
+  "grokrs mcp resources --depth 3 overrides resource_max_depth",
+  "grokrs mcp prompts lists available prompts (dry-run)",
+  "grokrs doctor reports MCP config when [mcp] section is present",
+  "grokrs doctor reports transport, trust level, exposed tool count, resource limits",
+  "grokrs doctor omits MCP section when [mcp] config is absent",
+  "All mcp subcommands load config from --config flag or default path",
+]
+produces = ["ART:mcp-cli"]
+consumes = ["ART:mcp-crate-scaffold", "ART:mcp-config", "ART:stdio-transport", "ART:sse-transport", "ART:mcp-server-builder", "ART:initialize-handshake", "ART:tool-handler", "ART:resource-handler", "ART:prompt-handler", "ART:session-management", "ART:logging-observability", "ART:test-suite"]
+critical_decisions = [
+  "mcp serve requires allow_network policy — the server is a network listener and must be explicitly permitted.",
+  "Dry-run subcommands (tools, resources, prompts) do not start a server — useful for config validation and debugging.",
+  "CLI args override config values (host, port, depth) — standard CLI convention for one-off overrides.",
+  "Doctor does not fail if [mcp] section is absent — it reports the absence gracefully.",
+]
+constraints = [
+  "All subcommands require [mcp] config section — fail with clear error message naming the missing section.",
+  "mcp serve must validate bearer token env var at startup, not at first connection.",
+  "mcp stdio must not print anything to stdout before entering the message loop — stdout is reserved for protocol.",
+]
+failure_modes = [
+  "Missing [mcp] config produces a generic deserialization error instead of a user-friendly message — must catch and wrap.",
+  "mcp stdio accidentally logs to stdout (e.g., tracing misconfigured) — breaks protocol. Must configure tracing to stderr before entering loop.",
+  "Port already in use for mcp serve — must produce clear error, not a panic.",
+]
+rationale = "CLI integration is how operators launch and inspect the MCP server. The dry-run subcommands make it possible to validate configuration without starting a server."
+
+[units.U31]
+name = "End-to-end integration: stdio MCP client simulation"
+summary = """
+End-to-end test that simulates an MCP client connecting via stdio \
+transport. Spawn the grokrs mcp stdio process as a child, send MCP \
+messages via stdin, read responses from stdout. Test the full flow: \
+send initialize request, verify InitializeResult with correct \
+capabilities and serverInfo. Send tools/list, verify registered tools \
+appear. Send tools/call for a tool with Allow policy, verify successful \
+result. Send tools/call for a tool with Deny policy, verify -32001 \
+error. Send resources/list, verify workspace files appear. Send \
+resources/read for a valid file, verify content. Send resources/read \
+for a path with .. traversal, verify error. Send prompts/list, verify \
+system and workspace-context prompts. Send prompts/get for workspace- \
+context, verify it includes trust level and tool names. Send ping, \
+verify empty result. Close stdin, verify process exits cleanly. \
+Also test HTTP+SSE end-to-end: start server, connect via reqwest SSE, \
+send initialize via POST, verify response on SSE stream, send \
+tools/list, verify response. This validates the full stack from CLI \
+entry point through transport through dispatch through handlers through \
+policy engine and back. Uses tempdir for workspace with known files. \
+Uses a test config TOML with [mcp] section configured."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["U10", "U11", "U12", "U13", "U14", "U15", "U16", "U20", "U21", "U22", "U23", "U30"]
+blocks = ["U32"]
+estimated_loc = 500
+files_create = [
+  "crates/grokrs-mcp/tests/e2e_stdio_test.rs",
+  "crates/grokrs-mcp/tests/e2e_sse_test.rs",
+]
+files_modify = []
+acceptance = [
+  "Stdio E2E: spawn grokrs mcp stdio, send initialize, receive InitializeResult",
+  "Stdio E2E: tools/list returns registered tools",
+  "Stdio E2E: tools/call with Allow policy returns tool result",
+  "Stdio E2E: tools/call with Deny policy returns -32001 error",
+  "Stdio E2E: resources/list returns workspace files",
+  "Stdio E2E: resources/read returns file content for valid path",
+  "Stdio E2E: resources/read rejects .. traversal",
+  "Stdio E2E: prompts/list includes system and workspace-context",
+  "Stdio E2E: prompts/get for workspace-context includes trust level",
+  "Stdio E2E: ping returns empty result",
+  "Stdio E2E: close stdin, process exits cleanly with exit code 0",
+  "SSE E2E: start server, connect via GET /sse, receive endpoint event",
+  "SSE E2E: send initialize via POST /message, receive InitializeResult on SSE stream",
+  "SSE E2E: tools/list via POST returns registered tools on SSE stream",
+  "SSE E2E: bearer token required (401 without it)",
+  "All E2E tests use tempdir with known workspace files",
+  "All E2E tests use test config TOML with [mcp] section",
+]
+produces = ["ART:e2e-tests"]
+consumes = ["ART:mcp-cli", "ART:mcp-crate-scaffold", "ART:mcp-config", "ART:stdio-transport", "ART:sse-transport", "ART:mcp-server-builder", "ART:tool-handler", "ART:resource-handler", "ART:prompt-handler", "ART:session-management", "ART:test-suite"]
+critical_decisions = [
+  "E2E tests spawn a real child process — validates the full stack including CLI argument parsing and config loading.",
+  "Separate E2E tests for stdio and SSE — different transports have different integration characteristics.",
+  "Known workspace files in tempdir — deterministic test assertions.",
+  "Test config TOML committed as test fixture — reproducible across environments.",
+]
+constraints = [
+  "E2E tests must build the grokrs-cli binary before running — cargo test dependency.",
+  "SSE E2E tests use ephemeral ports to avoid conflicts.",
+  "Tests must have adequate timeouts for process startup.",
+]
+failure_modes = [
+  "Binary not built before E2E test runs — use cargo build in test setup or build dependency.",
+  "Process hangs on stdin read — mitigated by test timeout.",
+  "Port conflict in SSE tests — mitigated by ephemeral ports.",
+]
+rationale = "E2E tests are the ultimate validation that the MCP server works as an MCP-compliant server from a client's perspective. This is what proves the implementation is correct end-to-end."
+
+[units.U32]
+name = "Documentation and example config updates"
+summary = """
+Final documentation pass. Update ARCHITECTURE.md with the grokrs-mcp \
+crate in the dependency diagram and crate responsibilities. Add grokrs-mcp \
+to the dependency direction: grokrs-cli -> grokrs-mcp -> (grokrs-session, \
+grokrs-tool, grokrs-policy) -> grokrs-cap -> grokrs-core. Document the \
+MCP server in the security model section (effect gating applies uniformly, \
+bearer token requirement, workspace-bounded resources). Update CLAUDE.md \
+with grokrs mcp CLI commands and test commands. Update configs/ with a \
+sample configs/prompts/example.md custom prompt file demonstrating the \
+{{arg_name}} template syntax. Verify all doc comments on public API \
+surface of grokrs-mcp. Verify all module-level doc comments in grokrs-mcp \
+describing the module's responsibility and key types. Run cargo doc \
+--workspace --no-deps to verify documentation builds without warnings."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["U10", "U11", "U12", "U13", "U14", "U15", "U16", "U20", "U21", "U22", "U23", "U30", "U31"]
+blocks = []
+estimated_loc = 200
+files_create = [
+  "configs/prompts/example.md",
+]
+files_modify = [
+  "ARCHITECTURE.md",
+  "CLAUDE.md",
+]
+acceptance = [
+  "ARCHITECTURE.md includes grokrs-mcp in dependency diagram",
+  "ARCHITECTURE.md documents grokrs-mcp crate responsibility",
+  "ARCHITECTURE.md security model section mentions MCP effect gating",
+  "CLAUDE.md includes grokrs mcp CLI commands for manual verification",
+  "CLAUDE.md includes test commands for grokrs-mcp",
+  "configs/prompts/example.md demonstrates {{arg_name}} template syntax",
+  "All public types in grokrs-mcp have doc comments",
+  "All modules in grokrs-mcp have module-level doc comments",
+  "cargo doc --workspace --no-deps builds without warnings",
+]
+produces = ["OUT:mcp-server-complete"]
+consumes = ["ART:mcp-cli", "ART:e2e-tests", "ART:test-suite", "ART:mcp-crate-scaffold", "ART:mcp-config", "ART:protocol-types", "ART:stdio-transport", "ART:sse-transport", "ART:mcp-server-builder", "ART:tool-handler", "ART:resource-handler", "ART:prompt-handler", "ART:session-management", "ART:logging-observability"]
+critical_decisions = [
+  "Documentation updated last — all code is finalized before documenting.",
+  "Example prompt file serves as both documentation and a test fixture.",
+  "cargo doc validation ensures documentation compiles — catches broken doc links and missing doc comments.",
+]
+constraints = [
+  "Documentation must reflect the actual implementation, not the spec — verify against code.",
+  "ARCHITECTURE.md and CLAUDE.md changes must be backward-compatible with existing content.",
+]
+failure_modes = [
+  "Documentation describes planned features not yet implemented — must verify against actual code.",
+  "cargo doc warnings from dependencies — filter to workspace crates only.",
+]
+rationale = "Documentation completes the deliverable. Architecture and onboarding docs must reflect the new crate. The example prompt file demonstrates the custom prompt system."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U10"]
+leaf_nodes = ["U32"]
+critical_path = ["U10", "U11", "U14", "U15", "U23", "U30", "U31", "U32"]
+critical_path_loc = 3630
+
+[computed.max_parallel]
+layer0 = 3
+layer1 = 3
+layer2 = 1
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-mcp/src/lib.rs"]
+units = ["U10", "U11", "U12", "U13", "U14", "U15", "U16", "U20", "U21", "U22"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-mcp/Cargo.toml"]
+units = ["U10", "U13", "U16"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-mcp/src/protocol/dispatch.rs"]
+units = ["U11", "U14", "U15", "U16", "U20", "U22"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-mcp/src/transport/mod.rs"]
+units = ["U12", "U13"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-core/src/lib.rs"]
+units = ["U10"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-tool/src/lib.rs"]
+units = ["U10"]
+
+[[computed.conflict_groups]]
+files = ["configs/grokrs.example.toml"]
+units = ["U10"]
+
+[[computed.conflict_groups]]
+files = ["Cargo.toml"]
+units = ["U10"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/Cargo.toml"]
+units = ["U30"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/main.rs"]
+units = ["U30"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/mod.rs"]
+units = ["U30"]
+
+[[computed.conflict_groups]]
+files = ["ARCHITECTURE.md"]
+units = ["U32"]
+
+[[computed.conflict_groups]]
+files = ["CLAUDE.md"]
+units = ["U32"]
+
+[computed.loc_totals]
+tier1 = 3320
+tier2 = 1830
+tier3 = 1080
+all = 6230

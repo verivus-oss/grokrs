@@ -1,0 +1,6 @@
+.git/
+target/
+.sqry/
+.sqry-index/
+.sqry-cache/
+.pytest_cache/

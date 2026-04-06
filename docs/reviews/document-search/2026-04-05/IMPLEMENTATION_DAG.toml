@@ -1,0 +1,144 @@
+[meta]
+title = "Document search endpoint (semantic RAG)"
+spec = "docs/specs/01_XAI_API_CLIENT.md"
+decomposition = "docs/reviews/document-search/2026-04-05/IMPLEMENTATION_DAG.toml"
+created = "2026-04-05"
+total_units = 2
+tier1_units = ["U60", "U61"]
+tier2_units = []
+tier3_units = []
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Types
+# ---------------------------------------------------------------------------
+
+[units.U60]
+name = "Document search wire types"
+summary = """
+Serde types for POST /v1/documents/search. Request: query (string), \
+source (DocumentsSource with collection_ids Vec<String>), filter \
+(AIP-160 filter expression string), group_by (Option<String>), \
+ranking_metric (L2/cosine enum), retrieval_mode (Option<RetrievalMode> \
+with typed mode_type field), limit (Option<u32>). Response: matches \
+(Vec<SearchMatch>) where SearchMatch has file_id, chunk_id, \
+chunk_content, score (f64), collection_ids, fields (HashMap), \
+page_number (Option<u32>)."""
+layer = 0
+tier = 1
+status = "planned"
+depends_on = []
+blocks = ["U61"]
+estimated_loc = 120
+spec_sections = []
+spec_anchors = []
+files_create = [
+  "crates/grokrs-api/src/types/documents.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/types/mod.rs",
+]
+acceptance = [
+  "DocumentSearchRequest with source: DocumentsSource (wrapping collection_ids) and correct serde attributes",
+  "DocumentsSource struct with collection_ids: Vec<String>",
+  "RetrievalMode struct with mode_type field (serde renamed to 'type')",
+  "DocumentSearchResponse with matches: Vec<SearchMatch>",
+  "SearchMatch with file_id, chunk_id, chunk_content, score, collection_ids, fields, page_number",
+  "RankingMetric enum with L2 and Cosine variants",
+  "all Option fields use skip_serializing_if",
+  "serde round-trip tests for request and response",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:document-search-types"]
+consumes = ["ART:api-common-types"]
+critical_decisions = [
+  "score as f64 — this is a similarity score, not a monetary value.",
+  "filter as String — AIP-160 filter expressions are complex; typed parsing deferred.",
+  "fields as HashMap<String, serde_json::Value> for user-defined metadata fields.",
+]
+constraints = [
+  "Types must not depend on Collections Management API types.",
+]
+failure_modes = [
+  "RankingMetric serde rename doesn't match xAI wire format.",
+]
+rationale = "Document search is the primary consumer-facing Collections endpoint using the inference API key."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 — Endpoint client
+# ---------------------------------------------------------------------------
+
+[units.U61]
+name = "Document search endpoint client"
+summary = """
+Endpoint client for POST /v1/documents/search. Uses the standard \
+inference API key (not management key). Sends query with collection IDs \
+and optional filters, returns ranked matches. Add to GrokClient facade \
+as client.documents().search(). Add CLI subcommand: \
+grokrs api search '<query>' --collection <id>."""
+layer = 1
+tier = 1
+status = "planned"
+depends_on = ["U60"]
+blocks = []
+estimated_loc = 150
+spec_sections = []
+spec_anchors = []
+files_create = [
+  "crates/grokrs-api/src/endpoints/documents.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-cli/src/commands/api.rs",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "DocumentsClient with search() method sending POST to /v1/documents/search",
+  "GrokClient gains documents() accessor returning DocumentsClient",
+  "CLI: grokrs api search 'query' --collection <id> prints ranked results",
+  "CLI: search respects policy engine (network must be allowed)",
+  "wiremock integration test for search request/response",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:document-search-client", "OUT:search-cli"]
+consumes = ["ART:document-search-types", "ART:http-transport"]
+critical_decisions = [
+  "Single documents() accessor on GrokClient rather than search() at top level.",
+  "CLI prints results as table: file_id, score, chunk_content (truncated).",
+]
+constraints = [
+  "Must go through policy gate like all other endpoints.",
+  "Must not depend on Collections Management API or management key.",
+]
+failure_modes = [
+  "Empty collection_ids causes confusing server error — validate at client.",
+]
+rationale = "Document search enables RAG workflows from the CLI."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U60"]
+leaf_nodes = ["U61"]
+critical_path = ["U60", "U61"]
+critical_path_loc = 270
+
+[computed.max_parallel]
+layer0 = 1
+layer1 = 1
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/types/mod.rs"]
+units = ["U60"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/endpoints/mod.rs", "crates/grokrs-api/src/client.rs"]
+units = ["U61"]
+
+[computed.loc_totals]
+tier1 = 270
+tier2 = 0
+tier3 = 0
+all = 270

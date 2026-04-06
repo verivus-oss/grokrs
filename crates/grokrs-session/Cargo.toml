@@ -1,0 +1,16 @@
+[package]
+name = "grokrs-session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+grokrs-cap = { path = "../grokrs-cap" }
+
+# Optional: OpenTelemetry instrumentation (behind `otel` feature)
+tracing = { workspace = true, optional = true }
+
+[features]
+default = []
+otel = ["tracing"]
+

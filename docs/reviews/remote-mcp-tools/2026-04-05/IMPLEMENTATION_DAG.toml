@@ -1,0 +1,184 @@
+[meta]
+title = "Remote MCP tools on Responses API"
+spec = "docs/specs/01_XAI_API_CLIENT.md"
+decomposition = "docs/reviews/remote-mcp-tools/2026-04-05/IMPLEMENTATION_DAG.toml"
+created = "2026-04-05"
+total_units = 3
+tier1_units = ["U70", "U71", "U72"]
+tier2_units = []
+tier3_units = []
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — MCP tool type definition
+# ---------------------------------------------------------------------------
+
+[units.U70]
+name = "Remote MCP tool type definitions"
+summary = """
+Define the MCP tool type for the Responses API tools array. An MCP tool \
+has type='mcp', server_url (required), server_label (optional), \
+server_description (optional), allowed_tools (optional Vec<String> to \
+restrict which server tools are exposed), authorization \
+(Option<McpAuthorization> with api_key type), and headers \
+(Option<HashMap<String, String>>). Multiple MCP servers can be specified \
+in a single request. Also define McpAuthorization struct."""
+layer = 0
+tier = 1
+status = "planned"
+depends_on = []
+blocks = ["U71", "U72"]
+estimated_loc = 80
+spec_sections = ["Tools and Function Calling"]
+spec_anchors = ["tool-definitions", "builtin-tools"]
+files_create = [
+  "crates/grokrs-api/src/types/mcp_tool.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/types/mod.rs",
+  "crates/grokrs-api/src/types/builtin_tools.rs",
+]
+acceptance = [
+  "McpToolDefinition struct with server_url, server_label, server_description, allowed_tools, authorization, headers",
+  "McpAuthorization struct with type='api_key' and api_key field",
+  "BuiltinTool enum gains Mcp variant (not McpServer) that wraps McpToolDefinition with #[serde(rename = 'mcp')]",
+  "BuiltinTool drops Copy and Hash derives (McpToolDefinition contains HashMap which is not Copy/Hash)",
+  "serde serializes to {type: 'mcp', server_url: '...', ...}",
+  "serde round-trip tests for McpToolDefinition with all optional fields",
+  "serde round-trip test for McpToolDefinition with minimal fields (server_url only)",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:mcp-tool-types"]
+consumes = ["ART:api-common-types"]
+critical_decisions = [
+  "McpToolDefinition as a separate struct rather than inline in BuiltinTool enum.",
+  "authorization as a typed struct rather than serde_json::Value.",
+  "headers as HashMap<String, String> for custom HTTP headers to the MCP server.",
+  "Variant named Mcp (not McpServer) to produce type='mcp' with rename_all=snake_case, plus explicit #[serde(rename = 'mcp')] for safety.",
+  "Drop Copy and Hash from BuiltinTool derives — HashMap payload is not Copy/Hash.",
+]
+constraints = [
+  "Must serialize alongside existing BuiltinTool variants in the tools array.",
+  "server_url must not be validated against PolicyGate — the xAI server makes the MCP connection, not grokrs.",
+  "Dropping Copy from BuiltinTool may require updating call sites that clone — check for .copied() usage.",
+]
+failure_modes = [
+  "serde tag conflict between McpToolDefinition and other BuiltinTool variants.",
+  "Dropping Copy breaks existing code that uses BuiltinTool by value — must audit usages.",
+]
+rationale = "Remote MCP tools are a major agentic capability allowing Grok to connect to external tool servers."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 — SSE stream events for MCP + tool loop integration
+# ---------------------------------------------------------------------------
+
+[units.U71]
+name = "MCP-related SSE stream events"
+summary = """
+The Responses API SSE stream emits MCP-specific events: \
+mcp_list_tools.in_progress, mcp_list_tools.completed, \
+mcp_list_tools.failed, response.mcp_call_arguments.delta, \
+response.mcp_call_arguments.done, response.mcp_call.in_progress, \
+response.mcp_call.completed, response.mcp_call.failed. Add these as \
+variants to ResponseStreamEvent with appropriate payload types."""
+layer = 1
+tier = 1
+status = "planned"
+depends_on = ["U70"]
+blocks = ["U72"]
+estimated_loc = 100
+spec_sections = ["Streaming"]
+spec_anchors = ["responses-stream-events"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/stream.rs",
+]
+acceptance = [
+  "ResponseStreamEvent gains McpListToolsInProgress, McpListToolsCompleted, McpListToolsFailed variants",
+  "ResponseStreamEvent gains McpCallArgumentsDelta, McpCallArgumentsDone variants",
+  "ResponseStreamEvent gains McpCallInProgress, McpCallCompleted, McpCallFailed variants",
+  "each variant has appropriate payload fields (server_label, tool_name, arguments, output, error)",
+  "serde deserialization from example JSON for each event type",
+  "existing Unknown variant catches any future MCP events not yet modeled",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:mcp-stream-events"]
+consumes = ["ART:mcp-tool-types"]
+critical_decisions = [
+  "Use serde tag='type' with rename to match the dotted event names (e.g., 'mcp_list_tools.completed').",
+  "Payload types are lightweight — MCP call results are serde_json::Value for flexibility.",
+]
+constraints = [
+  "Must not break existing ResponseStreamEvent deserialization.",
+  "Unknown variant must still catch unrecognized event types.",
+]
+failure_modes = [
+  "Dotted event names (mcp_list_tools.completed) may not work with serde tag — may need custom deserializer.",
+]
+rationale = "MCP stream events are needed for real-time progress feedback during agentic MCP tool execution."
+
+[units.U72]
+name = "Tool loop MCP awareness"
+summary = """
+Update the tool_loop to handle MCP call outputs in addition to \
+function calls. When the model response contains McpCall output items, \
+the tool loop should recognize them as server-executed (no client-side \
+execution needed) and include their results in the conversation \
+context. The tool loop should NOT attempt to execute MCP calls locally \
+— the xAI server handles MCP execution."""
+layer = 1
+tier = 1
+status = "planned"
+depends_on = ["U70"]
+blocks = []
+estimated_loc = 40
+spec_sections = ["Tools and Function Calling"]
+spec_anchors = ["function-calling-loop"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/tool_loop.rs",
+]
+acceptance = [
+  "tool_loop recognizes McpCall output items as server-executed",
+  "McpCall items are NOT passed to the FunctionExecutor",
+  "McpCall items are NOT replayed in stateless mode conversation (consistent with existing _ => {} catch-all)",
+  "existing function calling tests continue to pass",
+  "new test: response with McpCall + FunctionCall only executes the FunctionCall",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:mcp-aware-tool-loop"]
+consumes = ["ART:mcp-tool-types"]
+critical_decisions = [
+  "Do NOT execute MCP calls locally — the xAI server handles them.",
+  "McpCall items are NOT replayed in stateless mode — the existing allowlist (Message/FunctionCall/FunctionCallOutput) and _ => {} catch-all already handle this correctly.",
+]
+constraints = [
+  "Must not change behavior for non-MCP tool loops.",
+]
+failure_modes = [
+  "McpCall items treated as client-side function calls, passed to executor, causing errors.",
+]
+rationale = "Tool loop must gracefully coexist with server-side MCP execution."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U70"]
+leaf_nodes = ["U71", "U72"]
+critical_path = ["U70", "U71"]
+critical_path_loc = 180
+
+[computed.max_parallel]
+layer0 = 1
+layer1 = 2
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/types/mod.rs"]
+units = ["U70"]
+
+[computed.loc_totals]
+tier1 = 220
+tier2 = 0
+tier3 = 0
+all = 220

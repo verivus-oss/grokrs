@@ -1,0 +1,83 @@
+# Cross-DAG Integration Order and Conflict Groups
+#
+# The 6 extension DAGs are NOT fully independent — several share
+# files_modify targets. This file documents the conflicts and
+# prescribes a merge order.
+#
+# Created: 2026-04-05
+
+[meta]
+title = "Cross-DAG conflict groups and integration order"
+dags = [
+  "responses-enrichment",
+  "document-search",
+  "remote-mcp-tools",
+  "tts-api",
+  "batch-extensions",
+  "collections-management",
+]
+
+# ---------------------------------------------------------------------------
+# Shared file conflict groups
+# ---------------------------------------------------------------------------
+
+[[conflict_groups]]
+file = "crates/grokrs-api/src/types/mod.rs"
+dags = ["document-search (U60)", "remote-mcp-tools (U70)", "tts-api (U80)", "collections-management (U101, U102)"]
+resolution = "Each DAG adds a `pub mod X;` line. Merge sequentially — additions are non-overlapping."
+
+[[conflict_groups]]
+file = "crates/grokrs-api/src/endpoints/mod.rs"
+dags = ["document-search (U61)", "tts-api (U81)"]
+resolution = "Each DAG adds a `pub mod X;` line. Merge sequentially."
+
+[[conflict_groups]]
+file = "crates/grokrs-api/src/client.rs"
+dags = ["document-search (U61)", "tts-api (U81)", "collections-management (U100)"]
+resolution = "Each DAG adds an accessor method. U100 also modifies test helpers (AppConfig literal). Merge sequentially."
+
+[[conflict_groups]]
+file = "crates/grokrs-cli/src/commands/api.rs"
+dags = ["document-search (U61)", "tts-api (U82)"]
+resolution = "Each DAG adds subcommand variants. Merge sequentially."
+
+[[conflict_groups]]
+file = "crates/grokrs-cli/src/main.rs"
+dags = ["document-search (U61)", "tts-api (U82)", "collections-management (U103)"]
+resolution = "Each DAG adds command routing. Merge sequentially."
+
+[[conflict_groups]]
+file = "crates/grokrs-core/src/lib.rs"
+dags = ["collections-management (U100)"]
+resolution = "Only one DAG touches this file. No cross-DAG conflict."
+
+[[conflict_groups]]
+file = "configs/grokrs.example.toml"
+dags = ["collections-management (U100)"]
+resolution = "Only one DAG touches this file. No cross-DAG conflict."
+
+# ---------------------------------------------------------------------------
+# Recommended execution order
+# ---------------------------------------------------------------------------
+#
+# Phase 1 (parallel — no shared files between these DAGs):
+#   - responses-enrichment (U50-U52): only touches responses.rs, usage.rs, chat.rs
+#   - batch-extensions (U90→U91): only touches batches.rs
+#
+# Phase 2 (sequential — each adds to mod.rs, client.rs, endpoints/mod.rs):
+#   - document-search (U60→U61)
+#   - remote-mcp-tools (U70→U71+U72)
+#   - tts-api (U80→U81→U82)
+#   Run full test suite between each DAG merge.
+#
+# Phase 3 (after all inference DAGs merged):
+#   - collections-management (U100→U101→U102→U103)
+#   Separate auth domain, modifies core/lib.rs and client.rs.
+
+[execution_order]
+phase1 = ["responses-enrichment", "batch-extensions"]
+phase2 = ["document-search", "remote-mcp-tools", "tts-api"]
+phase3 = ["collections-management"]
+phase1_parallel = true
+phase2_parallel = false
+phase3_parallel = false

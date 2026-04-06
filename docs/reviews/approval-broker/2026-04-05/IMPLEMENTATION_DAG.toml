@@ -1,0 +1,759 @@
+[meta]
+title = "Approval broker for Decision::Ask resolution"
+spec = "docs/specs/03_APPROVAL_BROKER.md"
+created = "2026-04-05"
+total_units = 11
+tier1_units = ["U50", "U51", "U52", "U53", "U54", "U55", "U56"]
+tier2_units = ["U57", "U58"]
+tier3_units = ["U59", "U60"]
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Trait, types, and config foundations
+# ---------------------------------------------------------------------------
+
+[units.U50]
+name = "ApprovalDecision enum, EffectType enum, and ApprovalBroker trait"
+summary = """
+Create the grokrs-approval crate. Register it as a workspace member in \
+the root Cargo.toml. Add dependencies on grokrs-core and grokrs-policy. \
+Add async-trait as a dependency. Define ApprovalDecision enum with three \
+variants: Approved, Denied { reason: String }, Timeout. Derive Clone, \
+Debug, PartialEq, Eq. Define EffectType enum with variants FsRead, \
+FsWrite, ProcessSpawn, NetworkConnect. Derive Clone, Copy, Debug, Hash, \
+PartialEq, Eq. Implement From<&Effect> for EffectType (strips payload). \
+Implement Display for EffectType. Define the ApprovalBroker trait with \
+async_trait: request_approval(&self, session_id: &str, effect: &Effect, \
+context: &str) -> ApprovalDecision. Trait must be object-safe \
+(dyn ApprovalBroker). Re-export all public types from lib.rs."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["U51", "U52", "U53", "U54", "U55", "U56", "U57", "U58", "U59", "U60"]
+estimated_loc = 180
+files_create = [
+  "crates/grokrs-approval/Cargo.toml",
+  "crates/grokrs-approval/src/lib.rs",
+  "crates/grokrs-approval/src/types.rs",
+]
+files_modify = [
+  "Cargo.toml",
+]
+acceptance = [
+  "grokrs-approval registered as workspace member in root Cargo.toml",
+  "ApprovalDecision has Approved, Denied { reason: String }, Timeout variants",
+  "ApprovalDecision derives Clone, Debug, PartialEq, Eq",
+  "EffectType has FsRead, FsWrite, ProcessSpawn, NetworkConnect variants",
+  "EffectType derives Clone, Copy, Debug, Hash, PartialEq, Eq",
+  "EffectType implements Display (returns type name as string)",
+  "From<&Effect> for EffectType correctly maps all Effect variants to their type",
+  "ApprovalBroker trait uses #[async_trait] and is object-safe (compiles as dyn ApprovalBroker)",
+  "ApprovalBroker::request_approval signature matches the spec exactly",
+  "lib.rs re-exports ApprovalDecision, EffectType, ApprovalBroker",
+  "cargo test -p grokrs-approval passes",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:approval-trait", "ART:approval-types"]
+consumes = []
+critical_decisions = [
+  "EffectType is a separate enum from Effect — it represents the category without payload, used as a HashMap key for batch approval.",
+  "async_trait from the async-trait crate — keeps the trait object-safe while supporting async.",
+  "grokrs-approval depends on grokrs-policy for the Effect type but not on grokrs-api or grokrs-cap.",
+]
+constraints = [
+  "Trait must be object-safe — no generics on Self, no Sized bounds.",
+  "EffectType must cover all current Effect variants; adding a new Effect variant requires updating EffectType.",
+  "No runtime dependency — async-trait is a proc macro, not a runtime cost.",
+]
+failure_modes = [
+  "Adding a new Effect variant to grokrs-policy without updating EffectType breaks From impl — mitigated by exhaustive match.",
+  "async_trait box overhead for request_approval is negligible for an interactive prompt.",
+]
+rationale = "The trait and type definitions are the foundation every other unit depends on. Getting the trait shape right here prevents cascading changes downstream."
+
+[units.U55]
+name = "Add approval_timeout_secs to SessionConfig in grokrs-core"
+summary = """
+Add approval_timeout_secs: Option<u64> to SessionConfig in grokrs-core. \
+When absent, callers default to 30 seconds. Update AppConfig::summary() \
+to include the approval timeout when present. Update \
+configs/grokrs.example.toml to include approval_timeout_secs = 30 in \
+the [session] section with a comment explaining per-prompt timeout. \
+Ensure existing configs without approval_timeout_secs continue to \
+deserialize without error (Option handles absent field). Add approval_mode \
+documentation comment to the example config explaining the three modes: \
+interactive, deny, allow."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["U52", "U57", "U58", "U59", "U60"]
+estimated_loc = 50
+files_create = []
+files_modify = [
+  "crates/grokrs-core/src/lib.rs",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "SessionConfig has approval_timeout_secs: Option<u64> field",
+  "AppConfig with approval_timeout_secs = 30 deserializes correctly",
+  "AppConfig without approval_timeout_secs deserializes with None (backward compatible)",
+  "AppConfig::summary() includes approval timeout when present",
+  "configs/grokrs.example.toml includes approval_timeout_secs = 30 with comment",
+  "configs/grokrs.example.toml includes approval_mode documentation",
+  "existing test configs continue to load without modification",
+  "cargo test -p grokrs-core passes",
+]
+produces = ["ART:approval-config"]
+consumes = []
+critical_decisions = [
+  "Option<u64> rather than u64 with serde default — explicit about whether the operator configured a timeout vs using the code default.",
+  "Config lives in grokrs-core following the established pattern — consumed by downstream crates.",
+]
+constraints = [
+  "Must not break deserialization of existing configs — Option handles absent field via serde.",
+  "Default of 30 seconds is a caller-side convention, not a serde default.",
+]
+failure_modes = [
+  "Missing #[serde(default)] on the Option field causes deserialization error when field is absent — verify serde behavior for Option fields (serde defaults Option to None when absent).",
+]
+rationale = "Config must be in place before TerminalBroker and CLI integration can read the timeout value. Keeping it in grokrs-core follows the established config ownership pattern."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 — Implementations: brokers, persistence, gate
+# ---------------------------------------------------------------------------
+
+[units.U51]
+name = "Test stubs: AlwaysApproveBroker, AlwaysDenyBroker, RecordingBroker"
+summary = """
+Implement three test stub brokers in grokrs-approval/src/test_support.rs \
+behind a test-support feature flag (also available under #[cfg(test)]). \
+AlwaysApproveBroker::new() returns a broker that always returns Approved. \
+AlwaysDenyBroker::new() returns a broker that always returns \
+Denied { reason: 'test deny' }. RecordingBroker::new(decisions: Vec<ApprovalDecision>) \
+returns a broker that records all (session_id, effect, context) tuples \
+it receives and returns the next decision from the provided vec. Uses \
+an internal Mutex<VecDeque<ApprovalDecision>> for the decision queue and \
+a Mutex<Vec<(String, Effect, String)>> for recorded requests. Panics \
+if more requests arrive than decisions provided. RecordingBroker exposes \
+recorded() -> Vec<(String, Effect, String)> for test assertions. All \
+three implement ApprovalBroker. Add unit tests for each stub."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U50"]
+blocks = ["U56", "U57", "U58"]
+estimated_loc = 180
+files_create = [
+  "crates/grokrs-approval/src/test_support.rs",
+]
+files_modify = [
+  "crates/grokrs-approval/Cargo.toml",
+  "crates/grokrs-approval/src/lib.rs",
+]
+acceptance = [
+  "AlwaysApproveBroker::request_approval returns Approved for any input",
+  "AlwaysDenyBroker::request_approval returns Denied { reason: 'test deny' } for any input",
+  "RecordingBroker returns decisions in order from the provided vec",
+  "RecordingBroker panics when decisions exhausted and another request arrives",
+  "RecordingBroker::recorded() returns all (session_id, effect, context) tuples received",
+  "test_support module gated behind #[cfg(any(test, feature = 'test-support'))]",
+  "test-support feature declared in Cargo.toml",
+  "unit tests for all three stubs pass",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:test-stubs"]
+consumes = ["ART:approval-trait", "ART:approval-types"]
+critical_decisions = [
+  "Feature flag 'test-support' instead of only #[cfg(test)] — allows downstream crates (grokrs-cli tests, integration tests) to use the stubs.",
+  "Mutex for interior mutability in RecordingBroker — async_trait requires Send + Sync, std::sync::Mutex is simpler than tokio::sync::Mutex for non-contended test use.",
+  "Panic on exhausted decisions rather than returning a default — forces tests to specify the exact expected number of approvals.",
+]
+constraints = [
+  "Must not pull in tokio or other async runtime dependencies — stubs are runtime-agnostic.",
+  "RecordingBroker stores cloned Effect values — Effect must implement Clone (verify or add derive).",
+]
+failure_modes = [
+  "Effect does not derive Clone — would require adding Clone to grokrs-policy::Effect.",
+  "Mutex poisoning on panic in tests — acceptable for test code, panics propagate correctly.",
+]
+rationale = "Test stubs are needed before writing tests for TerminalBroker, BrokeredPolicyGate, and CLI integration. Building them early unblocks all downstream testing."
+
+[units.U52]
+name = "TerminalBroker with stdin/stderr I/O, timeout, and batch map"
+summary = """
+Implement TerminalBroker in grokrs-approval/src/terminal.rs. \
+TerminalBrokerConfig struct with timeout: Duration and \
+store: Option<Arc<Store>> (where Store is from grokrs-store). \
+TerminalBroker holds the config and a batch map: \
+Arc<Mutex<HashMap<(String, EffectType), ApprovalDecision>>>. \
+On request_approval: (1) check batch map for (session_id, effect_type) — \
+if found, persist batch-derived decision and return immediately; \
+(2) write the prompt to stderr using the spec format; (3) read from \
+stdin with tokio::time::timeout wrapping the read future; (4) parse \
+input: y/yes -> Approved, n/no -> Denied, Y/yes-all -> Approved + insert \
+batch map, N/no-all -> Denied + insert batch map, timeout -> Timeout; \
+(5) on invalid input, print 'unrecognized input' to stderr and re-prompt \
+with timeout reset; (6) persist the decision to the store if configured \
+(best-effort, log warning on failure); (7) return the decision. \
+Effect description for the prompt uses Display impl on Effect. \
+The batch map is session-scoped — different session_ids have independent \
+batch state. Implement Display for Effect in grokrs-policy if not present \
+(or use a local formatting function). Add unit tests using simulated \
+stdin (via trait abstraction or injected reader) for: approve, deny, \
+invalid input retry, timeout, batch yes-all, batch no-all, batch recall \
+on subsequent request, different sessions do not share batch state."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U50", "U55"]
+blocks = ["U57", "U58", "U59", "U60"]
+estimated_loc = 420
+files_create = [
+  "crates/grokrs-approval/src/terminal.rs",
+]
+files_modify = [
+  "crates/grokrs-approval/Cargo.toml",
+  "crates/grokrs-approval/src/lib.rs",
+]
+acceptance = [
+  "TerminalBrokerConfig has timeout: Duration and store: Option<Arc<Store>>",
+  "prompt written to stderr, not stdout",
+  "prompt format matches spec: effect description, context, options (y/n/Y/N/s)",
+  "y and yes (case-insensitive) return Approved",
+  "n and no (case-insensitive) return Denied { reason: 'user denied' }",
+  "Y and yes-all return Approved and insert into batch map",
+  "N and no-all return Denied and insert into batch map",
+  "no input within timeout returns Timeout",
+  "invalid input prints 'unrecognized input' to stderr and re-prompts",
+  "timeout clock resets on invalid input (user not penalized for typos)",
+  "batch map checked before prompting — cached decision returned immediately",
+  "batch decisions scoped to session_id — different sessions have independent maps",
+  "decision persisted to store when configured (best-effort)",
+  "store failure logged as warning, does not block or alter decision",
+  "batch-derived decisions persisted with decided_by = 'batch'",
+  "individual decisions persisted with decided_by = 'user'",
+  "timeout decisions persisted with decided_by = 'timeout'",
+  "unit tests with simulated stdin cover all input paths",
+  "cargo test -p grokrs-approval passes",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:terminal-broker"]
+consumes = ["ART:approval-trait", "ART:approval-types", "ART:approval-config"]
+critical_decisions = [
+  "stdin/stderr abstracted behind traits (AsyncBufRead for input, Write for output) to enable testing without real terminal I/O.",
+  "tokio::time::timeout for the prompt timer — no busy-wait or polling.",
+  "Batch map uses std::sync::Mutex, not tokio::sync::Mutex — the map is only accessed briefly and never held across awaits.",
+  "Store dependency is grokrs-store — adds an optional dependency (feature-gated or always present since persistence is best-effort).",
+]
+constraints = [
+  "Must not write to stdout — stderr only for all prompts and messages.",
+  "Must not expose API keys or secrets in the prompt context string (enforced by callers, but TerminalBroker must not add any secrets itself).",
+  "Timeout is per-prompt, resets on invalid input.",
+  "Batch map is in-memory only — does not persist across process restarts.",
+]
+failure_modes = [
+  "stdin not connected (piped/redirected) causes immediate EOF — treated as timeout or requires detection of non-TTY stdin.",
+  "tokio::time::timeout requires a tokio runtime — TerminalBroker must be used within a tokio context.",
+  "Simulated stdin tests may require a custom AsyncBufRead impl — ensure the abstraction is testable.",
+]
+rationale = "The terminal broker is the production implementation that resolves Decision::Ask through interactive user input. The batch map and timeout handling are core to the user experience and safety model."
+
+[units.U53]
+name = "Approval persistence in grokrs-store (record, list, count queries)"
+summary = """
+Extend grokrs-store with approval persistence. Add a V2 migration that \
+extends the approvals table with context TEXT and timeout_secs REAL \
+columns (or creates the full table if V1 created it as schema-only). \
+Create crates/grokrs-store/src/approval.rs with ApprovalRepo accessed \
+via store.approvals(). Implement: record(session_id, effect, decision, \
+decided_by, context, timeout_secs) -> Result<i64> inserts a row and \
+returns the row ID; list_by_session(session_id) -> Result<Vec<ApprovalRecord>> \
+returns all approval records ordered by decided_at; \
+count_by_decision(session_id) -> Result<ApprovalCounts> returns \
+{ approved: u64, denied: u64, timed_out: u64 }. Add ApprovalRecord \
+and ApprovalCounts structs to types.rs. effect stored as \
+'{EffectType}({payload})' format. decision stored as 'Approved', \
+'Denied: <reason>', or 'Timeout'. decided_at is RFC 3339 timestamp. \
+Add unit tests: record and retrieve round-trip, list ordering, \
+count accuracy, foreign key enforcement (nonexistent session_id fails)."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U50"]
+blocks = ["U52", "U57", "U58", "U59", "U60"]
+estimated_loc = 350
+files_create = [
+  "crates/grokrs-store/src/approval.rs",
+]
+files_modify = [
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/types.rs",
+  "crates/grokrs-store/src/migrations/mod.rs",
+]
+acceptance = [
+  "V2 migration adds context TEXT and timeout_secs REAL to approvals table (or creates full table)",
+  "migration runs cleanly on fresh database and on database already at V1",
+  "store.approvals().record() inserts row and returns positive row ID",
+  "record stores effect in '{EffectType}({payload})' format",
+  "record stores decision as 'Approved', 'Denied: <reason>', or 'Timeout'",
+  "record stores decided_at as RFC 3339 timestamp",
+  "record stores decided_by, context, and timeout_secs",
+  "list_by_session returns records ordered by decided_at ascending",
+  "list_by_session returns empty vec for session with no approvals",
+  "count_by_decision returns correct counts for approved, denied, timed_out",
+  "count_by_decision returns all zeros for session with no approvals",
+  "record with nonexistent session_id fails with foreign key violation",
+  "ApprovalRecord struct has all table columns as fields",
+  "ApprovalCounts struct has approved: u64, denied: u64, timed_out: u64",
+  "cargo test -p grokrs-store passes",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:approval-persistence"]
+consumes = ["ART:approval-types"]
+critical_decisions = [
+  "V2 migration rather than modifying V1 — V1 is immutable once shipped per migration constraints.",
+  "Effect formatting as '{EffectType}({payload})' is human-readable and grep-friendly for audit.",
+  "ApprovalRepo follows the same pattern as SessionRepo and TranscriptRepo — consistent store API.",
+]
+constraints = [
+  "grokrs-store depends on grokrs-approval only for EffectType/ApprovalDecision types used in formatting — or uses string-based API to avoid the dependency.",
+  "Foreign key on session_id requires sessions table from V1 schema.",
+  "Migration SQL is embedded as const &str, not external files.",
+]
+failure_modes = [
+  "V2 migration fails if V1 approvals table has unexpected schema — mitigated by IF NOT EXISTS and ALTER TABLE IF NOT EXISTS patterns.",
+  "Circular dependency if grokrs-store depends on grokrs-approval — resolve by using string-based record() API that accepts pre-formatted strings.",
+]
+rationale = "Persistence is required for audit trail and batch recall. The V2 migration extends the schema established by the sqlite-store spec without breaking existing databases."
+
+[units.U54]
+name = "BrokeredPolicyGate wrapping PolicyEngine + ApprovalBroker"
+summary = """
+Implement BrokeredPolicyGate in grokrs-approval/src/brokered_gate.rs. \
+BrokeredPolicyGate holds an inner PolicyEngine (from grokrs-policy) and \
+an Arc<dyn ApprovalBroker>. It implements PolicyGate (from grokrs-api). \
+evaluate_network(host) calls the inner PolicyEngine to get a Decision. \
+If Allow, return PolicyDecision::Allow. If Deny, return \
+PolicyDecision::Deny. If Ask, call broker.request_approval() and map: \
+Approved -> PolicyDecision::Allow, Denied -> PolicyDecision::Deny, \
+Timeout -> PolicyDecision::Deny { reason: 'approval timed out' }. \
+Because PolicyGate::evaluate_network is sync and ApprovalBroker is async, \
+use tokio::runtime::Handle::current().block_on() to bridge the boundary. \
+Document that this requires running inside a tokio runtime. Also support \
+a session_id that is set at construction time (stored in the gate). \
+The context string for the broker is formatted as \
+'Network connection to {host}'. Add unit tests using AlwaysApproveBroker \
+and AlwaysDenyBroker: Ask+Approved->Allow, Ask+Denied->Deny, \
+Ask+Timeout->Deny, Allow passthrough, Deny passthrough."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U50", "U51"]
+blocks = ["U57", "U58", "U59", "U60"]
+estimated_loc = 200
+files_create = [
+  "crates/grokrs-approval/src/brokered_gate.rs",
+]
+files_modify = [
+  "crates/grokrs-approval/Cargo.toml",
+  "crates/grokrs-approval/src/lib.rs",
+]
+acceptance = [
+  "BrokeredPolicyGate implements PolicyGate trait from grokrs-api",
+  "Allow from PolicyEngine passes through as PolicyDecision::Allow",
+  "Deny from PolicyEngine passes through as PolicyDecision::Deny with reason",
+  "Ask from PolicyEngine triggers broker.request_approval()",
+  "Broker Approved maps to PolicyDecision::Allow",
+  "Broker Denied maps to PolicyDecision::Deny with the denial reason",
+  "Broker Timeout maps to PolicyDecision::Deny { reason: 'approval timed out' }",
+  "session_id passed to broker.request_approval() matches construction-time value",
+  "context string is 'Network connection to {host}'",
+  "sync/async bridge uses tokio::runtime::Handle::current().block_on()",
+  "unit tests with test stubs verify all five decision paths",
+  "cargo test -p grokrs-approval passes",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:brokered-gate"]
+consumes = ["ART:approval-trait", "ART:approval-types", "ART:test-stubs"]
+critical_decisions = [
+  "BrokeredPolicyGate lives in grokrs-approval, not grokrs-cli — it depends on grokrs-api (for PolicyGate trait) and grokrs-policy (for PolicyEngine), both of which are library crates.",
+  "tokio::runtime::Handle::current().block_on() for sync-async bridge — acceptable because the CLI runs inside a tokio runtime.",
+  "session_id is set at construction, not per-call — the gate is constructed once per session.",
+]
+constraints = [
+  "Must not depend on grokrs-cli — the gate is a library component.",
+  "grokrs-approval now depends on grokrs-api (for PolicyGate) and grokrs-policy (for PolicyEngine and Effect) — verify no circular dependencies.",
+  "If PolicyGate becomes async in the future, remove the block_on bridge.",
+]
+failure_modes = [
+  "block_on() called outside a tokio runtime panics — documented as a requirement, enforced by the CLI being the only production caller.",
+  "block_on() inside a tokio worker thread causes a panic if the runtime is current-thread — use Handle::current() which works in both multi-thread and current-thread runtimes.",
+]
+rationale = "BrokeredPolicyGate is the integration point between the policy engine and the approval broker. It is the only production path through which Ask decisions reach the broker."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 continued — Comprehensive test suite for the crate
+# ---------------------------------------------------------------------------
+
+[units.U56]
+name = "Comprehensive test suite for grokrs-approval"
+summary = """
+Integration and unit tests covering all approval crate functionality. \
+Tests organized in crates/grokrs-approval/tests/integration.rs. \
+Test categories: (1) ApprovalDecision and EffectType type tests — \
+enum variant construction, Display, From<&Effect> conversion, \
+EffectType as HashMap key; (2) test stub tests — AlwaysApproveBroker \
+always approves, AlwaysDenyBroker always denies, RecordingBroker \
+returns configured sequence, RecordingBroker records requests, \
+RecordingBroker panics on exhaustion; (3) TerminalBroker tests with \
+simulated stdin — approve flow, deny flow, invalid input retry, \
+timeout, batch yes-all auto-approves subsequent same-type effects, \
+batch no-all auto-denies subsequent same-type effects, batch scoping \
+(different sessions independent), batch does not cross effect types; \
+(4) BrokeredPolicyGate tests — Ask+Approved->Allow, Ask+Denied->Deny, \
+Ask+Timeout->Deny, Allow passthrough, Deny passthrough; \
+(5) persistence round-trip tests (if store available) — record approval, \
+list by session, count by decision. Tests use tokio::test runtime."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U50", "U51", "U52", "U53", "U54"]
+blocks = ["U57", "U58", "U59", "U60"]
+estimated_loc = 400
+files_create = [
+  "crates/grokrs-approval/tests/integration.rs",
+]
+files_modify = [
+  "crates/grokrs-approval/Cargo.toml",
+]
+acceptance = [
+  "EffectType From<&Effect> covers all Effect variants",
+  "EffectType works as HashMap key (Hash + Eq verified)",
+  "AlwaysApproveBroker test: returns Approved on multiple calls",
+  "AlwaysDenyBroker test: returns Denied on multiple calls",
+  "RecordingBroker test: returns decisions in order",
+  "RecordingBroker test: recorded() returns all received requests",
+  "TerminalBroker test: 'y' input returns Approved",
+  "TerminalBroker test: 'n' input returns Denied",
+  "TerminalBroker test: invalid then valid input returns correct decision",
+  "TerminalBroker test: no input within timeout returns Timeout",
+  "TerminalBroker test: 'Y' input returns Approved and subsequent same-type returns Approved without prompt",
+  "TerminalBroker test: 'N' input returns Denied and subsequent same-type returns Denied without prompt",
+  "TerminalBroker test: batch for session A does not affect session B",
+  "TerminalBroker test: batch for NetworkConnect does not affect FsRead",
+  "BrokeredPolicyGate test: all five decision paths verified",
+  "persistence round-trip: record + list_by_session returns correct records",
+  "persistence round-trip: count_by_decision returns correct counts",
+  "all tests pass: cargo test -p grokrs-approval",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:approval-test-suite"]
+consumes = ["ART:approval-trait", "ART:approval-types", "ART:test-stubs", "ART:terminal-broker", "ART:approval-persistence", "ART:brokered-gate"]
+critical_decisions = [
+  "Integration tests in tests/ directory exercise the public API surface end-to-end.",
+  "tokio::test for async test runtime — matches the production runtime.",
+  "TerminalBroker tests use injected reader/writer traits, not real stdin/stderr.",
+]
+constraints = [
+  "Tests must not depend on real terminal I/O — fully automated.",
+  "Persistence tests require a tempdir SQLite database.",
+  "All tests use #[tokio::test] for async support.",
+]
+failure_modes = [
+  "Flaky timeout tests if CI is slow — use generous timeouts in tests (e.g., 100ms) with fast simulated input.",
+]
+rationale = "A comprehensive test suite is the primary evidence that the approval broker implementation is correct. Testing all paths including batch scoping and persistence validates the safety claims."
+
+# ---------------------------------------------------------------------------
+# LAYER 2 — CLI integration and end-to-end wiring
+# ---------------------------------------------------------------------------
+
+[units.U57]
+name = "CLI wiring: TerminalBroker + BrokeredPolicyGate construction"
+summary = """
+Update grokrs-cli to construct the approval broker at startup. Add \
+grokrs-approval dependency to grokrs-cli/Cargo.toml. In the CLI startup \
+path (main.rs or a dedicated wiring module), read session.approval_mode \
+from AppConfig. When approval_mode is 'interactive': construct \
+TerminalBroker with timeout from session.approval_timeout_secs (default \
+30s) and optional store handle; wrap PolicyEngine + TerminalBroker in \
+BrokeredPolicyGate; inject BrokeredPolicyGate as the PolicyGate for \
+GrokClient. When approval_mode is 'deny': use a DenyAllAskGate that \
+maps Ask to Deny (current behavior, can reuse existing gate or create \
+a thin wrapper). When approval_mode is 'allow': use an AllowAllAskGate \
+that maps Ask to Allow and logs a warning per approval; also log a \
+startup warning: 'WARNING: approval_mode=allow -- all Ask decisions \
+will be auto-approved. Do not use in production.' Validate that \
+approval_mode is one of the three recognized values at startup; exit \
+with error on unrecognized mode. Add tests for the wiring logic."""
+layer = 2
+tier = 2
+status = "pending"
+depends_on = ["U50", "U51", "U52", "U53", "U54", "U55", "U56"]
+blocks = ["U59", "U60"]
+estimated_loc = 250
+files_create = [
+  "crates/grokrs-cli/src/approval_wiring.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/Cargo.toml",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "grokrs-approval added as dependency in grokrs-cli/Cargo.toml",
+  "approval_mode = 'interactive' constructs TerminalBroker with correct timeout",
+  "approval_mode = 'interactive' wraps PolicyEngine + broker in BrokeredPolicyGate",
+  "approval_mode = 'deny' maps Ask to Deny without prompting",
+  "approval_mode = 'allow' maps Ask to Allow with warning logged per approval",
+  "approval_mode = 'allow' logs startup warning about auto-approval",
+  "unrecognized approval_mode causes CLI to exit with clear error message",
+  "timeout defaults to 30 seconds when approval_timeout_secs is absent in config",
+  "store handle passed to TerminalBroker when store is available",
+  "BrokeredPolicyGate injected as PolicyGate for GrokClient",
+  "cargo test -p grokrs-cli passes",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:cli-approval-wiring"]
+consumes = ["ART:approval-trait", "ART:approval-types", "ART:test-stubs", "ART:terminal-broker", "ART:approval-persistence", "ART:brokered-gate", "ART:approval-config", "ART:approval-test-suite"]
+critical_decisions = [
+  "Wiring logic in a dedicated approval_wiring.rs module — keeps main.rs clean and the wiring testable in isolation.",
+  "approval_mode validated at startup, not lazily — fail fast on misconfiguration.",
+  "DenyAllAskGate and AllowAllAskGate are thin wrappers, not full broker implementations — they do not go through ApprovalBroker.",
+]
+constraints = [
+  "The 'allow' mode must log every auto-approval with the effect description — silent auto-approval violates the safety model.",
+  "The 'deny' mode must not construct a TerminalBroker — no stdin dependency in headless/CI environments.",
+]
+failure_modes = [
+  "Store not yet constructed at approval wiring time — wire approval after store initialization.",
+  "approval_mode field missing from old configs — SessionConfig already has this field, so it is always present.",
+]
+rationale = "CLI wiring connects all the approval crate components into the running application. This is where the trait abstractions become concrete."
+
+[units.U58]
+name = "CLI subcommand: grokrs store approvals [--session <id>]"
+summary = """
+Add a new store approvals subcommand to grokrs-cli. The subcommand \
+lists approval decisions from the SQLite store. Optional --session <id> \
+flag filters by session ID. Output includes: timestamp (decided_at), \
+effect, decision, decided_by, and context. Output formatted as a table \
+to stderr. When no approvals exist, print an informational message. \
+When the store is not available (no database), print a helpful message \
+about running a session first. Add the subcommand to the existing store \
+command group (or create it if it does not exist yet). Update the Clap \
+command definitions in main.rs. Add integration tests that verify output \
+format with a pre-populated store."""
+layer = 2
+tier = 2
+status = "pending"
+depends_on = ["U50", "U53", "U55", "U56"]
+blocks = ["U59", "U60"]
+estimated_loc = 180
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/mod.rs",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "'grokrs store approvals' lists all approvals across all sessions",
+  "'grokrs store approvals --session <id>' filters to the specified session",
+  "output includes decided_at, effect, decision, decided_by, context columns",
+  "output formatted as a readable table on stderr",
+  "no approvals in store prints informational message",
+  "no store database prints helpful message",
+  "subcommand registered in Clap command hierarchy",
+  "cargo test -p grokrs-cli passes",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:approvals-subcommand"]
+consumes = ["ART:approval-types", "ART:approval-persistence", "ART:approval-config", "ART:approval-test-suite"]
+critical_decisions = [
+  "Output to stderr consistent with other grokrs CLI output — stdout reserved for piped data.",
+  "Table format rather than JSON — human-readable for operator audit. JSON can be added later if needed.",
+]
+constraints = [
+  "Must work with the same --config flag as other commands.",
+  "Must handle missing store gracefully — not an error, just informational.",
+]
+failure_modes = [
+  "Large number of approvals may overflow terminal — acceptable for CLI, can add --limit later.",
+]
+rationale = "The approvals subcommand provides operator visibility into approval decisions, supporting the audit trail requirement from the spec."
+
+[units.U59]
+name = "CLI doctor: report approval mode and store availability"
+summary = """
+Update the grokrs doctor subcommand to report the configured approval \
+mode and store availability for approval persistence. Doctor output \
+gains a new 'Approval' section showing: approval_mode (interactive, \
+deny, or allow), approval_timeout_secs (configured value or '30 \
+(default)'), store available for persistence (yes/no based on whether \
+grokrs-store database exists and is accessible), and approval count \
+if store is available (total approved, denied, timed out across all \
+sessions). Doctor does not fail if the store is unavailable — it \
+reports the absence gracefully. Add tests for doctor output with \
+each approval mode."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["U50", "U53", "U55", "U56", "U57", "U58"]
+blocks = []
+estimated_loc = 120
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/mod.rs",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "grokrs doctor output includes 'Approval' section",
+  "approval_mode displayed from config",
+  "approval_timeout_secs displayed (shows '30 (default)' when not configured)",
+  "store availability for persistence reported as yes/no",
+  "approval counts shown when store is available",
+  "doctor does not fail when store is unavailable",
+  "doctor does not fail when store has no approvals",
+  "tests verify doctor output for each approval mode",
+  "cargo test -p grokrs-cli passes",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:doctor-approval-reporting"]
+consumes = ["ART:approval-types", "ART:approval-persistence", "ART:approval-config", "ART:cli-approval-wiring", "ART:approvals-subcommand"]
+critical_decisions = [
+  "Doctor reports configuration, not liveness — it does not test whether stdin is a TTY or whether the broker can actually prompt.",
+  "Counts shown as summary totals, not per-session — keeps doctor output concise.",
+]
+constraints = [
+  "Doctor must remain fast — approval count query is a simple aggregate.",
+  "Doctor must not modify the store in any way — read-only access.",
+]
+failure_modes = [
+  "Corrupted store causes doctor to panic — must catch and report the error.",
+]
+rationale = "Doctor is the established diagnostic entry point. Reporting approval configuration helps operators verify their setup."
+
+[units.U60]
+name = "End-to-end wiring: api subcommands use BrokeredPolicyGate"
+summary = """
+Update the existing api subcommands in grokrs-cli to use the \
+BrokeredPolicyGate instead of the current placeholder behavior. The \
+api chat and other api subcommands that construct a GrokClient must \
+inject the gate constructed by the approval wiring module (U57). \
+When approval_mode is 'interactive', Decision::Ask from the policy \
+engine triggers the TerminalBroker prompt. When the user approves, \
+the API request proceeds. When denied or timed out, the request is \
+blocked with a clear error message to the user. Verify that \
+TransportError::ApprovalRequired is no longer surfaced when a broker \
+is configured — the BrokeredPolicyGate resolves Ask before the \
+transport sees it. Add integration tests: (1) with AlwaysApproveBroker, \
+an api call that triggers Ask succeeds; (2) with AlwaysDenyBroker, \
+an api call that triggers Ask fails with a denial message; (3) with \
+no broker configured (deny mode), Ask maps to Deny as before. \
+Persist all approval decisions during api calls to the store."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["U50", "U51", "U52", "U53", "U54", "U55", "U56", "U57", "U58", "U59"]
+blocks = []
+estimated_loc = 200
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/api.rs",
+]
+acceptance = [
+  "api subcommands use BrokeredPolicyGate when approval_mode is 'interactive'",
+  "Decision::Ask triggers TerminalBroker prompt in interactive mode",
+  "user approval allows the API request to proceed",
+  "user denial blocks the API request with clear error message",
+  "timeout blocks the API request with 'approval timed out' message",
+  "TransportError::ApprovalRequired not surfaced when broker is configured",
+  "deny mode maps Ask to Deny without prompting (existing behavior preserved)",
+  "allow mode maps Ask to Allow with per-approval warning logged",
+  "approval decisions persisted to store during api calls",
+  "integration test: AlwaysApproveBroker + Ask -> request succeeds",
+  "integration test: AlwaysDenyBroker + Ask -> request denied",
+  "integration test: deny mode + Ask -> request denied",
+  "cargo test -p grokrs-cli passes",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["OUT:approval-broker-integrated"]
+consumes = ["ART:approval-trait", "ART:approval-types", "ART:test-stubs", "ART:terminal-broker", "ART:approval-persistence", "ART:brokered-gate", "ART:approval-config", "ART:approval-test-suite", "ART:cli-approval-wiring", "ART:approvals-subcommand", "ART:doctor-approval-reporting"]
+critical_decisions = [
+  "BrokeredPolicyGate is the single integration point — api commands do not interact with ApprovalBroker directly.",
+  "Persistence of approval decisions happens inside the broker, not in the api command — keeps the api command clean.",
+  "Test stubs injected via the same wiring path used in production — tests validate the real construction logic.",
+]
+constraints = [
+  "Must not break existing api subcommand functionality when approval_mode is 'deny'.",
+  "Must not introduce hard dependency on approval broker for api commands to compile — the wiring module handles optional construction.",
+]
+failure_modes = [
+  "Broker prompt blocks the async runtime if not properly bridged — mitigated by block_on() in BrokeredPolicyGate.",
+  "Store write failure during api call does not affect the api call itself — best-effort persistence.",
+]
+rationale = "This is the end-to-end integration that proves the approval broker works in the production flow. It replaces the placeholder 'not yet implemented' behavior with real interactive approval."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U50", "U55"]
+leaf_nodes = ["U59", "U60"]
+critical_path = ["U50", "U52", "U56", "U57", "U60"]
+critical_path_loc = 1450
+
+[computed.max_parallel]
+layer0 = 2
+layer1 = 3
+layer2 = 2
+
+[[computed.conflict_groups]]
+files = ["Cargo.toml"]
+units = ["U50"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-approval/Cargo.toml"]
+units = ["U50", "U51", "U52", "U54", "U56"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-approval/src/lib.rs"]
+units = ["U50", "U51", "U52", "U54"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-core/src/lib.rs"]
+units = ["U55"]
+
+[[computed.conflict_groups]]
+files = ["configs/grokrs.example.toml"]
+units = ["U55"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-store/src/lib.rs"]
+units = ["U53"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-store/src/types.rs"]
+units = ["U53"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/Cargo.toml"]
+units = ["U57"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/main.rs"]
+units = ["U57", "U58", "U59"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/mod.rs"]
+units = ["U58", "U59"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/api.rs"]
+units = ["U60"]
+
+[computed.loc_totals]
+tier1 = 1780
+tier2 = 430
+tier3 = 320
+all = 2530

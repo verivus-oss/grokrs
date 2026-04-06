@@ -1,0 +1,94 @@
+[meta]
+title = "grokrs bootstrap contract declaration"
+template_kind = "contract-declaration"
+release_version = "1.0.0"
+source = "docs/reviews/bootstrap/2026-04-05/README.md"
+created = "2026-04-05"
+review_subject = "grokrs bootstrap scaffold"
+status = "declared"
+contract_count = 5
+artifact_root = "."
+
+[[contracts]]
+id = "C01"
+domain = "ordering_and_determinism"
+statement = "The scaffold establishes safety primitives and documentation before any attempt to add autonomous execution or model orchestration."
+applies_to = ["implementation_rereview"]
+source_artifacts = [
+  "ARCHITECTURE.md",
+  "docs/development/grokrs/03_IMPLEMENTATION_PLAN.md",
+]
+reviewer_checks = [
+  "phase 1 is limited to workspace, policy, CLI, and docs",
+  "no shell execution capability is introduced in the bootstrap crate set",
+]
+
+[[contracts]]
+id = "C02"
+domain = "compatibility_fallback_and_normalization"
+statement = "Configuration must parse from TOML with predictable defaults and policy decisions must be deterministic for the same effect set."
+applies_to = ["implementation_rereview"]
+source_artifacts = [
+  "configs/grokrs.example.toml",
+  "crates/grokrs-core/src/lib.rs",
+  "crates/grokrs-policy/src/lib.rs",
+]
+reviewer_checks = [
+  "show-config loads the sample file cleanly",
+  "policy evaluation produces stable allow or deny results",
+]
+
+[[contracts]]
+id = "C03"
+domain = "canonical_schema_and_serialization_shape"
+statement = "The authoritative runtime configuration shape is the Rust struct model in grokrs-core backed by the sample TOML checked into configs."
+applies_to = ["implementation_rereview"]
+source_artifacts = [
+  "crates/grokrs-core/src/lib.rs",
+  "configs/grokrs.example.toml",
+]
+reviewer_checks = [
+  "AppConfig fields align with the sample config",
+  "no undocumented config keys are required by the CLI",
+]
+
+[[contracts]]
+id = "C04"
+domain = "precedence_override_and_waiver"
+statement = "Deny-by-default safety posture is the bootstrap baseline. Any future network or shell allowance must be introduced explicitly through policy evolution, not ad hoc CLI shortcuts."
+applies_to = ["implementation_rereview"]
+source_artifacts = [
+  "ARCHITECTURE.md",
+  "crates/grokrs-policy/src/lib.rs",
+]
+reviewer_checks = [
+  "network and spawn effects default to deny",
+  "bootstrap commands do not bypass policy through hidden paths",
+]
+
+[[contracts]]
+id = "C05"
+domain = "source_of_truth_and_authority"
+statement = "The repo-local docs and machine-readable review artifacts are the source of truth for the scaffold. Informal chat intent does not override checked-in safety or architecture guidance."
+applies_to = ["implementation_rereview"]
+source_artifacts = [
+  "AGENTS.md",
+  "ARCHITECTURE.md",
+  "docs/reviews/bootstrap/2026-04-05/IMPLEMENTATION_DAG.toml",
+]
+reviewer_checks = [
+  "core safety invariants are documented in checked-in files",
+  "review artifacts reference repo-local authoritative files",
+]
+
+[computed]
+contract_ids = ["C01", "C02", "C03", "C04", "C05"]
+covered_domains = [
+  "ordering_and_determinism",
+  "compatibility_fallback_and_normalization",
+  "canonical_schema_and_serialization_shape",
+  "precedence_override_and_waiver",
+  "source_of_truth_and_authority",
+]
+missing_domains = []
+

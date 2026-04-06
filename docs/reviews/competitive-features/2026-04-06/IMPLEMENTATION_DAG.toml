@@ -1,0 +1,1565 @@
+[meta]
+title = "Competitive features: interactive chat, agent tools, search, media generation, model discovery, session management"
+created = "2026-04-06"
+revised = "2026-04-06"
+completed = "2026-04-06"
+total_units = 21
+tier1_units = ["U09", "U10", "U11", "U12", "U13", "U14", "U15", "U16", "U17", "U18"]
+tier2_units = ["U20", "U21", "U22", "U23", "U24"]
+tier3_units = ["U30", "U31", "U32", "U33", "U34", "U35"]
+
+# ---------------------------------------------------------------------------
+# SCOPING DECISIONS (post-review amendments)
+# ---------------------------------------------------------------------------
+# 1. U09 added: minimal approval bypass for networked features. Without this,
+#    allow_network = true yields Decision::Ask which becomes ApprovalRequired
+#    and all networked commands are non-functional. U09 is a temporary escape
+#    hatch (approval_mode = "allow" in config) until the full approval broker
+#    (spec 03) is implemented. All networked units depend on U09.
+# 2. U36 (trait evolution) folded into U10 -- U10/U11 need the evolved traits
+#    at implementation time, not after.
+# 3. U25 (agent search) merged into U17 -- search flags are just request
+#    construction and tool_loop already handles server-side tools.
+# 4. U20/U21 dependencies on U14/U15 removed -- media generation and model
+#    discovery use endpoint clients directly, not the tool registry.
+# 5. U14 rewritten to use trust_rank() ordering, ErasedTool object-safe
+#    wrapper, and flat Responses API function definition format.
+# 6. U22/U24 now depend on U23 (store extensions). U23 adds V2 migration
+#    with ON DELETE CASCADE and find_by_prefix.
+# ---------------------------------------------------------------------------
+
+# ===========================================================================
+# LAYER 0 -- Foundation: approval gate, tool traits, REPL core, trust gates
+# ===========================================================================
+
+[units.U09]
+name = "Minimal approval bypass: reuse session.approval_mode for networked effects"
+summary = """
+The existing SessionConfig already has an approval_mode field \
+(values: 'interactive', 'deny', 'allow'; default 'interactive'). \
+Reuse this field in ALL CLI policy bridges (FnPolicyGate in \
+commands/api.rs AND commands/collections.rs) to resolve Decision::Ask: if approval_mode = \
+'allow', map Ask to Allow; if 'deny', map Ask to Deny; if \
+'interactive', keep Ask (which becomes ApprovalRequired until the \
+approval broker from spec 03 is built). This avoids creating a \
+second source of truth. Update the example config comment under \
+[session] explaining the approval_mode values. Add unit tests \
+verifying all three modes in the policy bridge."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U13", "U16", "U17", "U18", "U20", "U21", "U31"]
+estimated_loc = 180
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/api.rs",
+  "crates/grokrs-cli/src/commands/collections.rs",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "CLI policy bridge (FnPolicyGate in api.rs) reads config.session.approval_mode from the existing SessionConfig field",
+  "approval_mode = 'allow' causes the bridge to map Decision::Ask to PolicyDecision::Allow",
+  "approval_mode = 'interactive' preserves existing behaviour (Ask stays Ask, becomes ApprovalRequired)",
+  "approval_mode = 'deny' causes the bridge to map Decision::Ask to PolicyDecision::Deny",
+  "No new field added to PolicyConfig or SessionConfig -- reuses the existing session.approval_mode",
+  "configs/grokrs.example.toml comment under [session] explains approval_mode values and warns about 'allow'",
+  "Unit tests verify all three approval_mode behaviours in the policy bridge",
+  "Unit test verifies Allow decisions are never downgraded by approval_mode",
+  "Unit test verifies Deny decisions are never upgraded by approval_mode",
+]
+produces = ["ART:approval-bypass"]
+consumes = []
+critical_decisions = [
+  "approval_mode is a conscious scoping decision: full approval broker (spec 03) will supersede this field.",
+  "Only Ask decisions are affected -- Allow and Deny pass through unchanged. This prevents the bypass from weakening explicit denials.",
+  "Default is 'interactive' (existing default in SessionConfig) -- users must explicitly change to 'allow' to bypass.",
+]
+constraints = [
+  "approval_mode only affects the Ask -> Allow/Deny mapping in the CLI bridge, not PolicyEngine itself.",
+  "Field already lives in SessionConfig -- no new config fields added.",
+  "When spec 03 approval broker ships, the temporary bridge in U09 is superseded for the 'interactive' flow (BrokeredPolicyGate handles Ask via TerminalBroker). The 'deny' and 'allow' modes remain as explicit fast-path mappings in the later wiring.",
+]
+failure_modes = [
+  "Users set approval_mode = 'allow' in production and forget -- mitigated by doctor warning (U31).",
+  "Future developer removes the field when spec 03 ships -- mark with #[deprecated] when broker lands.",
+]
+rationale = "Without this unit, every networked command is non-functional because allow_network = true yields Ask, which becomes ApprovalRequired with no approval path. This is the minimal change to unblock all networked features."
+
+[units.U10]
+name = "ToolSpec trait evolution and implementations for read_file, write_file, list_directory"
+summary = """
+Evolve the ToolSpec and Classify traits in grokrs-tool, then implement \
+three concrete filesystem tools. Trait changes: ToolSpec gains \
+description() -> &str and input_schema() -> serde_json::Value methods \
+for registry integration. ToolSpec::execute signature extended to \
+async fn execute(&self, input: Self::Input, root: &WorkspaceRoot) -> \
+Result<Self::Output, ToolError>. Classify::classify returns \
+Result<Vec<Effect>, ToolError> instead of Vec<Effect>. Add ToolError \
+with variants: PathValidation, Io, Timeout, PermissionDenied, Other. \
+Use async_trait if MSRV < 1.75. Then implement ReadFileTool: accepts a \
+relative path string, classifies as Effect::FsRead(WorkspacePath), \
+executes by reading the file content relative to WorkspaceRoot and \
+returning the content as String. WriteFileTool: accepts a relative path \
+and content string, classifies as Effect::FsWrite(WorkspacePath), \
+executes by writing content to the resolved path. ListDirectoryTool: \
+accepts a relative path, classifies as Effect::FsRead(WorkspacePath), \
+executes by listing directory entries. All tools validate paths \
+through WorkspacePath::new() -- absolute paths, '..' traversal, \
+and empty paths are rejected at classification time. Each tool returns \
+a Result<String, ToolError>. Add grokrs-cap dependency to grokrs-tool \
+for WorkspacePath/WorkspaceRoot."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U14", "U15"]
+estimated_loc = 570
+files_create = [
+  "crates/grokrs-tool/src/tools/mod.rs",
+  "crates/grokrs-tool/src/tools/read_file.rs",
+  "crates/grokrs-tool/src/tools/write_file.rs",
+  "crates/grokrs-tool/src/tools/list_directory.rs",
+  "crates/grokrs-tool/src/error.rs",
+]
+files_modify = [
+  "crates/grokrs-tool/Cargo.toml",
+  "crates/grokrs-tool/src/lib.rs",
+]
+acceptance = [
+  "ToolSpec::execute is async and accepts &WorkspaceRoot",
+  "ToolSpec::execute returns Result<Self::Output, ToolError>",
+  "ToolSpec::description() returns a human-readable tool description",
+  "ToolSpec::input_schema() returns a JSON Schema value for the tool input",
+  "Classify::classify returns Result<Vec<Effect>, ToolError>",
+  "ToolError has PathValidation, Io, Timeout, PermissionDenied, Other variants",
+  "async_trait used for trait methods (or native async trait if MSRV supports)",
+  "ReadFileTool classifies as FsRead with validated WorkspacePath",
+  "ReadFileTool rejects absolute paths at classification time",
+  "ReadFileTool rejects '..' traversal at classification time",
+  "ReadFileTool reads file content from WorkspaceRoot-resolved path",
+  "ReadFileTool returns ToolError::Io on nonexistent file",
+  "WriteFileTool classifies as FsWrite with validated WorkspacePath",
+  "WriteFileTool writes content to WorkspaceRoot-resolved path",
+  "WriteFileTool creates parent directories if absent",
+  "ListDirectoryTool classifies as FsRead with validated WorkspacePath",
+  "ListDirectoryTool returns sorted directory entries as newline-separated list",
+  "ListDirectoryTool returns ToolError::Io on nonexistent directory",
+  "All tools implement both ToolSpec and Classify traits",
+  "All tools implement description() and input_schema()",
+  "Unit tests use tempdir for filesystem isolation",
+  "Existing grokrs-tool tests updated to new async signatures and passing",
+]
+produces = ["ART:fs-tools", "ART:trait-evolution"]
+consumes = []
+critical_decisions = [
+  "Trait evolution happens here (not as a separate unit) because tools need the evolved traits at implementation time -- description(), input_schema(), async execute, WorkspaceRoot parameter.",
+  "ToolSpec::execute signature extended to take &WorkspaceRoot -- tools need a root to resolve absolute paths for I/O.",
+  "Path validation happens at classification time (Classify::classify), not at execution time -- fail early.",
+  "grokrs-tool gains a dependency on grokrs-cap for WorkspacePath and WorkspaceRoot but NOT on grokrs-policy -- policy evaluation is the caller's responsibility.",
+  "Result return type for classify enables early validation failure reporting.",
+  "async execute enables future tools (e.g., database queries, network fetches).",
+  "WorkspaceRoot parameter makes the workspace context explicit, not ambient.",
+]
+constraints = [
+  "grokrs-tool must not depend on grokrs-policy -- effect evaluation happens in the caller (CLI or agent loop).",
+  "Tools accept only workspace-relative paths -- no mechanism to access files outside the workspace.",
+  "Must use async_trait crate if MSRV < 1.75 (native async traits).",
+  "No new dependencies beyond async_trait (if needed) and serde_json for input_schema.",
+]
+failure_modes = [
+  "Large file reads could OOM -- mitigate with a configurable max_read_bytes in ReadFileTool (default 1MB).",
+  "Symlink traversal could escape workspace -- mitigate by checking canonical path is still under WorkspaceRoot after resolution.",
+  "Race condition between classify and execute (file deleted between validation and read) -- acceptable, returns Io error.",
+  "async_trait lifetime issues with borrowed input -- use owned types if needed.",
+]
+rationale = "Concrete tool implementations are the foundation for the agent execution framework. The trait evolution must happen here because the tools, registry, and executor all depend on the evolved signatures. Splitting trait evolution into a separate unit created a circular scheduling problem."
+
+[units.U11]
+name = "RunCommandTool with ProcessSpawn effect and output capture"
+summary = """
+Implement RunCommandTool in grokrs-tool that executes shell commands. \
+Classifies as Effect::ProcessSpawn { program } where program is \
+extracted from the command string (first whitespace-delimited token). \
+Execute spawns the command via std::process::Command with working \
+directory set to WorkspaceRoot, captures stdout and stderr, enforces \
+a configurable timeout (default 30 seconds), and returns combined \
+output as String. Stdin is closed (no interactive input). Environment \
+is inherited but sanitized: XAI_API_KEY and any env var matching \
+*_KEY, *_SECRET, *_TOKEN patterns are removed from the child process \
+environment. Exit code is included in the returned string. Non-zero \
+exit codes are not errors -- the tool returns the output regardless. \
+Timeout kills the child process (SIGKILL on Unix) and returns a \
+ToolError::Timeout. Implements the evolved ToolSpec trait from U10 \
+(async execute with &WorkspaceRoot, description(), input_schema())."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U14", "U15"]
+estimated_loc = 280
+files_create = [
+  "crates/grokrs-tool/src/tools/run_command.rs",
+]
+files_modify = [
+  "crates/grokrs-tool/src/tools/mod.rs",
+  "crates/grokrs-tool/src/error.rs",
+]
+acceptance = [
+  "RunCommandTool classifies as ProcessSpawn with extracted program name",
+  "RunCommandTool extracts first token as program name (e.g., 'ls -la' -> program='ls')",
+  "RunCommandTool executes command with cwd set to WorkspaceRoot",
+  "RunCommandTool captures both stdout and stderr in output",
+  "RunCommandTool includes exit code in returned string",
+  "RunCommandTool kills child process on timeout and returns ToolError::Timeout",
+  "RunCommandTool sanitizes environment: removes XAI_API_KEY from child env",
+  "RunCommandTool sanitizes environment: removes env vars matching *_KEY, *_SECRET, *_TOKEN patterns",
+  "RunCommandTool closes stdin (no interactive input possible)",
+  "RunCommandTool with non-zero exit code returns output (not an error)",
+  "RunCommandTool implements description() and input_schema()",
+  "Unit test: echo command returns expected output",
+  "Unit test: timeout fires for sleep command exceeding limit",
+  "Unit test: env sanitization removes test secret from child",
+]
+produces = ["ART:command-tool"]
+consumes = []
+critical_decisions = [
+  "Environment sanitization strips secret-like vars by pattern -- defense in depth even though PolicyEngine gates the spawn.",
+  "Timeout uses SIGKILL not SIGTERM -- ensures the child is killed even if it ignores SIGTERM.",
+  "Combined stdout+stderr in output -- separate capture available but combined is simpler for model consumption.",
+  "Non-zero exit is not an error -- the model needs to see compiler errors, test failures, etc.",
+]
+constraints = [
+  "No interactive input -- stdin is immediately closed.",
+  "Timeout is mandatory -- no unterminated child processes.",
+  "Secret sanitization patterns are hardcoded, not configurable -- simple and predictable.",
+  "Command is run via 'sh -c' on Unix for shell expansion support.",
+]
+failure_modes = [
+  "Shell injection via crafted command strings -- mitigated by PolicyEngine gating ProcessSpawn before execution.",
+  "Zombie processes if SIGKILL fails on obscure platforms -- acceptable for CLI usage.",
+  "Output truncation for commands producing megabytes of output -- mitigate with configurable max_output_bytes (default 512KB).",
+]
+rationale = "Process spawning is the most dangerous tool capability. Environment sanitization and timeout enforcement make it safer even when PolicyEngine allows the spawn."
+
+[units.U12]
+name = "Interactive REPL core with readline, history, and slash commands"
+summary = """
+Create the interactive REPL loop as a new module in grokrs-cli. The \
+REPL uses rustyline for readline with history persistence to \
+.grokrs/chat_history. Supports slash commands parsed before sending \
+to the API: /exit (quit REPL), /clear (reset conversation history), \
+/model <name> (switch model for subsequent turns), /system <prompt> \
+(set system instructions), /help (list available commands), \
+/history (show conversation turn count and token usage). Non-slash \
+input is treated as a user message. The REPL maintains a \
+Vec<ConversationTurn> tracking user messages and assistant responses. \
+Each turn stores the user input, assistant response text, and token \
+usage. The REPL core is decoupled from the API client -- it accepts \
+a trait ChatBackend with async fn send_message(&mut self, message: &str) \
+-> Result<ChatResponse> so it can be tested with a mock backend. \
+ChatResponse includes the response text, token usage, and optional \
+previous_response_id for stateful chaining. Add rustyline dependency \
+to grokrs-cli."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U13", "U16", "U17", "U24", "U30"]
+estimated_loc = 480
+files_create = [
+  "crates/grokrs-cli/src/repl/mod.rs",
+  "crates/grokrs-cli/src/repl/commands.rs",
+  "crates/grokrs-cli/src/repl/history.rs",
+  "crates/grokrs-cli/src/repl/backend.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/Cargo.toml",
+]
+acceptance = [
+  "REPL starts with a prompt and accepts user input",
+  "REPL persists readline history to .grokrs/chat_history across sessions",
+  "/exit terminates the REPL cleanly",
+  "/clear resets conversation history and previous_response_id",
+  "/model grok-4-mini switches the model for subsequent turns",
+  "/system 'You are a Rust expert' sets system instructions",
+  "/help lists all available slash commands with descriptions",
+  "/history shows turn count and cumulative token usage",
+  "Non-slash input is passed to ChatBackend::send_message",
+  "ConversationTurn tracks user input, assistant response, and usage",
+  "ChatBackend trait is async and returns ChatResponse",
+  "REPL handles Ctrl-C gracefully (cancels current input, does not exit)",
+  "REPL handles Ctrl-D as /exit (EOF terminates)",
+  "Empty input is ignored (no API call)",
+  "Unit tests use mock ChatBackend to verify slash command behavior",
+]
+produces = ["ART:repl-core"]
+consumes = []
+critical_decisions = [
+  "rustyline for readline -- mature, cross-platform, supports vi/emacs modes and persistent history.",
+  "ChatBackend trait decouples REPL from GrokClient -- testable without network, swappable for different API backends.",
+  "Slash commands parsed before API dispatch -- simple prefix matching, no complex parser needed.",
+  "History file at .grokrs/chat_history -- colocated with state.db, workspace-local.",
+]
+constraints = [
+  "REPL must not block on API calls -- uses tokio async runtime for send_message.",
+  "History file must not contain API keys or secrets -- only user input text.",
+  "Slash commands are case-insensitive for the command name.",
+  "REPL module has no dependency on grokrs-api -- only the ChatBackend trait.",
+]
+failure_modes = [
+  "rustyline history file corruption -- mitigate by catching load errors and starting with empty history.",
+  "Terminal not TTY (piped input) -- detect and run in non-interactive mode (no prompt, read lines from stdin).",
+  "Long responses block the REPL prompt -- mitigate by streaming output (handled in U13).",
+]
+rationale = "The REPL core must be decoupled from the API client so it can be tested independently and reused with different backends. rustyline provides a mature readline experience."
+
+[units.U13]
+name = "GrokChatBackend: wire REPL to GrokClient with streaming output"
+summary = """
+Implement GrokChatBackend that implements the ChatBackend trait from \
+U12, wiring the REPL to GrokClient. Each send_message call constructs \
+a CreateResponseRequest with the user message, current model, system \
+instructions (if set via /system), and previous_response_id (if \
+stateful mode). Sends via ResponsesClient::create_stream() for \
+token-by-token output. Streaming tokens are printed to stdout as they \
+arrive (same pattern as existing run_chat). On response completion, \
+extracts usage from the ResponseCompleted event and returns a \
+ChatResponse with the full text, usage, and response_id. Supports \
+two conversation modes: stateless (local history via input messages \
+array) and stateful (server-side via previous_response_id with \
+store=true). Default is stateless (store=false) matching the \
+fail-closed posture. --stateful flag opts into server-side chaining. \
+Policy gate is evaluated before the first API call -- if network is \
+denied, the REPL prints a helpful error and exits before entering \
+the loop. Requires U09 approval bypass so that network Ask decisions \
+can resolve to Allow when approval_mode = 'allow'."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = ["U09", "U12"]
+blocks = ["U16", "U17", "U30"]
+estimated_loc = 350
+files_create = [
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/src/repl/mod.rs",
+]
+acceptance = [
+  "GrokChatBackend implements ChatBackend trait",
+  "send_message constructs CreateResponseRequest with current model and instructions",
+  "Streaming tokens are printed to stdout as they arrive",
+  "Response text is accumulated and returned in ChatResponse",
+  "Token usage is extracted from ResponseCompleted event",
+  "Stateless mode (default): builds input messages array from local conversation history",
+  "Stateful mode (--stateful): uses previous_response_id with store=true",
+  "Policy gate denial before REPL loop prints helpful error and exits",
+  "With approval_mode = 'allow', network Ask resolves to Allow and REPL starts",
+  "/model changes are reflected in subsequent API requests",
+  "/system changes are reflected in subsequent API requests",
+  "/clear resets previous_response_id in stateful mode",
+  "Stream errors are displayed to the user and the REPL continues (does not crash)",
+  "Integration test: mock HTTP server verifies request structure",
+]
+produces = ["ART:grok-chat-backend"]
+consumes = ["ART:repl-core", "ART:approval-bypass"]
+critical_decisions = [
+  "Default stateless (store=false) matches fail-closed posture -- server-side storage is opt-in only.",
+  "Stateless mode reconstructs full message array each turn -- correct but increases token usage for long conversations.",
+  "Streaming output uses the same pattern as existing run_chat -- consistent UX.",
+  "Policy check happens once before the REPL loop, not on every turn -- network policy does not change mid-session.",
+]
+constraints = [
+  "store=false by default -- stateful mode requires explicit --stateful flag.",
+  "API key never appears in REPL output, error messages, or history file.",
+  "Stream errors do not terminate the REPL -- user can retry.",
+  "Stateless mode has a practical token limit -- warn user when conversation exceeds configurable threshold.",
+]
+failure_modes = [
+  "Stateless mode with long conversations exceeds context window -- mitigate by warning and suggesting /clear or --stateful.",
+  "Network drops mid-stream -- display error, REPL continues for next turn.",
+  "Server returns 429 rate limit -- retry logic in transport handles this transparently.",
+]
+rationale = "The chat backend bridges the decoupled REPL core to the real API client, maintaining the streaming UX users expect from interactive chat."
+
+[units.U14]
+name = "ToolRegistry with trust_rank ordering, ErasedTool wrapper, Responses API format"
+summary = """
+Create a ToolRegistry in grokrs-tool that manages available tools and \
+gates them by trust level. First, add a trust_rank() -> u8 method to \
+the TrustLevel trait in grokrs-cap: Untrusted=0, InteractiveTrusted=1, \
+AdminTrusted=2. This provides a runtime ordering API for trust levels. \
+Second, create an object-safe ErasedTool trait that wraps ToolSpec for \
+registry dispatch. ToolSpec has associated types (Input, Output) which \
+make it non-object-safe; ErasedTool provides execute_json(&self, \
+args: serde_json::Value, root: &WorkspaceRoot) -> Result<String, \
+ToolError> and classify_json(&self, args: serde_json::Value) -> \
+Result<Vec<Effect>, ToolError>, plus name(), description(), and \
+input_schema(). A blanket impl of ErasedTool for any T: ToolSpec \
+where T::Input: DeserializeOwned handles the JSON deserialization. \
+Third, the registry maps tool names to Box<dyn ErasedTool> with an \
+associated minimum trust_rank. Registration: register(tool: Box<dyn \
+ErasedTool>, min_rank: u8). Querying: available_tools(rank: u8) \
+returns tools whose min_rank <= requested rank. tool_definitions() \
+returns function definitions in the flat Responses API format \
+(FunctionToolDefinition: { type: 'function', name, description, \
+parameters }) -- NOT the nested Chat Completions format. ToolRegistry \
+is constructed per session."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = ["U10", "U11"]
+blocks = ["U15", "U18"]
+estimated_loc = 350
+files_create = [
+  "crates/grokrs-tool/src/registry.rs",
+  "crates/grokrs-tool/src/erased.rs",
+]
+files_modify = [
+  "crates/grokrs-tool/src/lib.rs",
+  "crates/grokrs-cap/src/lib.rs",
+  "crates/grokrs-cap/Cargo.toml",
+  "crates/grokrs-tool/Cargo.toml",
+]
+acceptance = [
+  "TrustLevel trait gains trust_rank() -> u8 method in grokrs-cap",
+  "Untrusted::trust_rank() returns 0",
+  "InteractiveTrusted::trust_rank() returns 1",
+  "AdminTrusted::trust_rank() returns 2",
+  "ErasedTool trait is object-safe (Box<dyn ErasedTool> compiles)",
+  "ErasedTool provides execute_json, classify_json, name, description, input_schema methods",
+  "Blanket impl: any T: ToolSpec where T::Input: DeserializeOwned implements ErasedTool",
+  "ToolRegistry registers tools with minimum trust rank",
+  "available_tools(rank=0) returns only read_file and list_directory",
+  "available_tools(rank=1) returns read_file, write_file, list_directory",
+  "available_tools(rank=2) returns all four tools",
+  "tool_definitions() returns flat Responses API FunctionToolDefinition format",
+  "tool_definitions() format: { type: 'function', name: '...', description: '...', parameters: {...} }",
+  "Tool lookup by name returns Option<&dyn ErasedTool> for execution dispatch",
+  "Unknown tool name returns None",
+  "Duplicate tool name registration rejected with error",
+  "Unit tests verify gating at each trust rank",
+  "Unit tests verify FunctionToolDefinition JSON output matches expected flat format",
+]
+produces = ["ART:tool-registry"]
+consumes = ["ART:fs-tools", "ART:command-tool", "ART:trait-evolution"]
+critical_decisions = [
+  "trust_rank() on TrustLevel trait provides runtime ordering without exposing trust level internals -- simple u8 comparison.",
+  "ErasedTool wraps ToolSpec for object safety -- the registry needs dynamic dispatch since tools have different Input/Output types.",
+  "Flat Responses API FunctionToolDefinition format (not nested Chat format) -- matches the xAI Responses API wire format used by grokrs-api.",
+  "Registry is not a global singleton -- constructed per session with the appropriate trust level.",
+]
+constraints = [
+  "grokrs-tool depends on grokrs-cap for TrustLevel but not on grokrs-policy -- policy evaluation is external.",
+  "Tool definitions must use the flat Responses API format: { type: 'function', name, description, parameters }. NOT the nested Chat format { type: 'function', function: { name, description, parameters } }.",
+  "Registry does not execute tools -- it only provides lookup and description. Execution goes through the caller.",
+  "ErasedTool JSON deserialization errors produce ToolError, not panics.",
+]
+failure_modes = [
+  "Duplicate tool name registration -- reject with error at registration time.",
+  "JSON Schema for parameters does not match actual tool input -- mitigate by deriving schema from the Input type via input_schema().",
+  "ErasedTool deserialization failure on malformed JSON -- returns structured ToolError with context.",
+]
+rationale = "Trust-level gating at the registry level ensures tools are never even visible to sessions that should not have access. ErasedTool provides the object-safe dispatch layer that ToolSpec's associated types prevent. The flat Responses API format matches the actual wire protocol."
+
+[units.U15]
+name = "AgentExecutor: policy-gated tool execution via run_tool_loop"
+summary = """
+Create AgentExecutor in grokrs-cli that drives a multi-turn agent \
+conversation with tool execution, using run_tool_loop from grokrs-api \
+with a synchronous FunctionExecutor implementation. The FunctionExecutor \
+dispatches tool calls to the ToolRegistry via ErasedTool, with policy \
+evaluation in between. Flow: (1) Construct a sync FunctionExecutor \
+implementation (PolicyGatedExecutor) that holds references to \
+ToolRegistry, PolicyEngine, and WorkspaceRoot. (2) On each tool call: \
+look up the tool in the registry by name, call classify_json() to get \
+effects, evaluate each effect through PolicyEngine, if all Allow then \
+call execute_json(), if any Deny/Ask return error to model. (3) Pass \
+this executor to run_tool_loop which handles the multi-turn dispatch \
+automatically. (4) run_tool_loop repeats until model returns text \
+output or max_iterations reached. Uses Session<T> state machine: \
+transitions to RunningTurn on API call, WaitingApproval on Ask \
+decision, back to RunningTurn on approval/denial."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = ["U10", "U11", "U14"]
+blocks = ["U18"]
+estimated_loc = 520
+files_create = [
+  "crates/grokrs-cli/src/agent/mod.rs",
+  "crates/grokrs-cli/src/agent/executor.rs",
+  "crates/grokrs-cli/src/agent/policy_bridge.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/Cargo.toml",
+]
+acceptance = [
+  "PolicyGatedExecutor implements FunctionExecutor trait from grokrs-api tool_loop",
+  "PolicyGatedExecutor is synchronous -- run_tool_loop drives the async loop",
+  "Tool calls are dispatched to ToolRegistry by name via ErasedTool",
+  "classify_json() is called on tool input before execution",
+  "PolicyEngine evaluates every effect from classify_json()",
+  "Decision::Allow proceeds to execute_json() tool execution",
+  "Decision::Deny returns structured error message to model (not a crash)",
+  "Decision::Ask returns 'approval required' message to model (approval broker not yet implemented)",
+  "Tool execution result is returned as function_call_output to the model",
+  "run_tool_loop continues until model returns text (no more tool calls)",
+  "max_iterations limit prevents infinite loops (default 10)",
+  "Session state transitions: RunningTurn on API call, WaitingApproval on Ask",
+  "Store integration: logs each tool call as a transcript entry (best-effort)",
+  "Unknown tool name returns error message to model (not a crash)",
+  "Tool execution error returns error message to model (not a crash)",
+  "JSON deserialization error returns error message to model (not a crash)",
+  "Integration test: mock API returns function_call, executor dispatches and returns result",
+]
+produces = ["ART:agent-executor"]
+consumes = ["ART:fs-tools", "ART:command-tool", "ART:tool-registry"]
+critical_decisions = [
+  "Sync FunctionExecutor implementation -- run_tool_loop handles the async orchestration, the executor just dispatches synchronously.",
+  "Policy evaluation happens INSIDE the FunctionExecutor, not in the tool_loop -- the loop does not know about policy.",
+  "Denied tool calls return structured error text to the model, not an exception -- the model can adapt its strategy.",
+  "PolicyGatedExecutor holds references to PolicyEngine and ToolRegistry, not copies -- single source of truth.",
+  "Store logging is best-effort -- agent loop continues even if persistence fails.",
+]
+constraints = [
+  "Every tool call must go through PolicyEngine -- no bypass path.",
+  "PolicyGatedExecutor must not execute tools that are not in the ToolRegistry for the current trust level.",
+  "Tool arguments from the model are JSON strings -- deserialization errors return structured error to model.",
+  "No secrets in tool execution output logged to store -- WorkspaceRoot path is not logged, only relative paths.",
+]
+failure_modes = [
+  "Model hallucinates nonexistent tool names -- return 'unknown tool' error, model retries with valid tool.",
+  "Model sends malformed JSON arguments -- return parse error, model retries with valid JSON.",
+  "Infinite tool call loop (model always returns tool calls) -- max_iterations terminates with warning.",
+  "Policy engine returns Ask but no approval broker exists -- treated as denial, message explains limitation.",
+]
+rationale = "The agent executor is the critical integration point where API responses, tool execution, policy evaluation, and session state all converge. Using run_tool_loop delegates the multi-turn protocol handling to grokrs-api, keeping the executor focused on dispatch and policy."
+
+[units.U16]
+name = "CLI command: grokrs chat with REPL and streaming"
+summary = """
+Add 'grokrs chat' as a top-level CLI command that launches the \
+interactive REPL from U12 with GrokChatBackend from U13. Accepts \
+flags: --model <name> (override default model), --system <prompt> \
+(initial system instructions), --stateful (enable server-side \
+conversation chaining with store=true), --no-stream (disable streaming, \
+wait for full response). Creates a Session<Untrusted> for lifecycle \
+tracking. Opens the store (best-effort) for session and transcript \
+persistence. Each conversation turn is logged to the store: user \
+message as log_request, assistant response as log_response. Session \
+transitions: Created -> Ready -> RunningTurn (per turn) -> Closed on \
+/exit. Usage summary printed on exit. The command checks network \
+policy before entering the REPL and fails with a helpful error if \
+network is denied. Requires U09 approval bypass to resolve network \
+Ask decisions."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = ["U09", "U12", "U13"]
+blocks = ["U17", "U24", "U30", "U31", "U32", "U33", "U34", "U35"]
+estimated_loc = 250
+files_create = [
+  "crates/grokrs-cli/src/commands/chat.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/mod.rs",
+]
+acceptance = [
+  "'grokrs chat' launches interactive REPL with prompt",
+  "--model flag overrides the default model from config",
+  "--system flag sets initial system instructions",
+  "--stateful flag enables previous_response_id chaining with store=true",
+  "--no-stream flag disables streaming (waits for complete response)",
+  "Session<Untrusted> is created and tracked through REPL lifecycle",
+  "Store integration: session created, turns logged, usage tracked (best-effort)",
+  "Network policy check before REPL -- helpful error if denied",
+  "Usage summary printed to stderr on /exit",
+  "Ctrl-C during streaming cancels current response, returns to prompt",
+  "Ctrl-D exits cleanly (same as /exit)",
+  "'grokrs chat' is a top-level command (not nested under 'api')",
+  "Command works without store (graceful degradation)",
+]
+produces = ["ART:chat-command"]
+consumes = ["ART:repl-core", "ART:grok-chat-backend", "ART:approval-bypass"]
+critical_decisions = [
+  "'grokrs chat' is top-level, not under 'api' -- it is the primary user-facing command, deserves top billing.",
+  "Default to Untrusted session -- matches the existing CLI posture. Trust elevation is a future feature.",
+  "Stateful mode is opt-in via flag -- explicit consent for server-side storage.",
+  "store=false by default even in REPL -- only --stateful enables store=true on API requests.",
+]
+constraints = [
+  "Must coexist with existing 'grokrs api chat' one-shot command -- different commands, different UX.",
+  "REPL must not start if network policy denies access -- check before entering the loop.",
+  "Session ID is UUID v4, consistent with existing api chat session tracking.",
+]
+failure_modes = [
+  "User confusion between 'grokrs chat' (REPL) and 'grokrs api chat' (one-shot) -- mitigate with clear --help text.",
+  "Store locked by concurrent session -- busy_timeout handles this.",
+  "Long conversation fills terminal scrollback -- not a failure, normal behavior.",
+]
+rationale = "Interactive chat is the highest-value competitive feature. Most competing tools (Claude CLI, ChatGPT CLI) offer this. Without it, grokrs is limited to one-shot scripting."
+
+# ===========================================================================
+# LAYER 1 -- Agent CLI, search integration, media generation, model discovery
+# ===========================================================================
+
+[units.U17]
+name = "Search tool integration for chat and agent (--search, --x-search flags)"
+summary = """
+Extend the GrokChatBackend from U13 and the agent command (U18, when \
+available) to support built-in server-side search tools. Add flags to \
+the 'grokrs chat' command: --search (enable web_search tool), \
+--x-search (enable x_search tool), --no-search (explicitly disable, \
+overrides config default). When search is enabled, the \
+CreateResponseRequest includes the appropriate BuiltinTool variants \
+in the tools array and optionally sets search_parameters. Add \
+--search-from-date, --search-to-date, --search-max-results, \
+--citations flags for SearchParameters configuration. When citations \
+are enabled and returned in the response, format and display them \
+after the response text. Search results appearing as server-side tool \
+call events in the stream are handled gracefully (displayed if \
+verbose). SearchParameters are constructed from CLI flags using the \
+existing SearchParameters type in grokrs-api. Also add --search flag \
+to the agent command (U18) which adds BuiltinTool::WebSearch and \
+BuiltinTool::XSearch to the tools array alongside local function \
+definitions. The run_tool_loop (used by AgentExecutor) already \
+handles server-side tool results as pass-through items that do not \
+require local execution -- no special agent-side handling needed \
+beyond including the BuiltinTool in the request. Citation display \
+logic is shared between chat and agent output streams."""
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U09", "U12", "U13", "U16", "U18"]
+blocks = ["U30", "U34"]
+estimated_loc = 430
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+]
+acceptance = [
+  "--search flag adds BuiltinTool::WebSearch to request tools array",
+  "--x-search flag adds BuiltinTool::XSearch to request tools array",
+  "--no-search disables search even if other flags are set",
+  "Both --search and --x-search can be combined",
+  "--search-from-date and --search-to-date set SearchParameters date range",
+  "--search-max-results sets SearchParameters.max_search_results",
+  "--citations enables SearchParameters.return_citations",
+  "Citations in response are formatted and displayed after response text",
+  "Search tool events in stream are handled without crashing",
+  "SearchParameters are not sent when no search flags are set (no unnecessary fields)",
+  "Search works in both stateless and stateful conversation modes",
+  "--search flag on agent command adds BuiltinTool variants alongside function definitions",
+  "Agent run_tool_loop handles server-side search results as pass-through (no local dispatch)",
+  "Citation display logic shared between chat and agent output",
+  "Mixed tool responses (function + server-side) handled in same agent response",
+  "Unit test: verify request includes correct tools array when --search is set",
+  "Unit test: verify agent request includes both BuiltinTool and function definitions",
+]
+produces = ["ART:search-integration"]
+consumes = ["ART:repl-core", "ART:grok-chat-backend", "ART:chat-command", "ART:approval-bypass"]
+critical_decisions = [
+  "Search tools are server-side (BuiltinTool) not client-side -- no local HTTP calls for search.",
+  "Citation display is formatted as numbered references after the response text.",
+  "Search flags are on both 'grokrs chat' and 'grokrs agent' commands -- search is a cross-cutting enhancement.",
+  "Agent search is merged here (not a separate unit) because it is pure request construction -- tool_loop already handles server-side tool results as pass-through items.",
+]
+constraints = [
+  "Search is server-side only -- no additional PolicyEngine effects needed beyond NetworkConnect.",
+  "Date parameters are validated as ISO 8601 date strings (YYYY-MM-DD).",
+  "SearchParameters are optional -- omitted when no search flags are set.",
+  "Function tool names must not collide with built-in tool type names.",
+  "Built-in tool results appear as OutputItem variants, not function_call_output.",
+]
+failure_modes = [
+  "Server-side search times out -- handled by the API timeout, not special-cased.",
+  "Citations reference format changes -- parse conservatively, display raw if format is unknown.",
+  "Model confuses function tools with built-in tools -- return error for unknown function, model adapts.",
+]
+rationale = "Web and X search are uniquely differentiated Grok features. Exposing them via CLI flags on both chat and agent makes them immediately accessible. Merging agent search here eliminates a separate unit because tool_loop already handles server-side tools as pass-through."
+
+[units.U18]
+name = "CLI command: grokrs agent '<task>' with tool execution"
+summary = """
+Add 'grokrs agent' as a top-level CLI command that runs a single \
+agentic task with tool use. Accepts a task description as a positional \
+argument: grokrs agent 'refactor the error handling in src/lib.rs'. \
+Constructs AgentExecutor from U15 with appropriate ToolRegistry for \
+the session's trust level (default Untrusted). Sends the task as the \
+initial prompt with tool definitions. The agent loop runs until the \
+model produces a text response (task complete) or max_iterations is \
+reached. Streaming output shows tool calls as they happen: \
+[tool:read_file] src/lib.rs, [tool:write_file] src/lib.rs, etc. \
+Final text response is printed to stdout. Flags: --trust <level> \
+(untrusted|interactive|admin, default untrusted), --max-iterations \
+<n> (default 10), --model <name>, --system <prompt>, --search \
+(enable search tools alongside function tools -- implementation in \
+U17), --dry-run (show what tools would be called without executing). \
+Store integration: session created, each turn logged, usage summary \
+on exit. Requires U09 approval bypass for network access."""
+layer = 1
+tier = 1
+status = "done"
+depends_on = ["U09", "U14", "U15"]
+blocks = ["U30", "U31", "U32", "U33", "U34"]
+estimated_loc = 380
+files_create = [
+  "crates/grokrs-cli/src/commands/agent.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/mod.rs",
+]
+acceptance = [
+  "'grokrs agent' accepts task description as positional argument",
+  "Agent loop sends task with tool definitions and processes responses",
+  "Tool calls are displayed in real-time: [tool:read_file] path",
+  "Tool results are fed back to the model for multi-turn execution",
+  "Agent terminates when model returns text response (no more tool calls)",
+  "Agent terminates at max_iterations with warning message",
+  "--trust untrusted provides only read_file and list_directory",
+  "--trust interactive additionally provides write_file",
+  "--trust admin additionally provides run_command",
+  "--max-iterations overrides default iteration limit",
+  "--dry-run shows tool calls and effects without executing",
+  "--search flag placeholder wired to U17 search integration",
+  "Store integration: session, transcripts, usage (best-effort)",
+  "Network policy check before agent loop",
+  "Usage summary printed to stderr on completion",
+  "Non-zero exit code if agent fails or is denied by policy",
+]
+produces = ["ART:agent-command"]
+consumes = ["ART:tool-registry", "ART:agent-executor", "ART:approval-bypass"]
+critical_decisions = [
+  "--trust flag sets the session trust level but does NOT bypass PolicyEngine -- both gates must pass.",
+  "--dry-run is valuable for understanding what the agent would do without side effects.",
+  "Agent command is non-interactive -- runs to completion or failure, suitable for scripting.",
+  "Tool call display format [tool:name] is terse and greppable.",
+]
+constraints = [
+  "Trust level from --trust must match the compiled Session<T> type -- use enum dispatch at runtime.",
+  "Agent command must not prompt for input -- it is non-interactive by design.",
+  "Tool definitions sent to API must match the trust level's available tools.",
+]
+failure_modes = [
+  "Model never stops calling tools -- max_iterations terminates.",
+  "Model calls denied tool repeatedly -- each denial is returned as error text, model should adapt.",
+  "Task description too vague -- model may produce unhelpful results. Not a CLI problem.",
+]
+rationale = "The agent command is the second highest-value feature. It enables autonomous task execution within the safety model, directly competing with Claude Code and Cursor agent mode."
+
+[units.U20]
+name = "CLI commands: grokrs generate image and grokrs generate video"
+summary = """
+Add 'grokrs generate' subcommand group with 'image' and 'video' \
+subcommands. These commands use the existing ImagesClient and \
+VideosClient endpoint clients directly -- they do NOT need the \
+ToolRegistry or AgentExecutor. Image generation: 'grokrs generate \
+image <prompt>' sends to ImagesClient::generate(), downloads the \
+result (URL or base64), and writes to --output <path> (required). \
+Supports --edit <input.png> for image editing via ImagesClient::edit(). \
+Flags: --model <name>, --aspect-ratio <ratio>, --quality <quality>, \
+--resolution <resolution>, --format <url|b64_json>. Video generation: \
+'grokrs generate video <prompt>' sends to VideosClient::generate(), \
+polls with progress display using VideosClient::poll_until_done(). \
+Video output is URL-only: the CLI prints the video URL to stdout \
+and does NOT download the binary. If file_id is present in the \
+response, it is also printed. The user downloads separately. This \
+avoids arbitrary binary download through the CLI and simplifies \
+the security surface. Supports --extend <input.mp4> for video \
+extension. Flags: --model <name>, --duration <seconds>, --aspect-ratio, \
+--resolution. Image output paths are validated through WorkspacePath \
+(FsWrite effect evaluated by PolicyEngine). Input file paths for \
+editing validated through WorkspacePath (FsRead effect). Progress \
+display for video polling shows percentage and elapsed time on stderr. \
+Requires U09 approval bypass for network access."""
+layer = 1
+tier = 2
+status = "done"
+depends_on = ["U09"]
+blocks = ["U30", "U31", "U32", "U34"]
+estimated_loc = 650
+files_create = [
+  "crates/grokrs-cli/src/commands/generate.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/mod.rs",
+]
+acceptance = [
+  "'grokrs generate image <prompt> --output out.png' generates and saves image",
+  "'grokrs generate image <prompt> --edit input.png --output out.png' edits image",
+  "--aspect-ratio, --quality, --resolution flags are passed to request",
+  "Image output path validated through WorkspacePath (FsWrite effect)",
+  "Image edit input path validated through WorkspacePath (FsRead effect)",
+  "PolicyEngine evaluates FsWrite before writing output file",
+  "PolicyEngine evaluates FsRead before reading edit input file",
+  "'grokrs generate video <prompt>' generates video with polling",
+  "'grokrs generate video <prompt> --extend input.mp4' extends video",
+  "--duration flag validates bounds (1-15 for generation, 1-10 for extension)",
+  "Video polling shows progress percentage and elapsed time on stderr",
+  "Video result: URL printed to stdout (no binary download through CLI)",
+  "Video result: file_id printed if present in response",
+  "Network policy check before API call",
+  "Helpful error if output path is outside workspace",
+  "Helpful error if input file does not exist",
+  "Store integration for session/transcript tracking (best-effort)",
+]
+produces = ["ART:generate-commands"]
+consumes = ["ART:approval-bypass"]
+critical_decisions = [
+  "No dependency on ToolRegistry or AgentExecutor -- generate commands use endpoint clients directly.",
+  "Video output is URL-only -- no arbitrary binary download through the CLI. User downloads separately or uses file_id.",
+  "Image download from URL uses the same HttpClient with policy gate -- network access is gated.",
+  "Output file path requires FsWrite policy evaluation -- consistent with safety model even for generated content.",
+  "Video polling progress on stderr, not stdout -- stdout reserved for machine-readable output (URL).",
+  "--output is required for image (not optional) -- no default filenames to avoid accidental overwrites.",
+]
+constraints = [
+  "Image output paths must be workspace-relative -- no writing to /tmp or absolute paths.",
+  "Input paths for edit/extend must be workspace-relative and FsRead-gated.",
+  "Duration bounds enforced at CLI level before sending to API -- fail fast.",
+  "Video result is URL-only to avoid introducing arbitrary binary download security surface.",
+]
+failure_modes = [
+  "Video generation takes too long -- configurable poll timeout with default 10 minutes.",
+  "Image URL expired before download -- retry once, then fail with clear error.",
+  "Image output file already exists -- overwrite with warning on stderr.",
+  "Video URL expired before user downloads -- not a CLI problem, URL TTL is server-side.",
+]
+rationale = "Image and video generation are unique Grok API capabilities. These commands use endpoint clients directly and do not need the tool framework, simplifying their dependency chain."
+
+[units.U21]
+name = "CLI commands: grokrs models (top-level model discovery)"
+summary = """
+Add 'grokrs models' as a top-level command group (not nested under \
+'api'). These commands use the existing ModelsClient endpoint client \
+directly -- they do NOT need the ToolRegistry or AgentExecutor. \
+Subcommands: 'grokrs models list' lists all language models with ID, \
+pricing, modalities, and context window in a formatted table. \
+'grokrs models info <model_id>' shows detailed information for a \
+single model including aliases, fingerprint, version, all pricing \
+fields. 'grokrs models pricing' shows a pricing comparison table \
+sorted by cost (cheapest first) with columns for model ID, prompt \
+price, completion price, cached price. All model data is fetched \
+dynamically from the API (no hardcoded model information). Output \
+uses color when stdout is a TTY: model IDs in bold, prices \
+color-coded (green=cheap, yellow=moderate, red=expensive). Supports \
+--json flag for machine-readable JSON output. Also lists image and \
+video generation models via 'grokrs models list --type image' and \
+'grokrs models list --type video'. Network policy check before API \
+call. Requires U09 approval bypass for network access."""
+layer = 1
+tier = 2
+status = "done"
+depends_on = ["U09"]
+blocks = ["U30", "U31", "U32", "U34"]
+estimated_loc = 380
+files_create = [
+  "crates/grokrs-cli/src/commands/models.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/mod.rs",
+  "crates/grokrs-cli/Cargo.toml",
+]
+acceptance = [
+  "'grokrs models list' shows all language models in formatted table",
+  "'grokrs models list' includes ID, pricing, modalities, context window columns",
+  "'grokrs models list --type image' shows image generation models",
+  "'grokrs models list --type video' shows video generation models",
+  "'grokrs models info <id>' shows detailed model information",
+  "'grokrs models info <id>' includes aliases, fingerprint, version, all pricing",
+  "'grokrs models pricing' shows pricing comparison sorted by cost",
+  "Color output when stdout is TTY (bold IDs, color-coded prices)",
+  "No color output when stdout is not TTY (piped)",
+  "--json flag outputs machine-readable JSON",
+  "Network policy check before API call",
+  "Helpful error when model_id not found",
+  "No hardcoded model names or prices -- all data from API",
+  "'grokrs models' is top-level (not under 'api')",
+]
+produces = ["ART:models-command"]
+consumes = ["ART:approval-bypass"]
+critical_decisions = [
+  "No dependency on ToolRegistry or AgentExecutor -- models commands use ModelsClient directly.",
+  "Top-level 'grokrs models' instead of 'grokrs api models' -- model discovery is a first-class operation.",
+  "Existing 'grokrs api models' continues to work (backward compatible) -- the new command is an enhancement.",
+  "Color output via a lightweight terminal color library (e.g., termcolor or owo-colors) -- no heavy TUI dependency.",
+  "Pricing sorted by cost for the pricing subcommand -- most useful default ordering.",
+]
+constraints = [
+  "No hardcoded model information -- all fetched via ModelsClient at runtime.",
+  "Color library must be lightweight -- no ncurses or full TUI framework.",
+  "--json output matches the API response structure for easy scripting.",
+]
+failure_modes = [
+  "API returns models without pricing fields -- display '-' for missing values.",
+  "Large number of models overflows terminal width -- use responsive column widths.",
+]
+rationale = "Model discovery is a quick-win that makes grokrs immediately more useful. Developers need to know what models are available and how much they cost before running tasks."
+
+[units.U22]
+name = "CLI commands: grokrs sessions (session management)"
+summary = """
+Add 'grokrs sessions' as a top-level command group for browsing and \
+managing stored sessions. Depends on U23 for the store extension \
+methods. Subcommands: 'grokrs sessions list' shows all sessions \
+with ID (truncated), state, trust level, created_at, and updated_at \
+in a formatted table. Supports --active (only active sessions), \
+--state <state> (filter by state), --limit <n> (max rows). \
+'grokrs sessions show <id>' shows full session detail including all \
+timestamps and transcript count. 'grokrs sessions transcript <id>' \
+shows the full transcript for a session: each request/response pair \
+with timestamps, endpoints, status codes, and usage. Long response \
+bodies are truncated to --max-body <bytes> (default 500) with a \
+note about truncation. 'grokrs sessions clean' deletes sessions in \
+Closed or Failed state older than --older-than <duration> (default \
+7d). Confirms deletion count before proceeding unless --yes flag \
+is set. All subcommands open the store read-only except 'clean' which \
+opens read-write. Uses find_by_prefix from U23 for partial ID \
+matching in show/transcript commands."""
+layer = 1
+tier = 2
+status = "done"
+depends_on = ["U23"]
+blocks = ["U30", "U31", "U32", "U34"]
+estimated_loc = 420
+files_create = [
+  "crates/grokrs-cli/src/commands/sessions.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/mod.rs",
+]
+acceptance = [
+  "'grokrs sessions list' shows all sessions in formatted table",
+  "'grokrs sessions list --active' shows only non-Closed, non-Failed sessions",
+  "'grokrs sessions list --state RunningTurn' filters by state",
+  "'grokrs sessions list --limit 10' limits output to 10 rows",
+  "Session IDs are truncated to first 8 characters in list view",
+  "'grokrs sessions show <id>' shows full session detail with transcript count",
+  "'grokrs sessions show <id>' accepts partial ID (prefix match via find_by_prefix)",
+  "'grokrs sessions transcript <id>' shows full conversation transcript",
+  "Transcript display truncates long bodies to --max-body bytes",
+  "'grokrs sessions clean' deletes old Closed/Failed sessions",
+  "'grokrs sessions clean --older-than 7d' respects duration",
+  "'grokrs sessions clean' confirms before deletion (interactive)",
+  "'grokrs sessions clean --yes' skips confirmation",
+  "Helpful message when no sessions exist",
+  "Helpful message when session ID not found",
+  "Works with store database using U23 extensions",
+]
+produces = ["ART:sessions-command"]
+consumes = ["ART:store-session-extensions"]
+critical_decisions = [
+  "Partial ID matching via find_by_prefix from U23 -- UUIDs are long, first 8 chars are usually unique enough.",
+  "Clean requires confirmation by default -- destructive operation gets an extra safety check.",
+  "Duration parsing uses human-readable format: 7d, 24h, 30m -- not raw seconds.",
+  "Transcript display includes request and response pairs -- gives full picture of API interaction.",
+]
+constraints = [
+  "Uses U23 store extensions: list_all, list_by_state, delete_old, count_transcripts, find_by_prefix.",
+  "Clean only deletes Closed and Failed sessions -- never active ones.",
+  "Store must be opened from workspace root, consistent with other store commands.",
+]
+failure_modes = [
+  "Partial ID matches multiple sessions -- list all matches and ask user to be more specific.",
+  "Very long transcripts -- paginate or warn about large output.",
+  "Store corrupted -- catch errors gracefully, suggest 'grokrs store status' for diagnostics.",
+]
+rationale = "Session management makes the store useful for operators. Without browsing and cleanup, stored sessions are invisible data that just consumes disk."
+
+[units.U23]
+name = "Store extensions: list_all, list_by_state, delete_old, count_transcripts, find_by_prefix for SessionRepo"
+summary = """
+Extend the SessionRepo in grokrs-store with methods needed by the \
+session management CLI (U22) and session persistence (U24). Add a V2 \
+migration that adds ON DELETE CASCADE to transcripts.session_id \
+foreign key (or recreate the table with the constraint if ALTER is \
+not supported by SQLite). This ensures delete_old does not leave \
+orphaned transcript rows. Methods: list_all(limit: Option<u32>) \
+returns all sessions ordered by updated_at descending, with optional \
+limit. list_by_state(state: &str) returns sessions matching the given \
+state. delete_old(state: &str, older_than_secs: i64) deletes sessions \
+in the given state where updated_at is older than the threshold, \
+returns count of deleted rows. Transcript deletion is handled by \
+ON DELETE CASCADE; if CASCADE is not feasible, delete_old explicitly \
+deletes associated transcripts in the same transaction before \
+deleting the session. count_transcripts(session_id: &str) returns the \
+number of transcript entries for a session. find_by_prefix(prefix: \
+&str) returns sessions whose ID starts with the given prefix (for \
+partial ID matching in U22 and U24). All methods use parameterized \
+queries (no SQL injection)."""
+layer = 1
+tier = 2
+status = "done"
+depends_on = []
+blocks = ["U22", "U24"]
+estimated_loc = 200
+files_create = [
+  "crates/grokrs-store/src/migrations/v2.sql",
+]
+files_modify = [
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/transcript.rs",
+  "crates/grokrs-store/src/lib.rs",
+]
+acceptance = [
+  "V2 migration adds ON DELETE CASCADE to transcripts.session_id foreign key",
+  "V2 migration adds response_id TEXT column to transcripts table (for stateful session resume via previous_response_id)",
+  "V2 migration is applied automatically on store open (migration runner handles versioning)",
+  "list_all returns all sessions ordered by updated_at descending",
+  "list_all with limit returns at most N sessions",
+  "list_by_state returns only sessions matching the given state",
+  "list_by_state with nonexistent state returns empty vec",
+  "delete_old deletes sessions in specified state older than threshold",
+  "delete_old returns count of deleted rows",
+  "delete_old cascades to delete associated transcripts (via CASCADE or explicit DELETE)",
+  "delete_old does not delete sessions in other states",
+  "count_transcripts returns correct count for session",
+  "count_transcripts returns 0 for session with no transcripts",
+  "find_by_prefix returns sessions with matching ID prefix",
+  "find_by_prefix with no matches returns empty vec",
+  "find_by_prefix with multiple matches returns all matches",
+  "All queries use parameterized SQL (no string concatenation)",
+  "Unit tests verify all methods with tempdir databases",
+  "Unit tests verify CASCADE deletes transcripts when session is deleted",
+]
+produces = ["ART:store-session-extensions"]
+consumes = []
+critical_decisions = [
+  "V2 migration for ON DELETE CASCADE -- V1 may not have this constraint, and without it delete_old leaves orphaned transcripts.",
+  "V2 migration adds response_id column to transcripts -- enables U24's --resume to chain via previous_response_id without re-sending full conversation.",
+  "If SQLite ALTER TABLE cannot add CASCADE to existing FK, recreate the transcripts table with the constraint in V2 migration (copy data, drop old, rename new).",
+  "Parameterized queries only -- defense against SQL injection even though input comes from CLI args.",
+  "Ordered by updated_at descending -- most recently active sessions first.",
+  "find_by_prefix uses LIKE with escaped prefix + '%' -- parameterized to prevent injection.",
+]
+constraints = [
+  "V2 migration must be idempotent or guarded by version check.",
+  "delete_old is the only destructive method -- all others are read-only.",
+  "State string matching is exact -- no fuzzy matching or case-insensitive.",
+  "find_by_prefix escapes SQL LIKE special characters (%, _) in the prefix before parameterized query.",
+]
+failure_modes = [
+  "V2 migration fails on existing database without backup -- mitigate by wrapping in transaction with rollback on error.",
+  "Large number of sessions to delete in single transaction -- acceptable for CLI usage volumes.",
+  "find_by_prefix with single-character prefix returns many results -- acceptable, caller limits display.",
+]
+rationale = "These store extensions are the data layer supporting the session management CLI and session persistence. The V2 migration ensures referential integrity for cascade deletes. find_by_prefix supports the partial ID matching UX in both U22 and U24."
+
+[units.U24]
+name = "Chat REPL session persistence with SQLite store integration"
+summary = """
+Integrate the REPL (U12/U13/U16) with grokrs-store for persistent \
+session tracking. Depends on U23 for find_by_prefix. On REPL start: \
+create a session in the store with UUID v4 ID and Untrusted trust \
+level. Each conversation turn: log_request before sending (with the \
+user message as body), log_response after receiving (with the \
+assistant response and token usage). On /exit: transition session to \
+Closed. On error: transition to Failed. On REPL reconnect with \
+--resume <session_id>: load the previous session's conversation \
+history from transcripts and reconstruct the conversation state. \
+The --resume flag requires a valid session ID (prefix match supported \
+via find_by_prefix from U23). If the session was in Closed state, \
+it is reopened. Store integration is best-effort: REPL works without \
+persistence (e.g., no store configured)."""
+layer = 1
+tier = 2
+status = "done"
+depends_on = ["U12", "U13", "U16", "U23"]
+blocks = ["U30"]
+estimated_loc = 300
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/repl/mod.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+]
+acceptance = [
+  "REPL creates session in store on start",
+  "Each turn logs request and response to transcripts table",
+  "Session transitions: Created -> Ready -> RunningTurn (per turn) -> Closed on /exit",
+  "Session transitions to Failed on unrecoverable error",
+  "--resume <session_id> loads previous conversation from transcripts",
+  "--resume supports prefix match on session ID via find_by_prefix",
+  "--resume reopens Closed sessions",
+  "--resume reconstructs conversation history for subsequent turns",
+  "REPL works without store (no store configured, no --resume)",
+  "Usage summary from store printed on /exit",
+  "Session ID displayed on REPL start",
+  "Best-effort: store write failure does not crash REPL",
+]
+produces = ["ART:repl-persistence"]
+consumes = ["ART:repl-core", "ART:grok-chat-backend", "ART:chat-command", "ART:store-session-extensions"]
+critical_decisions = [
+  "--resume reconstructs conversation from transcript request/response bodies -- enables session continuity across REPL invocations.",
+  "Prefix match for --resume uses find_by_prefix from U23 -- consistent with sessions show/transcript.",
+  "Best-effort persistence means REPL never fails due to store issues.",
+]
+constraints = [
+  "Transcript bodies must contain enough information to reconstruct the conversation (user messages and assistant responses).",
+  "Resuming a session in stateful mode (server-side) requires the last response_id, which must be stored.",
+  "No concurrent REPL sessions on the same store -- single-process constraint.",
+]
+failure_modes = [
+  "Transcript bodies too large for resume (very long conversations) -- load in reverse order until context limit.",
+  "Session ID prefix matches multiple sessions -- error with list of matches.",
+  "Resumed session's model no longer available -- warn user, allow --model override.",
+]
+rationale = "Session persistence transforms the REPL from ephemeral to durable. Users can resume conversations across sessions, which is essential for long-running tasks."
+
+# ===========================================================================
+# LAYER 2 -- Polish: cross-feature integration, comprehensive testing, docs
+# ===========================================================================
+
+[units.U30]
+name = "Comprehensive integration test suite for all competitive features"
+summary = """
+Integration tests covering the full feature surface. Tests organized \
+by feature: chat_repl_tests.rs (REPL lifecycle, slash commands, \
+streaming, search integration, store persistence), agent_tests.rs \
+(tool execution, policy gating, multi-turn loop, search integration, \
+trust levels), generate_tests.rs (image generation, video generation \
+with polling, file output validation, policy gating), models_tests.rs \
+(list, info, pricing, JSON output, color suppression), \
+sessions_tests.rs (list, show, transcript, clean, prefix match). \
+All tests use mock HTTP server (wiremock or similar) for API responses. \
+Store tests use tempdir for isolation. REPL tests use mock ChatBackend. \
+Agent tests use mock FunctionExecutor. Each test file covers happy \
+path, error handling, policy denial, and edge cases."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = ["U12", "U13", "U16", "U17", "U18", "U20", "U21", "U22", "U24"]
+blocks = []
+estimated_loc = 950
+files_create = [
+  "crates/grokrs-cli/tests/chat_repl_tests.rs",
+  "crates/grokrs-cli/tests/agent_tests.rs",
+  "crates/grokrs-cli/tests/generate_tests.rs",
+  "crates/grokrs-cli/tests/models_tests.rs",
+  "crates/grokrs-cli/tests/sessions_tests.rs",
+  "crates/grokrs-tool/tests/tool_execution_tests.rs",
+  "crates/grokrs-tool/tests/registry_tests.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/Cargo.toml",
+  "crates/grokrs-tool/Cargo.toml",
+]
+acceptance = [
+  "Chat REPL tests: lifecycle start -> turns -> /exit with store verification",
+  "Chat REPL tests: /clear resets conversation and previous_response_id",
+  "Chat REPL tests: /model switches model for subsequent turns",
+  "Chat REPL tests: streaming output arrives token by token",
+  "Chat REPL tests: --search adds correct tools to request",
+  "Chat REPL tests: --resume loads previous conversation from store",
+  "Chat REPL tests: network policy denial prints helpful error",
+  "Agent tests: tool call dispatched to correct ErasedTool implementation",
+  "Agent tests: PolicyEngine denies tool call, error returned to model",
+  "Agent tests: trust level gates available tools via trust_rank",
+  "Agent tests: max_iterations terminates infinite loop",
+  "Agent tests: mixed function + search tools handled correctly",
+  "Generate tests: image generation downloads and saves to output path",
+  "Generate tests: video polling shows progress and returns URL",
+  "Generate tests: output path FsWrite policy check enforced",
+  "Models tests: list, info, pricing produce correct output format",
+  "Models tests: --json outputs valid JSON",
+  "Sessions tests: list, show, transcript, clean work with test data",
+  "Sessions tests: find_by_prefix partial ID matching works",
+  "Tool execution tests: all four tools execute correctly with tempdir",
+  "Tool registry tests: trust rank gating enforced",
+  "All tests use mock HTTP server -- no real API calls",
+  "All tests use tempdir for store isolation",
+]
+produces = ["ART:integration-tests"]
+consumes = ["ART:repl-core", "ART:grok-chat-backend", "ART:chat-command", "ART:search-integration", "ART:agent-executor", "ART:agent-command", "ART:generate-commands", "ART:models-command", "ART:sessions-command", "ART:repl-persistence"]
+critical_decisions = [
+  "Mock HTTP server (wiremock) for API responses -- tests are fast, deterministic, and do not require API key.",
+  "Separate test files per feature -- parallel execution, focused test output.",
+  "Both unit tests (in src/) and integration tests (in tests/) -- unit for logic, integration for end-to-end.",
+]
+constraints = [
+  "No real API calls in tests -- all HTTP responses are mocked.",
+  "Tests must not depend on file system state outside tempdir.",
+  "Tests must be parallelizable -- no shared global state.",
+]
+failure_modes = [
+  "Mock server does not perfectly replicate xAI API behavior -- use recorded real responses where possible.",
+  "REPL tests are inherently sequential (readline) -- use the mock ChatBackend, not actual readline.",
+]
+rationale = "Comprehensive testing is the evidence that all competitive features work correctly, handle errors gracefully, and respect the safety model."
+
+[units.U31]
+name = "Update doctor command with competitive feature status reporting"
+summary = """
+Extend 'grokrs doctor' to report on all new competitive features. \
+Add sections for: chat capability (REPL available, network policy \
+status), agent capability (tool count by trust level, policy status \
+for ProcessSpawn and FsWrite), search capability (BuiltinTool \
+availability), media generation (image and video endpoint \
+reachability), model discovery (can list models), session management \
+(store status, session count), approval bypass (approval_mode status \
+with warning if set to 'allow'). Doctor does not make API calls -- it \
+reports on configuration readiness. For each feature, report whether \
+the configuration allows it (policy check) and what prerequisites \
+are needed (e.g., 'network access denied -- set allow_network=true \
+and approval_mode=allow'). Requires U09 for approval_mode reporting."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = ["U09", "U16", "U18", "U20", "U21", "U22"]
+blocks = []
+estimated_loc = 180
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "Doctor reports chat capability status (network policy)",
+  "Doctor reports agent capability: available tools by trust level",
+  "Doctor reports policy status for ProcessSpawn, FsWrite, NetworkConnect",
+  "Doctor reports search tool availability",
+  "Doctor reports media generation configuration readiness",
+  "Doctor reports model discovery configuration readiness",
+  "Doctor reports session management store status",
+  "Doctor reports approval_mode status with warning if set to 'allow'",
+  "Doctor does not make API calls",
+  "Each feature shows 'ready' or 'blocked: <reason>'",
+  "Blocked features include actionable fix instructions",
+]
+produces = ["ART:enhanced-doctor"]
+consumes = ["ART:chat-command", "ART:agent-command", "ART:generate-commands", "ART:models-command", "ART:sessions-command", "ART:approval-bypass"]
+critical_decisions = [
+  "Doctor is diagnostic only -- it never changes state or makes API calls.",
+  "Actionable fix instructions for blocked features -- users know exactly what to change.",
+  "Feature readiness is based on config, not runtime state -- doctor works offline.",
+  "Doctor warns when approval_mode = 'allow' is set -- reminds users this is a temporary bypass.",
+]
+constraints = [
+  "Doctor must remain fast -- no network calls, no slow queries.",
+  "Doctor output is human-readable (not JSON) -- use key=value format consistent with existing output.",
+]
+failure_modes = [
+  "Config file missing or invalid -- doctor handles gracefully with informational message.",
+]
+rationale = "Doctor is the debugging entry point. When features do not work, users run doctor first. It must reflect the full feature surface including the approval bypass status."
+
+[units.U32]
+name = "Update help text and --help for all new commands"
+summary = """
+Ensure all new CLI commands have comprehensive --help output. Each \
+command's help text includes: one-line description, detailed \
+description with usage examples, all flags with defaults and \
+descriptions, related commands (see also). Update the top-level \
+--help to show the full command tree including chat, agent, generate, \
+models, sessions alongside existing doctor, show-config, eval, api, \
+store. Add examples section to each command's help showing common \
+usage patterns. Verify clap derives produce clean help output at \
+every nesting level."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = ["U16", "U18", "U20", "U21", "U22"]
+blocks = []
+estimated_loc = 200
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/generate.rs",
+  "crates/grokrs-cli/src/commands/models.rs",
+  "crates/grokrs-cli/src/commands/sessions.rs",
+]
+acceptance = [
+  "'grokrs --help' lists all top-level commands including new ones",
+  "'grokrs chat --help' shows description, flags, and usage examples",
+  "'grokrs agent --help' shows description, flags, and usage examples",
+  "'grokrs generate --help' shows subcommands (image, video)",
+  "'grokrs generate image --help' shows all flags with descriptions",
+  "'grokrs generate video --help' shows all flags with descriptions",
+  "'grokrs models --help' shows subcommands (list, info, pricing)",
+  "'grokrs sessions --help' shows subcommands (list, show, transcript, clean)",
+  "Each command includes 'See also' section referencing related commands",
+  "Help text includes at least one usage example per command",
+  "No clap derive warnings or formatting issues",
+]
+produces = ["ART:help-text"]
+consumes = ["ART:chat-command", "ART:agent-command", "ART:generate-commands", "ART:models-command", "ART:sessions-command"]
+critical_decisions = [
+  "Examples in help text use realistic commands -- not abstract placeholders.",
+  "Consistent help style across all commands -- same structure, same level of detail.",
+]
+constraints = [
+  "Help text must not contain API keys or secret values in examples.",
+  "Examples should use safe operations (reads, not writes) where possible.",
+]
+failure_modes = [
+  "Clap derive attribute conflicts cause confusing help output -- verify each command at every nesting level.",
+]
+rationale = "Good help text is the difference between a tool that users figure out and one they abandon. Every command must be self-documenting."
+
+[units.U33]
+name = "Update configs/grokrs.example.toml with agent and chat configuration"
+summary = """
+Extend the example config with new sections relevant to competitive \
+features. Add [agent] section: max_iterations (default 10), \
+default_trust (default 'untrusted'), enable_search (default false). \
+Add [chat] section: default_model (falls back to [model].default_model), \
+system_prompt (optional default system instructions), stateful \
+(default false), history_file (default '.grokrs/chat_history'), \
+max_conversation_tokens (default 100000, warn threshold). Update \
+AppConfig in grokrs-core with AgentConfig and ChatConfig as optional \
+sections. Both sections are Option so existing configs continue to \
+work. Update AppConfig::summary() to include new sections. Add \
+serde defaults for all fields so partial sections work."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = ["U16", "U18"]
+blocks = []
+estimated_loc = 180
+files_create = []
+files_modify = [
+  "crates/grokrs-core/src/lib.rs",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "AppConfig with [agent] section deserializes correctly",
+  "AppConfig with [chat] section deserializes correctly",
+  "AppConfig without [agent] or [chat] sections continues to work (Option)",
+  "AgentConfig fields have serde defaults",
+  "ChatConfig fields have serde defaults",
+  "AppConfig::summary() includes agent and chat sections when present",
+  "configs/grokrs.example.toml includes documented [agent] and [chat] sections",
+  "Existing tests continue to pass without modification",
+  "'grokrs show-config' displays new sections when present",
+]
+produces = ["ART:config-extensions"]
+consumes = ["ART:chat-command", "ART:agent-command"]
+critical_decisions = [
+  "Optional sections (Option<AgentConfig>, Option<ChatConfig>) for backward compatibility.",
+  "Serde defaults for all fields so partial sections work.",
+  "Config sections are in grokrs-core following the established pattern.",
+]
+constraints = [
+  "Must not break existing config deserialization.",
+  "No secrets in config -- only operational parameters.",
+  "Default values must be safe (e.g., default_trust = 'untrusted').",
+]
+failure_modes = [
+  "Serde default attribute missing on a field causes deserialization error for partial sections.",
+]
+rationale = "Configuration is how operators customize behavior. New features need config knobs for production deployments."
+
+[units.U34]
+name = "Update ARCHITECTURE.md and CLAUDE.md with competitive feature documentation"
+summary = """
+Update ARCHITECTURE.md to document the new features and their \
+architectural integration. Add sections for: interactive chat \
+(REPL architecture, ChatBackend trait, conversation modes), agent \
+framework (ToolRegistry, AgentExecutor, policy evaluation flow, \
+trust level gating), search integration (server-side vs local tools), \
+media generation (CLI surface, async video polling, URL-only video), \
+model discovery (dynamic model information), session management \
+(store extensions, V2 migration). Update CLAUDE.md crate \
+responsibilities to include new modules. Update the dependency \
+direction diagram to show new internal dependencies. Update CLI \
+commands section with all new commands. Document the security \
+implications of each new feature (how trust levels, policy gates, \
+and path validation apply). Document approval_mode as a temporary \
+escape hatch."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = ["U16", "U17", "U18", "U20", "U21", "U22"]
+blocks = []
+estimated_loc = 300
+files_create = []
+files_modify = [
+  "ARCHITECTURE.md",
+  "CLAUDE.md",
+]
+acceptance = [
+  "ARCHITECTURE.md documents REPL architecture and ChatBackend trait",
+  "ARCHITECTURE.md documents agent framework with tool registry and executor",
+  "ARCHITECTURE.md documents trust level gating with trust_rank() for tool access",
+  "ARCHITECTURE.md documents policy evaluation flow for agent tool calls",
+  "ARCHITECTURE.md documents search integration (server-side tools via BuiltinTool)",
+  "ARCHITECTURE.md documents media generation CLI surface (URL-only video output)",
+  "ARCHITECTURE.md documents session management CLI and V2 migration",
+  "ARCHITECTURE.md documents approval_mode as temporary escape hatch",
+  "ARCHITECTURE.md dependency direction diagram updated",
+  "CLAUDE.md crate responsibilities updated with new modules",
+  "CLAUDE.md CLI commands section includes all new commands",
+  "CLAUDE.md includes examples for new commands",
+  "Security model section updated with agent-specific considerations",
+]
+produces = ["ART:documentation"]
+consumes = ["ART:chat-command", "ART:search-integration", "ART:agent-command", "ART:generate-commands", "ART:models-command", "ART:sessions-command"]
+critical_decisions = [
+  "Architecture docs describe the security model implications of each feature -- not just what it does, but how it is safe.",
+  "CLAUDE.md is the primary reference for AI agents working on this codebase -- must be complete and accurate.",
+]
+constraints = [
+  "Documentation must match the actual implementation -- written after features are complete.",
+  "No speculative future features in architecture docs -- only what is implemented.",
+]
+failure_modes = [
+  "Documentation diverges from implementation -- mitigate by writing docs after implementation is tested.",
+]
+rationale = "Documentation is a deliverable, not an afterthought. ARCHITECTURE.md and CLAUDE.md are the primary onboarding materials for both humans and AI agents."
+
+[units.U35]
+name = "Existing 'grokrs api chat' one-shot command: add deprecation notice pointing to 'grokrs chat'"
+summary = """
+Add a deprecation notice to the existing 'grokrs api chat' one-shot \
+command that recommends 'grokrs chat' for interactive use. The notice \
+is printed to stderr before the API call: 'Note: for interactive \
+multi-turn chat, use grokrs chat instead.' The existing command \
+continues to work unchanged -- this is informational, not breaking. \
+Update the --help text for 'grokrs api chat' to mention 'grokrs chat' \
+as the recommended interactive alternative. The 'grokrs api chat' \
+command remains useful for scripting (one-shot, non-interactive)."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = ["U16"]
+blocks = []
+estimated_loc = 30
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/api.rs",
+]
+acceptance = [
+  "'grokrs api chat' prints deprecation notice to stderr",
+  "'grokrs api chat' continues to work unchanged (not breaking)",
+  "'grokrs api chat --help' mentions 'grokrs chat' as recommended alternative",
+  "Deprecation notice is concise and actionable",
+  "Notice is on stderr (does not affect piped stdout output)",
+]
+produces = ["ART:api-chat-deprecation"]
+consumes = ["ART:chat-command"]
+critical_decisions = [
+  "Informational notice, not a hard deprecation -- scripting users should not be forced to change.",
+  "Notice on stderr preserves stdout for piping.",
+]
+constraints = [
+  "Must not break existing scripts that use 'grokrs api chat' with piped output.",
+]
+failure_modes = [
+  "Users ignore the notice -- acceptable, the command still works.",
+]
+rationale = "Guiding users from the one-shot command to the interactive REPL improves discoverability without breaking backward compatibility."
+
+# ===========================================================================
+# COMPUTED
+# ===========================================================================
+
+[computed]
+entry_points = ["U09", "U10", "U11", "U12", "U23"]
+leaf_nodes = ["U30", "U31", "U32", "U33", "U34", "U35"]
+critical_path = ["U10", "U14", "U15", "U18", "U30"]
+critical_path_loc = 2770
+
+[computed.max_parallel]
+layer0 = 4
+layer1 = 5
+layer2 = 6
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-tool/src/lib.rs"]
+units = ["U10", "U14"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-tool/src/tools/mod.rs"]
+units = ["U10", "U11"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-tool/src/error.rs"]
+units = ["U10", "U11"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-tool/Cargo.toml"]
+units = ["U10", "U14", "U30"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cap/src/lib.rs"]
+units = ["U14"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/main.rs"]
+units = ["U16", "U18", "U20", "U21", "U22", "U31", "U32"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/mod.rs"]
+units = ["U16", "U18", "U20", "U21", "U22", "U32"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/Cargo.toml"]
+units = ["U12", "U15", "U21", "U30"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/chat.rs"]
+units = ["U16", "U17", "U24", "U32"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/repl/mod.rs"]
+units = ["U12", "U13", "U24"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/repl/grok_backend.rs"]
+units = ["U13", "U17", "U24"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/agent/executor.rs"]
+units = ["U15"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/agent.rs"]
+units = ["U17", "U18", "U32"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-store/src/session.rs"]
+units = ["U23"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-store/src/transcript.rs"]
+units = ["U23"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-store/src/lib.rs"]
+units = ["U23"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-core/src/lib.rs"]
+units = ["U09", "U33"]
+
+[[computed.conflict_groups]]
+files = ["configs/grokrs.example.toml"]
+units = ["U09", "U33"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-policy/src/lib.rs"]
+units = ["U09"]
+
+[[computed.conflict_groups]]
+files = ["ARCHITECTURE.md", "CLAUDE.md"]
+units = ["U34"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/api.rs"]
+units = ["U35"]
+
+[computed.loc_totals]
+tier1 = 3790
+tier2 = 1950
+tier3 = 1840
+all = 7580

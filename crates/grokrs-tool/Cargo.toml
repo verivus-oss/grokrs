@@ -1,0 +1,30 @@
+[package]
+name = "grokrs-tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+grokrs-policy = { path = "../grokrs-policy" }
+grokrs-cap = { path = "../grokrs-cap" }
+grokrs-store = { path = "../grokrs-store" }
+serde = { workspace = true }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }
+git2 = "0.19"
+
+# Optional: OpenTelemetry instrumentation (behind `otel` feature)
+tracing = { workspace = true, optional = true }
+
+[features]
+default = []
+otel = ["tracing"]
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+grokrs-api = { path = "../grokrs-api" }
+grokrs-cli = { path = "../grokrs-cli" }
+wiremock = "0.6"

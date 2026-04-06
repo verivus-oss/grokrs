@@ -1,0 +1,235 @@
+[meta]
+title = "Security hardening: three-LLM review consensus fixes"
+spec = "codex_security_report.md"
+decomposition = "docs/reviews/security-hardening/2026-04-05/IMPLEMENTATION_DAG.toml"
+created = "2026-04-05"
+total_units = 4
+tier1_units = ["U40", "U41", "U42", "U43"]
+tier2_units = []
+tier3_units = []
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Independent fixes (all can run in parallel)
+# ---------------------------------------------------------------------------
+
+[units.U40]
+name = "Replace extract_host() with url::Url parser"
+summary = """
+The hand-rolled extract_host() in transport/client.rs splits on '://', \
+'/', and ':' to extract the hostname from base_url. This is not \
+RFC 3986 compliant — a URL with userinfo like \
+https://api.x.ai:443@evil.example/v1 fools the parser into returning \
+'api.x.ai' while reqwest connects to 'evil.example'. Replace with \
+url::Url::parse().host_str() and reject URLs with username/password \
+or without a host. Add the 'url' crate as a workspace dependency."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = []
+estimated_loc = 80
+spec_sections = ["Policy Integration"]
+spec_anchors = ["network-gating", "policy-bridge"]
+files_create = []
+files_modify = [
+  "Cargo.toml",
+  "crates/grokrs-api/Cargo.toml",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-api/src/transport/error.rs",
+]
+acceptance = [
+  "extract_host() uses url::Url::parse().host_str() instead of manual string splitting",
+  "new TransportError::InvalidBaseUrl variant added to transport/error.rs for malformed or userinfo-containing URLs",
+  "check_policy_gate() rejects URLs with userinfo (@ in authority) via TransportError::InvalidBaseUrl — fail-closed",
+  "check_policy_gate() rejects URLs without a parseable host via TransportError::InvalidBaseUrl",
+  "existing tests continue to pass (https://api.x.ai, http://localhost:8080/v1, etc.)",
+  "new test: check_policy_gate with base_url 'https://api.x.ai:443@evil.example/v1' returns TransportError::InvalidBaseUrl",
+  "new test: check_policy_gate with base_url 'not-a-url' returns TransportError::InvalidBaseUrl",
+  "new test: check_policy_gate with base_url 'http://127.0.0.1:PORT' succeeds (no false rejection of test URLs)",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:secure-host-extraction"]
+consumes = []
+critical_decisions = [
+  "Use the url crate (well-maintained, RFC 3986 compliant) rather than improving manual parsing.",
+  "Reject URLs with userinfo rather than stripping it — fail-closed on ambiguous URLs.",
+]
+constraints = [
+  "Must not break the existing default base_url https://api.x.ai.",
+  "Must not break localhost/loopback URLs used in wiremock integration tests.",
+]
+failure_modes = [
+  "Over-strict URL validation rejects valid test server URLs (e.g., http://127.0.0.1:PORT).",
+]
+rationale = """
+Defense-in-depth fix. The base_url is currently operator-controlled TOML \
+config, so not directly exploitable, but correct URL parsing prevents \
+future vulnerabilities if dynamic URL sources are ever added. The url \
+crate is already a transitive dependency via reqwest."""
+
+[units.U41]
+name = "Filter OutputItem variants in stateless tool loop"
+summary = """
+In stateless mode (store=false), run_tool_loop() in tool_loop.rs \
+serializes ALL OutputItem variants from the previous response back \
+into the follow-up input array. This includes server-output-only \
+variants (Reasoning, WebSearchCall, XSearchCall, CodeInterpreterCall, \
+FileSearchCall, McpCall) that are not valid input types. The xAI API \
+would reject these with HTTP 400. Fix: filter to only replay Message, \
+FunctionCall, and FunctionCallOutput variants. Skip all others."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = []
+estimated_loc = 40
+spec_sections = ["Tools and Function Calling"]
+spec_anchors = ["function-calling-loop"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/tool_loop.rs",
+]
+acceptance = [
+  "stateless mode only replays Message, FunctionCall, and FunctionCallOutput items",
+  "Reasoning, WebSearchCall, XSearchCall, CodeInterpreterCall, FileSearchCall, McpCall, and Unknown variants are skipped",
+  "stateful mode (Mode A) is unchanged — it clears conversation each iteration",
+  "existing tool_loop tests continue to pass",
+  "new test: stateless mode with a response containing Reasoning + FunctionCall only replays the FunctionCall",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:correct-tool-loop"]
+consumes = []
+critical_decisions = [
+  "Explicit match on allowed variants rather than a denylist — new OutputItem variants default to skipped (fail-safe).",
+]
+constraints = [
+  "Must not change Mode A (stateful) behavior.",
+  "Must not break the existing function calling loop tests.",
+]
+failure_modes = [
+  "Filtering too aggressively could drop FunctionCall items needed for the loop to continue.",
+]
+rationale = """
+Correctness fix. Mixed server-side and client-side tool calls in the \
+same response would break the stateless tool loop with an API error. \
+The fix ensures only input-compatible items are replayed."""
+
+[units.U42]
+name = "Add InProgress variant to ResponseStatus"
+summary = """
+ResponseStatus enum only has Completed, Incomplete, and Failed. The \
+xAI API also returns 'in_progress' for in-flight responses (visible \
+when polling via GET /v1/responses/{id}). Add an InProgress variant \
+with #[serde(rename = 'in_progress')]. The streaming path already \
+handles this via serde_json::Value and is unaffected."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = []
+estimated_loc = 20
+spec_sections = ["Responses API"]
+spec_anchors = ["responses-create", "responses-retrieve"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+]
+acceptance = [
+  "ResponseStatus has an InProgress variant with #[serde(rename = 'in_progress')]",
+  "JSON string 'in_progress' deserializes to ResponseStatus::InProgress",
+  "ResponseStatus::InProgress serializes to 'in_progress'",
+  "existing tests continue to pass (completed, incomplete, failed round-trips unchanged)",
+  "new test: response with status 'in_progress' deserializes successfully",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:forward-compat-status"]
+consumes = []
+critical_decisions = [
+  "Add the specific InProgress variant rather than a generic #[serde(other)] Unknown fallback — in_progress has defined semantics.",
+]
+constraints = [
+  "Must not break existing ResponseStatus deserialization for completed/incomplete/failed.",
+  "rename_all = lowercase must work correctly with the underscore in in_progress — verify serde behavior or use explicit rename.",
+]
+failure_modes = [
+  "rename_all = lowercase would produce 'inprogress' not 'in_progress' — must use explicit #[serde(rename = 'in_progress')].",
+]
+rationale = """
+Forward compatibility fix. GET /v1/responses/{id} on an in-flight \
+response returns status 'in_progress'. Without this variant, \
+deserialization fails with an opaque serde error instead of a \
+typed status the caller can handle."""
+
+[units.U43]
+name = "Emit error on truncated SSE frame at EOF"
+summary = """
+When the underlying byte stream ends with a non-empty partial line \
+in the buffer (no trailing newline), SseStream returns None silently, \
+discarding the incomplete event. This hides connection drops — the \
+consumer sees a clean EOF when the response was actually truncated. \
+Fix: at EOF, first drain all complete lines from the buffer (existing \
+behavior), then on subsequent polls check if the residual trimmed \
+buffer is non-empty and emit TransportError::Sse indicating an \
+incomplete frame. This ensures buffers like 'data: ok\\ndata: trunc' \
+yield 'ok' first, then error on the truncated residual."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = []
+estimated_loc = 45
+spec_sections = ["Streaming"]
+spec_anchors = ["sse-transport"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/transport/sse.rs",
+]
+acceptance = [
+  "at EOF, all complete lines in the buffer are drained and yielded first (existing behavior preserved)",
+  "after draining complete lines, if residual trimmed buffer is non-empty, emit TransportError::Sse with message about incomplete frame",
+  "EOF with empty buffer (or whitespace-only residual) returns None cleanly as before",
+  "existing streaming tests continue to pass",
+  "new test: stream with 'data: ok\\ndata: trunc' (no trailing newline) yields 'ok' then TransportError::Sse",
+  "new test: stream ending mid-line without any complete lines produces an Sse error, not clean None",
+  "new test: stream ending with only whitespace/empty buffer returns None (clean EOF)",
+  "new test: normal stream with [DONE] followed by EOF continues to work without error",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:robust-sse-eof"]
+consumes = []
+critical_decisions = [
+  "Trim whitespace before checking buffer emptiness — trailing \\r\\n or blank lines should not trigger false errors.",
+  "Use TransportError::Sse variant (already exists) rather than adding a new error variant.",
+]
+constraints = [
+  "Must not break normal stream termination where [DONE] is followed by EOF.",
+  "Must not false-positive on trailing whitespace after the last complete event.",
+]
+failure_modes = [
+  "Over-sensitive check fires on normal trailing whitespace/blank lines after [DONE].",
+  "Naive 'buffer non-empty at EOF => error' fires before draining complete lines, dropping valid events.",
+]
+rationale = """
+Robustness fix. Silent truncation hides network errors and can cause \
+downstream consumers to believe a partial response is complete. \
+Surfacing the error lets callers distinguish clean completion from \
+connection loss."""
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U40", "U41", "U42", "U43"]
+leaf_nodes = ["U40", "U41", "U42", "U43"]
+critical_path = ["U40"]
+critical_path_loc = 80
+
+[computed.max_parallel]
+layer0 = 4
+
+[computed.loc_totals]
+tier1 = 185
+tier2 = 0
+tier3 = 0
+all = 185

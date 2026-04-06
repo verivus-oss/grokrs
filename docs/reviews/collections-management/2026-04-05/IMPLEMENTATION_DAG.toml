@@ -1,0 +1,273 @@
+[meta]
+title = "Collections Management API (management-api.x.ai)"
+spec = "docs/specs/01_XAI_API_CLIENT.md"
+decomposition = "docs/reviews/collections-management/2026-04-05/IMPLEMENTATION_DAG.toml"
+created = "2026-04-05"
+total_units = 4
+tier1_units = ["U100", "U101"]
+tier2_units = ["U102", "U103"]
+tier3_units = []
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Foundation: management transport + collection types
+# ---------------------------------------------------------------------------
+
+[units.U100]
+name = "Management API transport layer"
+summary = """
+The Collections Management API uses a different base URL \
+(https://management-api.x.ai) and a different authentication model \
+(Management API Key instead of inference API key). Create a thin \
+ManagementClient that wraps HttpClient with the management base URL \
+and management key. The management key env var defaults to \
+XAI_MANAGEMENT_API_KEY. Reuses the existing HttpClient, RetryConfig, and \
+PolicyGate infrastructure — only the base URL and auth key differ. \
+Add management_api: Option<ManagementApiConfig> to AppConfig."""
+layer = 0
+tier = 1
+status = "planned"
+depends_on = []
+blocks = ["U101", "U102", "U103"]
+estimated_loc = 120
+spec_sections = []
+spec_anchors = []
+files_create = [
+  "crates/grokrs-api/src/management/mod.rs",
+  "crates/grokrs-api/src/management/client.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/lib.rs",
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-core/src/lib.rs",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "ManagementApiConfig in grokrs-core with management_key_env, base_url, timeout_secs, max_retries",
+  "AppConfig gains management_api: Option<ManagementApiConfig>",
+  "configs/grokrs.example.toml gains [management_api] section (commented out)",
+  "ManagementClient wraps HttpClient with management base URL and key",
+  "ManagementClient::from_config() reads management key from env",
+  "ManagementClient goes through same PolicyGate as GrokClient",
+  "existing AppConfig loading without [management_api] still works",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:management-transport"]
+consumes = ["ART:http-transport"]
+critical_decisions = [
+  "Reuse HttpClient internals rather than duplicating transport layer.",
+  "Separate ManagementClient rather than adding management methods to GrokClient.",
+  "Management key stored as env var name only, same pattern as inference key.",
+]
+constraints = [
+  "ManagementClient must NOT share the inference API key.",
+  "Must not break existing AppConfig or GrokClient.",
+]
+failure_modes = [
+  "Management key accidentally used for inference endpoints or vice versa.",
+]
+rationale = "Management API uses different auth and base URL, requiring a separate client."
+
+[units.U101]
+name = "Collection CRUD types and endpoint client"
+summary = """
+Wire types and endpoint client for collection management: \
+POST /v1/collections (create), GET /v1/collections (list), \
+GET /v1/collections/{id} (get), PUT /v1/collections/{id} (update), \
+DELETE /v1/collections/{id} (delete). Collection has name, \
+embedding_model, chunk_config (chars/tokens/markdown/code/bytes \
+strategy, chunk_size, chunk_overlap), metric_space \
+(cosine/euclidean/inner_product), field_definitions. \
+ChunkStrategy and MetricSpace are enums."""
+layer = 1
+tier = 1
+status = "planned"
+depends_on = ["U100"]
+blocks = ["U102"]
+estimated_loc = 250
+spec_sections = []
+spec_anchors = []
+files_create = [
+  "crates/grokrs-api/src/types/collections.rs",
+  "crates/grokrs-api/src/management/collections.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/types/mod.rs",
+  "crates/grokrs-api/src/management/mod.rs",
+  "crates/grokrs-api/src/management/client.rs",
+]
+acceptance = [
+  "Collection struct with all fields (name, embedding_model, chunk_config, metric_space, field_definitions, created_at, etc.)",
+  "CreateCollectionRequest, UpdateCollectionRequest types",
+  "ChunkStrategy enum: Chars, Tokens, Markdown, Code, Bytes",
+  "MetricSpace enum: Cosine, Euclidean, InnerProduct",
+  "FieldDefinition struct with name, required, unique, inject_into_chunk",
+  "CollectionsClient with create(), list(), get(), update(), delete() methods",
+  "ManagementClient gains collections() accessor",
+  "serde round-trip tests for all types",
+  "wiremock test for create and list",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:collections-crud"]
+consumes = ["ART:management-transport"]
+critical_decisions = [
+  "ChunkStrategy as enum with explicit variants, not free-form string.",
+  "FieldDefinition as a struct with typed fields.",
+  "UpdateCollectionRequest uses field-level updates, not full replacement.",
+]
+constraints = [
+  "All requests go through management base URL, not inference URL.",
+  "Must use management API key, not inference API key.",
+]
+failure_modes = [
+  "ChunkStrategy serde rename doesn't match xAI wire format.",
+  "Update API uses PATCH semantics vs PUT — verify with docs.",
+]
+rationale = "Collection CRUD is the foundation for document management in the Collections system."
+
+# ---------------------------------------------------------------------------
+# LAYER 2 — Document management within collections
+# ---------------------------------------------------------------------------
+
+[units.U102]
+name = "Document management within collections"
+summary = """
+Endpoint client for managing documents within collections: \
+POST /v1/collections/{id}/documents/{file_id} (add document), \
+GET /v1/collections/{id}/documents (list documents), \
+GET /v1/collections/{id}/documents/{file_id} (get document), \
+PATCH /v1/collections/{id}/documents/{file_id} (regenerate), \
+DELETE /v1/collections/{id}/documents/{file_id} (remove), \
+GET /v1/collections/{id}/documents:batchGet (batch get). \
+Documents reference files uploaded via the inference Files API."""
+layer = 2
+tier = 2
+status = "planned"
+depends_on = ["U101"]
+blocks = ["U103"]
+estimated_loc = 180
+spec_sections = []
+spec_anchors = []
+files_create = [
+  "crates/grokrs-api/src/types/collection_documents.rs",
+  "crates/grokrs-api/src/management/documents.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/types/mod.rs",
+  "crates/grokrs-api/src/management/mod.rs",
+  "crates/grokrs-api/src/management/collections.rs",
+]
+acceptance = [
+  "CollectionDocument struct with file_id, status, name, fields, created_at",
+  "DocumentStatus enum: Pending, Indexing, Ready, Failed",
+  "DocumentsClient with add(), list(), get(), regenerate(), remove(), batch_get() methods",
+  "CollectionsClient gains documents(collection_id) accessor",
+  "list supports pagination and status filtering",
+  "serde round-trip tests for document types",
+  "wiremock test for add and list",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:collection-documents"]
+consumes = ["ART:collections-crud"]
+critical_decisions = [
+  "DocumentsClient is accessed via CollectionsClient.documents(collection_id).",
+  "file_id references files from the inference Files API — cross-API reference.",
+]
+constraints = [
+  "Must use management API key and management base URL.",
+  "Path parameters (collection_id, file_id) must be percent-encoded.",
+]
+failure_modes = [
+  "Confusion between inference file_id and management document_id.",
+]
+rationale = "Document management enables populating collections with uploaded files."
+
+# ---------------------------------------------------------------------------
+# LAYER 3 — CLI integration
+# ---------------------------------------------------------------------------
+
+[units.U103]
+name = "Collections CLI subcommands"
+summary = """
+Add CLI subcommands for collection management: \
+grokrs collections create '<name>' --model grok-embedding-small, \
+grokrs collections list, \
+grokrs collections add-doc <collection_id> <file_id>, \
+grokrs collections list-docs <collection_id>, \
+grokrs collections delete <collection_id>. \
+These read management API config from the [management_api] section \
+in the same config file loaded via --config."""
+layer = 2
+tier = 2
+status = "planned"
+depends_on = ["U102"]
+blocks = []
+estimated_loc = 120
+spec_sections = []
+spec_anchors = []
+files_create = [
+  "crates/grokrs-cli/src/commands/collections.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/src/commands/mod.rs",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "grokrs collections create creates a collection and prints its ID",
+  "grokrs collections list prints collections as a table",
+  "grokrs collections add-doc adds a document to a collection",
+  "grokrs collections list-docs lists documents in a collection",
+  "grokrs collections delete deletes a collection with confirmation",
+  "all commands fail with helpful error if [management_api] is not configured",
+  "all commands respect policy engine (network must be allowed)",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["OUT:collections-cli"]
+consumes = ["ART:collections-crud", "ART:collection-documents"]
+critical_decisions = [
+  "Top-level 'collections' subcommand group, not under 'api'.",
+  "Delete requires confirmation (destructive operation).",
+]
+constraints = [
+  "Must clearly distinguish management API key from inference API key in error messages.",
+]
+failure_modes = [
+  "User confuses inference key with management key — error message must be specific.",
+]
+rationale = "CLI surface for collection management enables RAG workflow setup from the terminal."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U100"]
+leaf_nodes = ["U103"]
+critical_path = ["U100", "U101", "U102", "U103"]
+critical_path_loc = 670
+
+[computed.max_parallel]
+layer0 = 1
+layer1 = 1
+layer2 = 1
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-core/src/lib.rs", "configs/grokrs.example.toml"]
+units = ["U100"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/types/mod.rs"]
+units = ["U101", "U102"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/management/mod.rs"]
+units = ["U101", "U102"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/main.rs"]
+units = ["U103"]
+
+[computed.loc_totals]
+tier1 = 370
+tier2 = 300
+tier3 = 0
+all = 670

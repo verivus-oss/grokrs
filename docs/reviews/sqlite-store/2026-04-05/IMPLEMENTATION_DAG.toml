@@ -1,0 +1,624 @@
+[meta]
+title = "SQLite store persistence layer"
+spec = "docs/specs/02_SQLITE_STORE.md"
+adr = "docs/design/01_SQLITE_STATE.md"
+created = "2026-04-05"
+total_units = 10
+tier1_units = ["U10", "U11", "U12", "U13", "U14", "U15"]
+tier2_units = ["U20", "U21"]
+tier3_units = ["U30", "U31"]
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Foundation: crate scaffold, connection, migrations
+# ---------------------------------------------------------------------------
+
+[units.U10]
+name = "Crate scaffold and Store::open with pragmas"
+summary = """
+Create the grokrs-store crate with Cargo.toml (depends on grokrs-core + \
+rusqlite with bundled feature), register it as a workspace member, and \
+implement the Store struct. Store::open(workspace_root: &Path) creates \
+or opens .grokrs/state.db under the workspace root, creating the \
+.grokrs/ directory if absent. Sets file permissions to 0600 on creation. \
+On every open: PRAGMA journal_mode=WAL, PRAGMA busy_timeout=5000, \
+PRAGMA foreign_keys=ON. Store holds a single rusqlite::Connection. \
+Store::close(self) calls PRAGMA wal_checkpoint(TRUNCATE) before drop. \
+Path validation rejects absolute paths and .. traversal for the \
+configured store path. Add .grokrs/ to the project .gitignore."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["U11", "U12", "U13", "U14", "U15", "U20", "U21", "U30", "U31"]
+estimated_loc = 320
+files_create = [
+  "crates/grokrs-store/Cargo.toml",
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/types.rs",
+]
+files_modify = [
+  "Cargo.toml",
+  ".gitignore",
+]
+acceptance = [
+  "Store::open creates .grokrs/ directory and state.db if absent",
+  "PRAGMA journal_mode returns 'wal' after open",
+  "PRAGMA busy_timeout returns 5000 after open",
+  "PRAGMA foreign_keys returns 1 after open",
+  "database file permissions are 0600 on Unix",
+  "Store::close checkpoints WAL before closing (WAL file truncated to zero)",
+  "Store::open rejects paths containing '..' traversal",
+  "Store::open rejects absolute store paths when configured via StoreConfig",
+  "workspace member registered in root Cargo.toml",
+  ".grokrs/ entry present in .gitignore",
+]
+produces = ["ART:store-connection"]
+consumes = []
+critical_decisions = [
+  "Use rusqlite with bundled feature — no system SQLite dependency required.",
+  "Single Connection, not a pool — single-process CLI does not need connection pooling.",
+  "WAL mode is set unconditionally on every open — never fallback to rollback journal.",
+  "File permissions set via std::fs::set_permissions, not rusqlite — portable across platforms.",
+]
+constraints = [
+  "grokrs-store depends only on grokrs-core and rusqlite — no dependency on grokrs-cap, grokrs-policy, or grokrs-api.",
+  "Database path must be workspace-relative; never outside the workspace root.",
+  "Store must not expose the raw rusqlite::Connection publicly.",
+]
+failure_modes = [
+  "WAL pragma silently ignored if database is in read-only mode.",
+  "File permission 0600 is a no-op on Windows — document platform limitation.",
+  "Concurrent opens from multiple processes corrupt without WAL — documented as single-process constraint.",
+]
+rationale = "The Store struct and its connection pragmas are the foundation every other unit builds on. Getting WAL, busy_timeout, and foreign_keys right here prevents subtle data integrity issues downstream."
+
+[units.U11]
+name = "Embedded binary migrations with version tracking"
+summary = """
+Implement a migration runner that embeds SQL migrations in the binary \
+(not external files). Create a schema_version table to track the current \
+version. Each migration has a monotonic integer version. On Store::open, \
+run all pending migrations in order inside a single transaction. V1 \
+migration creates all tables: sessions, transcripts, approvals, evidence, \
+plus the schema_version table itself. Migration SQL is stored as const \
+&str in a migrations module. The runner compares the current schema \
+version against available migrations and applies only those with version \
+greater than current."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = ["U10"]
+blocks = ["U12", "U13", "U14", "U15", "U20", "U21", "U30", "U31"]
+estimated_loc = 350
+files_create = [
+  "crates/grokrs-store/src/migrations/mod.rs",
+  "crates/grokrs-store/src/migrations/v001.rs",
+]
+files_modify = [
+  "crates/grokrs-store/src/lib.rs",
+]
+acceptance = [
+  "fresh database runs all migrations and schema_version table shows current version",
+  "database already at latest version skips all migrations",
+  "database at version N applies only migrations > N",
+  "migration failure rolls back the entire transaction — schema_version unchanged",
+  "V1 migration creates sessions table with correct columns and types",
+  "V1 migration creates transcripts table with foreign key to sessions",
+  "V1 migration creates approvals table with foreign key to sessions",
+  "V1 migration creates evidence table with foreign key to sessions",
+  "foreign key constraint on transcripts.session_id is enforced (insert with nonexistent session_id fails)",
+  "migration runner is idempotent — running twice on same database has no effect",
+]
+produces = ["ART:migration-framework", "ART:v1-schema"]
+consumes = ["ART:store-connection"]
+critical_decisions = [
+  "Embed migrations as const &str rather than using refinery or external SQL files — zero runtime file dependencies.",
+  "All V1 tables created in a single migration — sessions, transcripts, approvals, evidence are one atomic schema version.",
+  "schema_version is a single-row table with version INTEGER, not a migration history log — simpler, sufficient for single-process CLI.",
+]
+constraints = [
+  "Migrations must be backward-compatible — once shipped, a migration SQL string is immutable.",
+  "Migration versions are strictly monotonic integers starting at 1.",
+  "All DDL runs inside a single transaction per migration batch.",
+]
+failure_modes = [
+  "SQLite does not support transactional DDL for all operations (e.g., ALTER TABLE in some cases) — mitigated by using only CREATE TABLE in V1.",
+  "Corrupted schema_version row causes all migrations to re-run — mitigated by transaction wrapping.",
+]
+rationale = "Embedded migrations eliminate external file dependencies and ensure every binary carries its own schema evolution capability. Version tracking prevents duplicate application."
+
+# ---------------------------------------------------------------------------
+# LAYER 1 — Data access: sessions, transcripts, usage
+# ---------------------------------------------------------------------------
+
+[units.U12]
+name = "Session persistence (create, transition, get, list_active)"
+summary = """
+Implement the sessions data access layer. Store exposes a sessions() \
+method returning a SessionRepo handle. SessionRepo provides: \
+create(id, trust_level) inserts a new session in Created state with \
+timestamps; transition(id, new_state) updates state and updated_at, \
+returning error if session does not exist; get(id) returns \
+Option<SessionRecord>; list_active() returns sessions not in Closed \
+or Failed state. Trust level stored as string matching grokrs-cap \
+type names (Untrusted, InteractiveTrusted, AdminTrusted). State \
+stored as string matching SessionState variants; Failed includes \
+error message as 'Failed: <message>'. SessionRecord is a plain \
+struct in types.rs. All mutations use transactions."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U10", "U11"]
+blocks = ["U13", "U14", "U20", "U30", "U31"]
+estimated_loc = 280
+files_create = [
+  "crates/grokrs-store/src/session.rs",
+]
+files_modify = [
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/types.rs",
+]
+acceptance = [
+  "create inserts session with Created state and correct timestamps",
+  "create with duplicate id returns an error (PRIMARY KEY violation)",
+  "transition updates state and updated_at timestamp",
+  "transition on nonexistent session_id returns a typed error (not found)",
+  "transition to Failed state stores 'Failed: <message>' format",
+  "get returns Some(SessionRecord) for existing session",
+  "get returns None for nonexistent session",
+  "list_active returns only sessions not in Closed or Failed state",
+  "list_active returns empty vec when no active sessions exist",
+  "trust_level roundtrips as exact string (Untrusted, InteractiveTrusted, AdminTrusted)",
+  "timestamps are RFC 3339 formatted strings",
+]
+produces = ["ART:session-persistence"]
+consumes = ["ART:store-connection", "ART:v1-schema"]
+critical_decisions = [
+  "Store trust_level and state as plain strings — grokrs-store does not depend on grokrs-cap or grokrs-session, avoiding compile-time coupling.",
+  "SessionRepo is a borrow of the Store connection, not a separate owned type — keeps lifetime management simple.",
+  "Failed state encodes error message inline as 'Failed: <msg>' rather than a separate column — matches the spec and avoids schema change.",
+]
+constraints = [
+  "Session IDs are caller-provided strings, not auto-generated — the store is not responsible for ID generation.",
+  "State values must match SessionState variant names exactly for interop with grokrs-session.",
+  "All writes are transactional.",
+]
+failure_modes = [
+  "State string mismatch between grokrs-session and grokrs-store causes silent data corruption — mitigated by string constants or validation.",
+  "Concurrent transition calls on the same session (from different threads) — mitigated by single-process constraint and SQLite serialization.",
+]
+rationale = "Session persistence is the first consumer of the schema and validates the full create-read-update pattern that transcripts and usage build on."
+
+[units.U13]
+name = "API transcript logging (log_request, log_response, log_error, list_by_session)"
+summary = """
+Implement the transcripts data access layer. Store exposes a \
+transcripts() method returning a TranscriptRepo handle. TranscriptRepo \
+provides: log_request(session_id, endpoint, method, request_body) inserts \
+a partial record with request_at timestamp and returns the transcript_id \
+(i64 autoincrement); log_response(transcript_id, status_code, \
+response_body, usage) updates the record with response_at, status_code, \
+response_body, token counts (input_tokens, output_tokens, \
+reasoning_tokens), and cost_in_usd_ticks; log_error(transcript_id, \
+error) records a failed request with error message; \
+list_by_session(session_id) returns all transcripts for a session \
+ordered by request_at. TranscriptRecord in types.rs. Usage is passed \
+as a TranscriptUsage struct with optional token counts and cost."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U10", "U11", "U12"]
+blocks = ["U14", "U20", "U30", "U31"]
+estimated_loc = 310
+files_create = [
+  "crates/grokrs-store/src/transcript.rs",
+]
+files_modify = [
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/types.rs",
+]
+acceptance = [
+  "log_request inserts record and returns a positive transcript_id",
+  "log_request sets request_at to current time in RFC 3339 format",
+  "log_request with nonexistent session_id fails with foreign key violation",
+  "log_response updates the matching transcript with response data",
+  "log_response sets response_at to current time",
+  "log_response stores input_tokens, output_tokens, reasoning_tokens, cost_in_usd_ticks from usage",
+  "log_error sets the error field on the matching transcript",
+  "log_error on already-completed transcript still succeeds (overwrites are acceptable)",
+  "list_by_session returns transcripts ordered by request_at ascending",
+  "list_by_session returns empty vec for session with no transcripts",
+  "TranscriptRecord includes all columns from the transcripts table",
+  "concurrent read during write does not block (WAL verification)",
+]
+produces = ["ART:transcript-persistence"]
+consumes = ["ART:store-connection", "ART:v1-schema", "ART:session-persistence"]
+critical_decisions = [
+  "Two-phase logging (log_request then log_response/log_error) matches the async nature of API calls — request is logged before the response arrives.",
+  "TranscriptUsage is a separate input struct, not the API crate's usage type — keeps grokrs-store decoupled from grokrs-api.",
+  "cost_in_usd_ticks is i64 to match the xAI API convention (integer cost, not float).",
+]
+constraints = [
+  "Foreign key on session_id is enforced — cannot log transcripts for nonexistent sessions.",
+  "Request/response bodies are stored as-is (TEXT) — no scrubbing by the store. Transport layer strips API keys upstream.",
+  "Transcript IDs are autoincrement integers, not UUIDs.",
+]
+failure_modes = [
+  "log_response called with wrong transcript_id silently updates zero rows — must check affected row count and return error.",
+  "Very large response bodies (multi-MB streaming responses) stored as TEXT may bloat the database — acceptable for CLI usage patterns.",
+]
+rationale = "Transcript logging is the audit trail that makes API usage observable. The two-phase pattern handles the request-response lifecycle cleanly."
+
+[units.U14]
+name = "Usage accumulation (session_totals, all_totals, UsageSummary)"
+summary = """
+Implement the usage aggregation layer. Store exposes a usage() method \
+returning a UsageRepo handle. UsageRepo provides: \
+session_totals(session_id) returns a UsageSummary with SUM of \
+cost_in_usd_ticks, input_tokens, output_tokens, reasoning_tokens, and \
+COUNT of requests for a single session; all_totals() returns the same \
+aggregation across all sessions. UsageSummary struct: \
+total_cost_ticks: i64, total_input_tokens: u64, \
+total_output_tokens: u64, total_reasoning_tokens: u64, \
+request_count: u64. Queries aggregate from the transcripts table. \
+NULL token values treated as zero in aggregation. Sessions with no \
+transcripts return a zero-valued UsageSummary."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U10", "U11", "U13"]
+blocks = ["U20", "U30", "U31"]
+estimated_loc = 150
+files_create = [
+  "crates/grokrs-store/src/usage.rs",
+]
+files_modify = [
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/types.rs",
+]
+acceptance = [
+  "session_totals returns correct sums for a session with multiple transcripts",
+  "session_totals returns zero-valued UsageSummary for session with no transcripts",
+  "session_totals treats NULL token columns as zero (COALESCE behavior)",
+  "all_totals aggregates across all sessions",
+  "all_totals returns zero-valued UsageSummary when database has no transcripts",
+  "cost_in_usd_ticks is i64 (can be negative for credits/adjustments)",
+  "token counts are u64 (always non-negative)",
+  "request_count matches COUNT(*) of transcript records",
+]
+produces = ["ART:usage-aggregation"]
+consumes = ["ART:store-connection", "ART:v1-schema", "ART:transcript-persistence"]
+critical_decisions = [
+  "Aggregate queries run against the transcripts table directly — no separate usage accumulator table. Correct for single-process CLI with modest data volumes.",
+  "COALESCE with 0 for all nullable numeric columns — prevents NULL propagation in SUM.",
+]
+constraints = [
+  "UsageSummary is a plain struct, not an ORM model — it represents a query result, not a table row.",
+  "Aggregation uses SQL SUM/COUNT, not Rust-side iteration — database does the work.",
+]
+failure_modes = [
+  "Integer overflow in SUM for very large token counts — mitigated by u64 range being sufficient for any realistic usage.",
+  "Slow query on large transcript tables without index — mitigated by session_id foreign key index.",
+]
+rationale = "Usage queries are the primary operator-facing feedback on API cost. Running them as SQL aggregations is efficient and correct."
+
+[units.U15]
+name = "Optional [store] config section in AppConfig"
+summary = """
+Add an optional [store] section to AppConfig in grokrs-core. StoreConfig \
+struct with path field (String, defaults to '.grokrs/state.db'). \
+AppConfig gains store: Option<StoreConfig> — absent section means use \
+defaults. Update AppConfig::summary() to include store config when \
+present. Update configs/grokrs.example.toml with a commented-out \
+[store] section showing the default path. Existing configs without \
+[store] continue to load without error (backward compatible). StoreConfig \
+is defined in grokrs-core (not grokrs-store) so the store crate can \
+consume it without circular dependency."""
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U10"]
+blocks = ["U30", "U31"]
+estimated_loc = 80
+files_create = []
+files_modify = [
+  "crates/grokrs-core/src/lib.rs",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "AppConfig with [store] section deserializes correctly",
+  "AppConfig without [store] section deserializes with store = None",
+  "StoreConfig.path defaults to '.grokrs/state.db' when section is present but path is absent",
+  "AppConfig::summary() includes store path when store config is Some",
+  "configs/grokrs.example.toml includes commented-out [store] section with documentation",
+  "existing test configs continue to load without modification",
+]
+produces = ["ART:store-config"]
+consumes = ["ART:store-connection"]
+critical_decisions = [
+  "StoreConfig lives in grokrs-core, not grokrs-store — follows the pattern where config types are in grokrs-core and consumed by downstream crates.",
+  "Option<StoreConfig> rather than StoreConfig with all-default fields — explicit about whether the operator configured storage.",
+]
+constraints = [
+  "Must not break deserialization of existing configs — Option<StoreConfig> handles absent section.",
+  "Default path is workspace-relative, never absolute.",
+]
+failure_modes = [
+  "Serde default for path field not set correctly causes panic on missing field when section is present.",
+  "StoreConfig placed in wrong crate creates circular dependency.",
+]
+rationale = "Config belongs in grokrs-core by established pattern. Making it optional preserves backward compatibility with existing configs."
+
+# ---------------------------------------------------------------------------
+# LAYER 2 — CLI integration
+# ---------------------------------------------------------------------------
+
+[units.U20]
+name = "Future extension table schemas (approvals, evidence)"
+summary = """
+Verify and document that the V1 migration (created in U11) includes \
+the approvals and evidence tables with correct schemas. Approvals: \
+id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL \
+REFERENCES sessions(id), effect TEXT NOT NULL, decision TEXT NOT NULL, \
+decided_at TEXT NOT NULL, decided_by TEXT. Evidence: id INTEGER PRIMARY \
+KEY AUTOINCREMENT, session_id TEXT NOT NULL REFERENCES sessions(id), \
+kind TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL, \
+expires_at TEXT. No Rust API is exposed for these tables in this spec \
+— schema only. Add integration tests that verify table existence and \
+foreign key constraints. Document the intended future use in module-level \
+doc comments."""
+layer = 2
+tier = 2
+status = "pending"
+depends_on = ["U11", "U12", "U13", "U14"]
+blocks = []
+estimated_loc = 100
+files_create = []
+files_modify = [
+  "crates/grokrs-store/src/migrations/v001.rs",
+  "crates/grokrs-store/src/lib.rs",
+]
+acceptance = [
+  "approvals table exists after migration with all specified columns",
+  "evidence table exists after migration with all specified columns",
+  "approvals.session_id foreign key to sessions.id is enforced",
+  "evidence.session_id foreign key to sessions.id is enforced",
+  "no Rust API is exposed for approvals or evidence — schema only",
+  "module-level doc comments describe the intended future use of both tables",
+  "integration test inserts into approvals and evidence via raw SQL to verify schema correctness",
+]
+produces = ["ART:future-table-schemas"]
+consumes = ["ART:v1-schema", "ART:session-persistence", "ART:transcript-persistence", "ART:usage-aggregation"]
+critical_decisions = [
+  "Schema created now, API deferred to separate specs — avoids shipping incomplete approval/evidence logic while reserving the schema shape.",
+  "Tables included in V1 migration rather than a separate V2 — all initial tables ship atomically.",
+]
+constraints = [
+  "No public Rust types or methods for these tables in this implementation — they are internal schema only.",
+  "Schema must match the spec exactly — future specs will depend on this column layout.",
+]
+failure_modes = [
+  "Future spec changes column names or types, requiring a V2 migration — acceptable and expected.",
+]
+rationale = "Creating the tables now ensures the migration framework handles them and future specs can build Rust APIs without schema changes."
+
+[units.U21]
+name = "Comprehensive test suite"
+summary = """
+Integration and unit tests covering all store functionality. Tests: \
+migration forward-compat (apply V1, verify schema, apply hypothetical \
+V2 stub); session state transitions through full lifecycle; transcript \
+round-trip (log_request, log_response, verify list_by_session); usage \
+aggregation correctness with multiple sessions and transcripts; \
+concurrent read during write (WAL verification — spawn reader thread \
+during write transaction); crash recovery simulation (open store, \
+begin transaction, drop without commit, reopen and verify consistency); \
+foreign key enforcement (transcript with bad session_id rejected); \
+path validation (reject .., reject absolute paths); file permissions \
+check on Unix. Tests use tempdir for isolated database instances."""
+layer = 2
+tier = 2
+status = "pending"
+depends_on = ["U10", "U11", "U12", "U13", "U14"]
+blocks = ["U30", "U31"]
+estimated_loc = 450
+files_create = [
+  "crates/grokrs-store/tests/integration.rs",
+]
+files_modify = [
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/transcript.rs",
+  "crates/grokrs-store/src/usage.rs",
+]
+acceptance = [
+  "migration forward-compat test: V1 applied, schema_version correct, re-open is no-op",
+  "session lifecycle test: Created -> Ready -> RunningTurn -> WaitingApproval -> Closed",
+  "session failure test: Created -> Failed with error message preserved",
+  "transcript round-trip: log_request returns id, log_response updates, list_by_session returns complete record",
+  "transcript error: log_request then log_error, verify error field set",
+  "usage aggregation: multiple transcripts across sessions, verify session_totals and all_totals",
+  "WAL concurrent read: reader thread reads while writer holds transaction — no blocking",
+  "crash recovery: drop Store mid-transaction, reopen, verify no partial state",
+  "foreign key: transcript insert with nonexistent session_id returns error",
+  "path validation: Store::open rejects '..' traversal and absolute store paths",
+  "file permissions: state.db has 0600 on Unix (cfg(unix) gated test)",
+  "all tests use tempdir — no shared state between tests",
+]
+produces = ["ART:test-suite"]
+consumes = ["ART:store-connection", "ART:v1-schema", "ART:session-persistence", "ART:transcript-persistence", "ART:usage-aggregation"]
+critical_decisions = [
+  "Integration tests in tests/ directory, not unit tests in src/ — tests exercise the public API surface end-to-end.",
+  "Use tempfile::tempdir for isolation — each test gets a fresh database.",
+  "WAL concurrent read test uses std::thread, not async — rusqlite::Connection is not Send across await points.",
+]
+constraints = [
+  "Tests must not depend on any external database or file — fully self-contained.",
+  "Crash recovery test simulates crash by dropping the Store without calling close, not by killing a process.",
+]
+failure_modes = [
+  "Tempdir cleanup race on Windows — mitigated by explicit drop ordering.",
+  "WAL test is timing-sensitive — mitigated by using barriers instead of sleep.",
+]
+rationale = "A comprehensive test suite is the primary evidence that the store implementation is correct and crash-safe. Testing WAL and crash recovery specifically validates the safety claims."
+
+[units.U30]
+name = "CLI integration: doctor reports store status"
+summary = """
+Update the grokrs doctor command to report store status. When the store \
+database exists: print database path, schema version, session count \
+(total and active), and total cost across all sessions. When the store \
+does not exist: print that no store is configured or the database has \
+not been created yet. Add the grokrs-store dependency to grokrs-cli. \
+Doctor opens the store read-only (or handles the case where it does not \
+exist gracefully). Also implement the new store subcommand group: \
+'grokrs store status' prints database path, schema version, WAL mode \
+confirmation, session count, total cost; 'grokrs store usage \
+[--session <id>]' prints token usage and cost summary, optionally \
+filtered by session. These subcommands construct a Store from the \
+config and query the database."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["U10", "U11", "U12", "U13", "U14", "U15", "U21"]
+blocks = ["U31"]
+estimated_loc = 280
+files_create = [
+  "crates/grokrs-cli/src/commands/store.rs",
+]
+files_modify = [
+  "crates/grokrs-cli/Cargo.toml",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/mod.rs",
+]
+acceptance = [
+  "grokrs doctor includes store section showing database path and schema version",
+  "grokrs doctor gracefully handles missing database (prints informational message, does not error)",
+  "grokrs doctor shows active session count and total cost when database exists",
+  "grokrs store status prints database path, schema version, WAL mode, session count, total cost",
+  "grokrs store status with no database prints helpful message about running a session first",
+  "grokrs store usage prints all_totals with formatted cost and token counts",
+  "grokrs store usage --session <id> prints session_totals for that session",
+  "grokrs store usage --session <nonexistent> prints zero-valued summary or informational message",
+  "all store subcommands respect workspace root from config",
+]
+produces = ["ART:store-cli"]
+consumes = ["ART:store-connection", "ART:v1-schema", "ART:session-persistence", "ART:transcript-persistence", "ART:usage-aggregation", "ART:store-config", "ART:test-suite"]
+critical_decisions = [
+  "Doctor does not fail if the database does not exist — it reports the absence. This avoids breaking doctor for users who have not used the store yet.",
+  "Store subcommands are a new top-level group (grokrs store ...) rather than nested under an existing group — matches the architecture where store is a distinct concern.",
+  "Cost displayed in human-readable format (USD with decimal) converted from ticks.",
+]
+constraints = [
+  "Doctor must remain fast — store queries are simple aggregations, not full table scans.",
+  "Store subcommands must work with the same --config flag as other commands.",
+]
+failure_modes = [
+  "Database locked by another process causes doctor to hang — mitigated by busy_timeout pragma.",
+  "Corrupted database causes doctor to panic instead of reporting the corruption — must catch rusqlite errors.",
+]
+rationale = "Operator visibility into store state is critical for debugging and cost management. Doctor is the established diagnostic entry point."
+
+[units.U31]
+name = "CLI integration: api chat session + transcript logging"
+summary = """
+Update the existing grokrs api chat command to integrate with the store. \
+Before making API calls, create a session in the store (with a generated \
+UUID and Untrusted trust level). For each API request/response cycle: \
+call log_request before sending, log_response or log_error after \
+receiving. On exit (normal or error), print a usage summary for the \
+session. If the store is not available (no database, config disabled), \
+api chat continues to work without persistence — store integration is \
+best-effort, not mandatory. Session state transitions: Created -> Ready \
+on store open, Ready -> RunningTurn on API call, RunningTurn -> Ready \
+on response, Ready -> Closed on normal exit, any -> Failed on error."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["U10", "U11", "U12", "U13", "U14", "U15", "U21", "U30"]
+blocks = []
+estimated_loc = 250
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/api.rs",
+  "crates/grokrs-cli/Cargo.toml",
+]
+acceptance = [
+  "api chat creates a session record in the store before making API calls",
+  "session state transitions through Created -> Ready -> RunningTurn -> Ready -> Closed on normal flow",
+  "each API request is logged via log_request before sending",
+  "each API response is logged via log_response with status code, body, and usage",
+  "API errors are logged via log_error with error message",
+  "usage summary printed to stderr on exit showing token counts and cost",
+  "api chat works without a store (graceful degradation — no persistence, no error)",
+  "session ID is a UUID v4 generated at chat start",
+  "session transitions to Failed on unrecoverable error with error message preserved",
+  "grokrs store usage --session <chat-session-id> shows correct totals after api chat",
+]
+produces = ["OUT:store-integrated-cli"]
+consumes = ["ART:store-cli", "ART:store-connection", "ART:session-persistence", "ART:transcript-persistence", "ART:usage-aggregation", "ART:store-config", "ART:test-suite"]
+critical_decisions = [
+  "Store integration is best-effort — api chat must not fail if the database is unavailable. This preserves the CLI's usability even without persistence.",
+  "Session ID is a UUID v4 generated by the CLI, not by the store — the store is a dumb persistence layer.",
+  "Usage summary is printed to stderr, not stdout — keeps stdout clean for piping API responses.",
+]
+constraints = [
+  "Must not introduce a hard dependency on grokrs-store for api chat to function — the store is optional.",
+  "UUID generation requires adding uuid crate dependency to grokrs-cli.",
+  "Transcript bodies logged as-is — no additional scrubbing beyond what the transport layer already does.",
+]
+failure_modes = [
+  "Store write failure mid-conversation loses transcript data — acceptable because the API response is still returned to the user.",
+  "Session left in RunningTurn state if process is killed — detected by list_active on next run.",
+  "UUID collision is astronomically unlikely but would cause a PRIMARY KEY violation — generate and retry.",
+]
+rationale = "This is the end-to-end integration that proves the store works in practice. Best-effort persistence ensures the store never degrades the core CLI experience."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U10"]
+leaf_nodes = ["U20", "U31"]
+critical_path = ["U10", "U11", "U12", "U13", "U14", "U21", "U30", "U31"]
+critical_path_loc = 2390
+
+[computed.max_parallel]
+layer0 = 1
+layer1 = 4
+layer2 = 4
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-store/src/lib.rs"]
+units = ["U10", "U11", "U12", "U13", "U14", "U20", "U21"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-store/src/types.rs"]
+units = ["U10", "U12", "U13", "U14"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/main.rs"]
+units = ["U30"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/Cargo.toml"]
+units = ["U30", "U31"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/mod.rs"]
+units = ["U30"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-cli/src/commands/api.rs"]
+units = ["U31"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-store/src/migrations/v001.rs"]
+units = ["U11", "U20"]
+
+[computed.loc_totals]
+tier1 = 1490
+tier2 = 550
+tier3 = 530
+all = 2570

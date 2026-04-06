@@ -1,0 +1,127 @@
+[meta]
+title = "Batch API extensions (JSONL upload + image/video)"
+spec = "docs/specs/01_XAI_API_CLIENT.md"
+decomposition = "docs/reviews/batch-extensions/2026-04-05/IMPLEMENTATION_DAG.toml"
+created = "2026-04-05"
+total_units = 2
+tier1_units = ["U90", "U91"]
+tier2_units = []
+tier3_units = []
+
+# ---------------------------------------------------------------------------
+# LAYER 0 — Independent extensions
+# ---------------------------------------------------------------------------
+
+[units.U90]
+name = "Batch creation from JSONL file upload"
+summary = """
+As of March 2026, batches can be created by uploading a JSONL file \
+via the Files API rather than adding requests one by one. The JSONL \
+file contains one request per line, each with method, url, custom_id, \
+and body fields. Add a create_from_file() method to BatchesClient \
+that accepts a file_id (previously uploaded via Files API) and creates \
+a batch from it. Also add the input_file_id field to CreateBatchRequest."""
+layer = 0
+tier = 1
+status = "planned"
+depends_on = []
+blocks = []
+estimated_loc = 60
+spec_sections = ["Batch API"]
+spec_anchors = ["batch-create"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/batches.rs",
+  "crates/grokrs-api/src/endpoints/batches.rs",
+]
+acceptance = [
+  "CreateBatchRequest gains input_file_id: Option<String>",
+  "BatchesClient gains create_from_file(file_id, endpoint) method",
+  "create_from_file sends POST /v1/batches with input_file_id",
+  "existing create() and add_requests() methods unchanged",
+  "serde round-trip test for CreateBatchRequest with input_file_id",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:batch-jsonl"]
+consumes = ["ART:batch-client"]
+critical_decisions = [
+  "create_from_file is a convenience method, not a replacement for create + add_requests.",
+  "file_id references a file previously uploaded via Files API — no inline upload.",
+]
+constraints = [
+  "Must not change existing batch creation flow.",
+]
+failure_modes = [
+  "JSONL file format validation is server-side — client just passes the file_id.",
+]
+rationale = "JSONL batch creation is more efficient for large batches (single upload vs many add_requests calls)."
+
+[units.U91]
+name = "Batch image and video generation support"
+# NOTE: U91 depends on U90 because both modify types/batches.rs.
+summary = """
+As of March 2026, the Batch API supports image generation, image \
+editing, and video generation endpoints. Add BatchRequestItem \
+constructors for these endpoint types: image_generation(), \
+image_edit(), video_generation(). The BatchEndpoint enum gains \
+corresponding variants. Requests reuse the existing typed request \
+builders (ImageGenerationRequest, ImageEditRequest, \
+VideoGenerationRequest)."""
+layer = 1
+tier = 1
+status = "planned"
+depends_on = ["U90"]
+blocks = []
+estimated_loc = 70
+spec_sections = ["Batch API", "Image Generation", "Video Generation"]
+spec_anchors = ["batch-create", "image-gen", "video-gen"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/batches.rs",
+]
+acceptance = [
+  "BatchEndpoint enum gains ImageGenerations, ImageEdits, VideoGenerations variants",
+  "BatchRequestItem gains image_generation() constructor accepting &ImageGenerationRequest",
+  "BatchRequestItem gains image_edit() constructor accepting &ImageEditRequest",
+  "BatchRequestItem gains video_generation() constructor accepting &VideoGenerationRequest",
+  "serde round-trip tests for each new BatchEndpoint variant",
+  "new constructors produce correct method and url fields",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+]
+produces = ["ART:batch-media"]
+consumes = ["ART:batch-client", "ART:media-clients"]
+critical_decisions = [
+  "Reuse existing typed request builders from images.rs and videos.rs.",
+  "BatchEndpoint variants use the same URL paths as the corresponding direct endpoints.",
+]
+constraints = [
+  "Must not break existing batch request construction for chat/responses.",
+]
+failure_modes = [
+  "BatchEndpoint serde rename doesn't match xAI expected endpoint strings.",
+]
+rationale = "Batch media generation enables cost-effective bulk image/video production."
+
+# ---------------------------------------------------------------------------
+# COMPUTED
+# ---------------------------------------------------------------------------
+
+[computed]
+entry_points = ["U90"]
+leaf_nodes = ["U91"]
+critical_path = ["U90", "U91"]
+critical_path_loc = 130
+
+[computed.max_parallel]
+layer0 = 1
+layer1 = 1
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/types/batches.rs"]
+units = ["U90", "U91"]
+
+[computed.loc_totals]
+tier1 = 130
+tier2 = 0
+tier3 = 0
+all = 130

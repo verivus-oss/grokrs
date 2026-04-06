@@ -1,0 +1,1020 @@
+[meta]
+title = "Competitive gaps R2: Voice Agent API, encrypted reasoning, model freshness, headless mode, OTEL, MCP client, git integration"
+created = "2026-04-06"
+revised = "2026-04-06"
+completed = "2026-04-06"
+total_units = 17
+tier1_units = ["U40", "U41", "U42"]
+tier2_units = ["U43", "U44", "U45", "U46"]
+tier3_units = ["U47", "U48", "U49", "U50", "U51", "U52", "U53", "U54", "U55", "U56"]
+
+# ---------------------------------------------------------------------------
+# CONTEXT
+# ---------------------------------------------------------------------------
+# This DAG addresses gaps identified in the April 2026 competitive analysis,
+# validated against the sqry index (102 files, 33,260 nodes, 43,928 edges).
+#
+# The original competitive-features DAG (21 units) delivered chat, agent,
+# search, media gen, model discovery, and session management. This R2 DAG
+# covers what's still missing:
+#
+# Tier 1 (xAI API parity):
+#   U40 -- Encrypted reasoning content (Grok 4 reasoning continuity)
+#   U41 -- Model catalog freshness (grok-4.20 defaults + docs)
+#   U42 -- Voice Agent API client (WebSocket real-time voice)
+#
+# Tier 2 (competitor CLI parity):
+#   U43 -- Headless/CI mode for agent command
+#   U44 -- OpenTelemetry observability
+#   U45 -- Cost reporting CLI
+#   U46 -- MCP client-side hosting in CLI
+#
+# Tier 3 (polish + differentiation):
+#   U47 -- Git workflow integration
+#   U48 -- Agent memory (cross-session context)
+#   U49 -- Config profiles
+#   U50 -- Prompt cache CLI flag
+#   U51 -- Integration tests for R2 features
+#   U52 -- Doctor updates for R2 features
+#   U53 -- Help text and documentation
+#   U54 -- Example config extensions
+#   U55 -- Deprecation notices and migration
+#   U56 -- End-to-end test suite
+#
+# SCOPING DECISIONS:
+# 1. U40 is trivially small (~200 LOC) but unblocks Grok 4 reasoning
+#    continuity -- highest priority per unit of effort.
+# 2. U41 is cosmetic but stale defaults (grok-3) undermine credibility.
+# 3. U42 (Voice Agent) is the largest unit -- new WebSocket transport,
+#    new types, new CLI command. Isolated from all other units.
+# 4. U43 (headless) is the highest-impact CLI gap for adoption.
+# 5. U44 (OTEL) is opt-in via cargo feature flag to avoid bloating
+#    the binary for users who don't need it.
+# 6. U46 (MCP client) is large and depends on U43 (headless agents
+#    need tool sources beyond compiled-in tools).
+# ---------------------------------------------------------------------------
+
+# ===========================================================================
+# LAYER 0 -- Foundation: small, no-dependency units
+# ===========================================================================
+
+[units.U40]
+name = "Encrypted reasoning content passthrough"
+summary = """
+Add support for xAI's encrypted reasoning content feature. When \
+`include: [\"reasoning.encrypted_content\"]` is sent in a Responses API \
+request, Grok 4 models return encrypted reasoning traces that can be \
+sent back in subsequent turns to provide reasoning continuity without \
+exposing the raw chain-of-thought. Changes: (1) Add \
+`encrypted_content` field to the Reasoning OutputItem type. (2) Add \
+`ReasoningInclude` enum or allow arbitrary strings in the `include` \
+vec on CreateResponseBuilder. (3) Add `InputItem::Reasoning` variant \
+so encrypted reasoning can be passed back as structured input. (4) \
+Store encrypted reasoning blobs in transcripts (new column or in \
+response_body). (5) Wire through chat REPL so stateful conversations \
+automatically replay encrypted reasoning. (6) Tests for round-trip \
+serialization and multi-turn replay."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U51"]
+estimated_loc = 250
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-store/src/transcript.rs",
+]
+acceptance = [
+  "OutputItem::Reasoning has an optional encrypted_content: Option<String> field",
+  "CreateResponseBuilder::include() accepts 'reasoning.encrypted_content' as a valid include directive",
+  "Encrypted reasoning content deserializes from xAI wire format without loss",
+  "InputItem has a Reasoning variant that carries encrypted_content for replay",
+  "Chat REPL in stateful mode captures encrypted reasoning from responses and replays it in the next turn's input",
+  "Transcript storage preserves encrypted reasoning blobs (in response_body JSON)",
+  "Round-trip test: build request with include, deserialize response with encrypted_content, replay in next request",
+  "Test: non-reasoning models return no encrypted_content (field is None)",
+  "Test: encrypted_content is opaque -- no parsing or validation of the blob contents",
+]
+produces = ["ART:encrypted-reasoning"]
+consumes = []
+critical_decisions = [
+  "Encrypted content is treated as opaque bytes (String) -- we never parse, decrypt, or validate it. xAI manages the encryption.",
+  "Replay is automatic in stateful chat mode -- the user doesn't need to manage it manually.",
+  "Storage in transcript response_body avoids a schema migration -- the JSON already captures the full response.",
+]
+constraints = [
+  "Only grok-4 family models support encrypted reasoning. Non-reasoning models silently ignore the include directive.",
+  "Encrypted reasoning increases token counts (the opaque blob counts as input tokens when replayed).",
+]
+failure_modes = [
+  "Encrypted blob is too large for SQLite TEXT column -- mitigated by SQLite's 1GB text limit, reasoning blobs are typically <100KB.",
+  "xAI changes the encryption format -- we treat it as opaque, so format changes are transparent to grokrs.",
+]
+rationale = "Enables reasoning continuity across multi-turn conversations with Grok 4 models. Without this, each turn starts reasoning from scratch, degrading quality on complex multi-step tasks."
+
+[units.U41]
+name = "Model catalog freshness: grok-4.20 defaults and documentation"
+summary = """
+Update all default model references from 'grok-3' to the current \
+flagship model. Changes: (1) Update default_model in ChatConfig and \
+AgentConfig defaults. (2) Update grokrs.example.toml default model. \
+(3) Update all test fixtures that use hardcoded 'grok-3' as the \
+model name. (4) Update CLAUDE.md, ARCHITECTURE.md, README.md model \
+references. (5) Add grok-4.20-reasoning and grok-4.20-multi-agent \
+to any model-related documentation or examples. (6) Ensure \
+`grokrs models list` dynamically fetches from API (already does) \
+but verify the pricing display handles new model tiers."""
+layer = 0
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U53"]
+estimated_loc = 120
+files_create = []
+files_modify = [
+  "crates/grokrs-core/src/config.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "configs/grokrs.example.toml",
+  "CLAUDE.md",
+  "ARCHITECTURE.md",
+  "README.md",
+]
+acceptance = [
+  "ChatConfig default_model is 'grok-4' (or latest flagship at ship time)",
+  "AgentConfig default model is 'grok-4' (or latest flagship)",
+  "grokrs.example.toml uses current model names in comments and defaults",
+  "Test fixtures updated to use current model names where they reference specific models",
+  "README.md and ARCHITECTURE.md reference current model names",
+  "grokrs models list correctly displays pricing for grok-4.20 family",
+  "No test regressions from model name changes",
+]
+produces = ["ART:model-freshness"]
+consumes = []
+critical_decisions = [
+  "Default model should be the best general-purpose model, not the cheapest -- users can override via config.",
+  "Test fixtures that test model-agnostic behavior (e.g., request serialization) can use any model name.",
+  "Dynamic model list from API is the source of truth -- we don't hardcode a model catalog.",
+]
+constraints = [
+  "Model names change with xAI releases -- defaults should be easy to update (single constant or config default).",
+]
+failure_modes = [
+  "Default model doesn't exist on user's API tier -- mitigated by clear error message from API + ability to override in config.",
+]
+rationale = "Stale model defaults (grok-3) undermine credibility and leave performance on the table. Users who don't customize config get an inferior experience."
+
+# ===========================================================================
+# LAYER 1 -- Depends on Layer 0 or standalone with moderate scope
+# ===========================================================================
+
+[units.U42]
+name = "Voice Agent API client: WebSocket transport and CLI command"
+summary = """
+Implement the xAI Voice Agent API, which uses WebSocket for real-time \
+bidirectional voice conversations. This is a fundamentally different \
+transport from the HTTP REST endpoints. Changes: (1) New transport \
+module in grokrs-api: WebSocket client using tokio-tungstenite, \
+connection management, automatic reconnection, heartbeat/ping-pong. \
+(2) New types module: VoiceSession, VoiceConfig (voice, language, \
+turn detection, VAD settings), VoiceEvent (audio chunks, transcripts, \
+function calls, state changes), VoiceMessage (client-to-server audio \
+and control frames). (3) New endpoint module: VoiceAgentClient with \
+connect(), send_audio(), send_text(), close(). (4) Audio I/O: PCM \
+capture from microphone via cpal, playback of received audio. (5) \
+New CLI command: `grokrs voice` -- interactive voice session with \
+terminal UI showing transcription, function calls, and state. (6) \
+Voice sessions recorded in store (session type 'voice', transcript \
+includes text transcriptions). (7) Policy gate for NetworkConnect \
+effect on voice WebSocket connection. (8) Integration with existing \
+function calling -- voice agent can invoke tools during conversation."""
+layer = 1
+tier = 1
+status = "done"
+depends_on = []
+blocks = ["U51", "U52", "U53"]
+estimated_loc = 2200
+files_create = [
+  "crates/grokrs-api/src/transport/websocket.rs",
+  "crates/grokrs-api/src/types/voice.rs",
+  "crates/grokrs-api/src/endpoints/voice.rs",
+  "crates/grokrs-cli/src/commands/voice.rs",
+]
+files_modify = [
+  "crates/grokrs-api/Cargo.toml",
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/types/mod.rs",
+  "crates/grokrs-api/src/endpoints/mod.rs",
+  "crates/grokrs-cli/Cargo.toml",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-store/src/session.rs",
+]
+acceptance = [
+  "WebSocket transport connects to wss://api.x.ai/v1/voice-agent endpoint",
+  "WebSocket client handles ping/pong heartbeats automatically",
+  "WebSocket client reconnects on transient failures with exponential backoff",
+  "VoiceConfig supports voice selection, language, VAD sensitivity, turn detection mode",
+  "VoiceEvent enum covers: AudioChunk, Transcript, FunctionCall, StateChange, Error",
+  "VoiceMessage enum covers: AudioData, TextInput, FunctionResult, Control",
+  "VoiceAgentClient::connect() establishes authenticated WebSocket session",
+  "VoiceAgentClient::send_audio() streams PCM audio frames to server",
+  "VoiceAgentClient handles server-initiated function calls and routes to FunctionExecutor",
+  "Audio capture from default microphone via cpal (or rodio) on supported platforms",
+  "Audio playback of server-generated speech",
+  "CLI command: `grokrs voice` starts interactive voice session",
+  "CLI command: `grokrs voice --text-only` for text-mode (no audio I/O)",
+  "Voice sessions persist in store with session type 'voice'",
+  "Transcriptions stored in transcripts table",
+  "NetworkConnect policy gate evaluated before WebSocket connection",
+  "Unit tests for VoiceConfig serialization, VoiceEvent deserialization",
+  "Unit tests for WebSocket frame parsing",
+  "Integration test with mock WebSocket server",
+  "Graceful shutdown on Ctrl+C during voice session",
+]
+produces = ["ART:voice-agent"]
+consumes = []
+critical_decisions = [
+  "Audio I/O via cpal is behind a cargo feature flag 'audio' -- text-only mode works without audio deps.",
+  "WebSocket transport is separate from HttpClient -- different lifecycle, different error handling.",
+  "Voice sessions reuse the existing Session<T> state machine with a new 'voice' session type.",
+  "Function calling during voice sessions uses the same ToolRegistry and PolicyGatedExecutor as agent mode.",
+  "VAD (Voice Activity Detection) is server-side -- client just streams raw audio.",
+]
+constraints = [
+  "WebSocket requires tokio-tungstenite -- adds ~300KB to dependency tree.",
+  "Audio I/O requires cpal -- platform-specific, may not build on all targets. Behind feature flag.",
+  "Voice Agent API is GA since Dec 2025 but wire format may evolve -- use serde(deny_unknown_fields=false).",
+  "Microphone access requires OS permissions on macOS/Linux.",
+]
+failure_modes = [
+  "No microphone available -- graceful fallback to text-only mode with clear message.",
+  "WebSocket disconnects mid-conversation -- reconnect and resume if server supports it, else inform user.",
+  "Audio latency too high -- configurable buffer size, warn if >200ms round-trip.",
+  "Platform doesn't support cpal -- compile error gated by feature flag, user gets clear message.",
+]
+rationale = "Voice Agent API is the biggest xAI-exclusive feature we're missing. It's GA since Dec 2025 and no other Grok CLI implements it. First-mover advantage on voice-powered CLI."
+
+[units.U43]
+name = "Headless/CI mode for agent command"
+summary = """
+Add a --headless flag to `grokrs agent` that makes it suitable for \
+CI/CD pipelines, GitHub Actions, cron jobs, and scripted automation. \
+Changes: (1) New --headless flag on agent command. (2) In headless \
+mode: no TTY interaction, no colored output, no progress spinners, \
+no approval prompts. (3) JSON output mode: --output json emits \
+structured JSON to stdout (one JSON object per event: tool_call, \
+tool_result, message, error, usage). (4) Exit codes: 0 = success, \
+1 = agent error, 2 = policy denial, 3 = API error, 4 = timeout. \
+(5) --timeout flag for maximum execution time (default: none in \
+interactive, 300s in headless). (6) Stdin input: accept task \
+description from stdin when --headless (for piping). (7) \
+Approval mode auto-set to 'deny' in headless (no one to approve). \
+(8) Session recording still works in headless mode."""
+layer = 1
+tier = 2
+status = "done"
+depends_on = []
+blocks = ["U46", "U51", "U52"]
+estimated_loc = 550
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "grokrs agent --headless 'task' runs without any TTY interaction",
+  "grokrs agent --headless --output json emits newline-delimited JSON events to stdout",
+  "JSON events include: {type: 'tool_call', name, arguments}, {type: 'tool_result', name, output}, {type: 'message', content}, {type: 'error', message}, {type: 'usage', tokens}",
+  "Exit code 0 on successful task completion",
+  "Exit code 1 on agent-level error (e.g., max iterations exceeded)",
+  "Exit code 2 on policy denial (tool blocked by policy)",
+  "Exit code 3 on API error (network, auth, rate limit)",
+  "Exit code 4 on timeout (--timeout exceeded)",
+  "--timeout flag defaults to 300s in headless mode, no timeout in interactive",
+  "Headless mode sets approval_mode to 'deny' unless explicitly overridden",
+  "Task description can be piped via stdin: echo 'fix the bug' | grokrs agent --headless",
+  "Session recording persists in store even in headless mode",
+  "No ANSI color codes in headless output",
+  "No progress spinners or interactive elements in headless mode",
+  "Stderr used for diagnostic messages, stdout reserved for JSON events",
+  "Unit tests for exit code mapping",
+  "Unit tests for JSON event serialization",
+  "Integration test: headless agent with mock API",
+]
+produces = ["ART:headless-mode"]
+consumes = []
+critical_decisions = [
+  "Headless mode auto-denies approvals -- in CI there's no human to approve. Users can override with --approval-mode allow if they trust the agent.",
+  "JSON output on stdout, diagnostics on stderr -- enables piping agent output to other tools.",
+  "Exit codes are stable API -- scripts depend on them. Document and don't change.",
+  "Timeout is per-execution, not per-turn -- a 5-minute timeout covers the entire agent run.",
+]
+constraints = [
+  "Headless mode must not import/reference any TTY-specific crates (dialoguer, indicatif) in the hot path.",
+  "JSON output format is a public API -- changes require semver consideration.",
+]
+failure_modes = [
+  "Agent hangs in headless mode -- mitigated by --timeout with default 300s.",
+  "JSON output malformed on error -- always emit valid JSON, even for error events.",
+  "User forgets --headless in CI -- detect !isatty(stdout) and suggest --headless.",
+]
+rationale = "Headless mode is the single most impactful CLI gap for adoption. Claude Code and Codex both run in CI/CD. Without this, grokrs can't be used in automation pipelines."
+
+[units.U44]
+name = "OpenTelemetry observability: tracing spans for requests, tools, sessions"
+summary = """
+Add opt-in OpenTelemetry instrumentation to grokrs. Behind a cargo \
+feature flag 'otel' to avoid bloating the default binary. Changes: \
+(1) Add tracing and tracing-opentelemetry dependencies (feature-gated). \
+(2) Instrument HttpClient: span per HTTP request with attributes \
+(endpoint, method, status_code, latency_ms, model, input_tokens, \
+output_tokens, cost_usd). (3) Instrument tool execution: span per \
+tool call with attributes (tool_name, trust_level, policy_decision, \
+execution_ms). (4) Instrument session lifecycle: span per session \
+with attributes (session_id, trust_level, state_transitions, \
+total_turns, total_cost). (5) Instrument agent loop: span per agent \
+iteration with attributes (iteration_number, tools_called, \
+tokens_used). (6) Add --otel-endpoint flag to CLI for OTLP exporter \
+configuration. (7) Add GROKRS_OTEL_ENDPOINT env var as alternative. \
+(8) Document setup with Jaeger, Grafana, Datadog, Honeycomb."""
+layer = 1
+tier = 2
+status = "done"
+depends_on = []
+blocks = ["U51", "U52", "U53"]
+estimated_loc = 650
+files_create = [
+  "crates/grokrs-api/src/transport/telemetry.rs",
+  "crates/grokrs-cli/src/telemetry.rs",
+]
+files_modify = [
+  "crates/grokrs-api/Cargo.toml",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-cli/Cargo.toml",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-tool/Cargo.toml",
+  "crates/grokrs-tool/src/lib.rs",
+  "Cargo.toml",
+]
+acceptance = [
+  "cargo build without 'otel' feature: no tracing-opentelemetry in dependency tree",
+  "cargo build --features otel: OTEL dependencies included, spans emitted",
+  "HttpClient emits one span per HTTP request with: endpoint, method, status_code, latency_ms",
+  "HttpClient span includes model name when present in request body",
+  "HttpClient span includes token counts and cost when present in response",
+  "Tool execution emits one span per tool call with: tool_name, trust_level, policy_decision, execution_ms",
+  "Session lifecycle emits one span per session with: session_id, trust_level, state, total_turns",
+  "Agent loop emits one span per iteration with: iteration_number, tools_called",
+  "--otel-endpoint flag configures OTLP exporter target",
+  "GROKRS_OTEL_ENDPOINT env var works as alternative to CLI flag",
+  "When otel is disabled (no feature flag), zero runtime overhead -- no-op instrumentation",
+  "Spans are correctly nested: session > agent_iteration > tool_call > http_request",
+  "Unit tests verify span attributes are set correctly (using tracing-test or similar)",
+  "Documentation covers setup with at least one observability platform",
+]
+produces = ["ART:otel-observability"]
+consumes = []
+critical_decisions = [
+  "Feature-gated behind 'otel' -- most CLI users don't need OTEL, and the dependency tree (tonic, prost, etc.) is heavy.",
+  "Use tracing crate for instrumentation -- it's the Rust ecosystem standard and works with or without OTEL export.",
+  "Span hierarchy: session > agent_iteration > tool_call > http_request. This matches the logical execution model.",
+  "Token counts and costs in spans enable cost dashboards without reading the SQLite store.",
+]
+constraints = [
+  "tracing-opentelemetry pulls in tonic (gRPC) for OTLP export -- adds ~2MB to binary when enabled.",
+  "Feature flag must not break compilation when disabled -- all instrumentation behind #[cfg(feature = \"otel\")].",
+  "No tracing in hot paths that don't cross I/O boundaries (e.g., path validation, config parsing).",
+]
+failure_modes = [
+  "OTEL endpoint unreachable -- tracing-opentelemetry handles this gracefully (drops spans, no crash).",
+  "Span cardinality explosion from agent loops -- cap iteration spans, don't span individual SSE events.",
+]
+rationale = "All three major competitors (Claude Code, Codex, Gemini CLI) now ship native OTEL. Enterprise teams expect observability. Feature-gated to keep the default binary lean."
+
+[units.U45]
+name = "Cost reporting CLI: per-model, per-day, per-session cost breakdowns"
+summary = """
+Enhance `grokrs store stats` (or add `grokrs cost` subcommand) to \
+surface cost data from the transcripts table. The data is already \
+there (cost_in_usd_ticks, input_tokens, output_tokens, \
+reasoning_tokens per transcript row). Changes: (1) Add SQL \
+aggregation queries to StoreClient: cost by model, by day, by \
+session, by endpoint. (2) Add CLI subcommand or enhance existing \
+stats: `grokrs store stats --cost` or `grokrs cost`. (3) Display \
+options: --format table (default), --format json, --format csv. \
+(4) Date range filtering: --since DATE --until DATE. (5) Session \
+filtering: --session ID. (6) Summary line showing total cost, \
+total tokens, average cost per session."""
+layer = 1
+tier = 2
+status = "done"
+depends_on = []
+blocks = ["U53"]
+estimated_loc = 350
+files_create = [
+  "crates/grokrs-store/src/cost.rs",
+]
+files_modify = [
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-cli/src/commands/store.rs",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "SQL query aggregates cost_in_usd_ticks grouped by model (derived from endpoint or request_body)",
+  "SQL query aggregates cost grouped by date (DATE(request_at))",
+  "SQL query aggregates cost grouped by session_id",
+  "SQL query aggregates cost grouped by endpoint",
+  "CLI outputs formatted table with columns: group, requests, input_tokens, output_tokens, reasoning_tokens, cost_usd",
+  "Cost displayed as USD with 6 decimal places (from usd_ticks / 1_000_000)",
+  "--format json outputs JSON array of cost records",
+  "--format csv outputs CSV with headers",
+  "--since and --until filter by request_at timestamp",
+  "--session filters to a single session",
+  "Summary line shows: total requests, total tokens, total cost",
+  "Empty store produces 'No usage data found' message, not an error",
+  "Unit tests for SQL aggregation queries",
+  "Unit tests for cost formatting (usd_ticks to dollars)",
+]
+produces = ["ART:cost-reporting"]
+consumes = []
+critical_decisions = [
+  "Cost data comes from existing transcripts table -- no new tables needed.",
+  "Model name extraction from request_body JSON is best-effort -- if the body doesn't parse, group as 'unknown'.",
+  "USD formatting uses 6 decimal places to handle sub-cent costs accurately.",
+]
+constraints = [
+  "Depends on transcripts having cost_in_usd_ticks populated -- older sessions before cost tracking was added will show $0.",
+]
+failure_modes = [
+  "Large transcript tables slow down aggregation -- add INDEX on request_at in a migration if needed.",
+]
+rationale = "Teams need to understand API costs. The data is already in SQLite -- this unit just surfaces it in the CLI."
+
+# ===========================================================================
+# LAYER 2 -- Depends on Layer 1 units
+# ===========================================================================
+
+[units.U46]
+name = "MCP client-side hosting: connect to local MCP servers as tool sources"
+summary = """
+Enable grokrs CLI to act as an MCP client, connecting to local MCP \
+servers and discovering tools that can be used during agent sessions. \
+This complements the existing remote MCP support (server-side, via \
+API) with client-side MCP hosting (grokrs itself connects to MCP \
+servers). Changes: (1) New MCP client transport in grokrs-api (or \
+new crate grokrs-mcp): Streamable HTTP and SSE client for MCP \
+protocol. (2) MCP tool discovery: list_tools, call_tool, handle \
+results. (3) MCP tool adapter: wraps discovered MCP tools as \
+ToolSpec implementations so they integrate with ToolRegistry. (4) \
+Configuration: [mcp] section in config with server definitions \
+(url, label, allowed_tools). (5) CLI flag: --mcp-server URL for \
+ad-hoc server connections. (6) Agent integration: MCP tools appear \
+in tool registry alongside built-in tools, filtered by trust rank. \
+(7) Policy gate: MCP tool calls go through PolicyEngine as \
+NetworkConnect effects."""
+layer = 2
+tier = 2
+status = "done"
+depends_on = ["U43"]
+blocks = ["U51", "U52", "U53"]
+estimated_loc = 1400
+files_create = [
+  "crates/grokrs-api/src/mcp/mod.rs",
+  "crates/grokrs-api/src/mcp/client.rs",
+  "crates/grokrs-api/src/mcp/transport.rs",
+  "crates/grokrs-api/src/mcp/types.rs",
+  "crates/grokrs-api/src/mcp/adapter.rs",
+]
+files_modify = [
+  "crates/grokrs-api/Cargo.toml",
+  "crates/grokrs-api/src/lib.rs",
+  "crates/grokrs-core/src/config.rs",
+  "crates/grokrs-tool/src/registry.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/main.rs",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "MCP client connects to local MCP server via Streamable HTTP transport",
+  "MCP client discovers available tools via tools/list RPC",
+  "MCP client invokes tools via tools/call RPC and returns results",
+  "Discovered MCP tools implement ToolSpec trait via McpToolAdapter wrapper",
+  "McpToolAdapter provides name(), description(), input_schema() from MCP tool definition",
+  "McpToolAdapter::execute() calls the MCP server's tools/call endpoint",
+  "McpToolAdapter::classify() returns Effect::NetworkConnect for the MCP server host",
+  "MCP tools appear in ToolRegistry alongside built-in tools",
+  "MCP tools filtered by trust rank (configurable, default: rank 1 / InteractiveTrusted)",
+  "Config [mcp.servers] section defines persistent MCP server connections",
+  "Each server config has: url, label, allowed_tools (optional), trust_rank (optional)",
+  "--mcp-server URL flag connects to ad-hoc MCP server for single session",
+  "PolicyEngine evaluates NetworkConnect before MCP server connection",
+  "MCP tool calls logged in transcripts",
+  "Graceful handling of MCP server unavailability (skip unavailable servers, warn user)",
+  "Unit tests for MCP type serialization/deserialization",
+  "Unit tests for McpToolAdapter ToolSpec implementation",
+  "Integration test with mock MCP server",
+]
+produces = ["ART:mcp-client"]
+consumes = ["ART:headless-mode"]
+critical_decisions = [
+  "MCP tools get a configurable trust_rank (default 1) -- they're external tools, not compiled-in, so they shouldn't be available to Untrusted sessions by default.",
+  "MCP client lives in grokrs-api (not a new crate) to reuse HttpClient and transport infrastructure.",
+  "McpToolAdapter wraps MCP tools as ToolSpec -- this means they integrate seamlessly with policy gates and the tool loop.",
+  "Streamable HTTP transport (not stdio) -- grokrs is a CLI, not an IDE. HTTP MCP servers are more portable.",
+  "Config-based server definitions are persistent; --mcp-server flag is ephemeral for single-session use.",
+]
+constraints = [
+  "MCP protocol version: target 2025-03-26 (latest stable spec).",
+  "Only Streamable HTTP transport supported initially -- stdio transport adds process management complexity.",
+  "MCP servers must be running before grokrs starts -- no server lifecycle management.",
+]
+failure_modes = [
+  "MCP server not running -- warn on startup, exclude its tools, continue with built-in tools only.",
+  "MCP tool call times out -- respect HttpClient timeout, return ToolError::Timeout.",
+  "MCP server returns invalid tool schema -- skip that tool, warn, continue with others.",
+]
+rationale = "All three major competitors act as MCP clients. This enables tool extensibility without recompiling grokrs -- connect to any MCP server for database access, documentation, APIs, etc."
+
+# ===========================================================================
+# LAYER 2 continued -- Standalone differentiation units
+# ===========================================================================
+
+[units.U47]
+name = "Git workflow integration: stage, commit, diff within agent sessions"
+summary = """
+Enable `grokrs agent` to interact with git when operating in a \
+workspace that is a git repository. Changes: (1) New tools in \
+grokrs-tool: git_status, git_diff, git_add, git_commit. (2) Each \
+git tool classified under appropriate Effect: git_status/git_diff \
+as FsRead, git_add as FsWrite, git_commit as FsWrite. (3) Trust \
+levels: git_status/git_diff at rank 0 (untrusted), git_add at \
+rank 1 (interactive), git_commit at rank 2 (admin). (4) Git \
+operations use git2 crate (libgit2 bindings) -- no shelling out. \
+(5) All git operations scoped to WorkspaceRoot -- cannot affect \
+repos outside the workspace. (6) Commit messages include \
+'[grokrs-agent]' prefix for auditability."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = []
+blocks = ["U51", "U53"]
+estimated_loc = 850
+files_create = [
+  "crates/grokrs-tool/src/tools/git_status.rs",
+  "crates/grokrs-tool/src/tools/git_diff.rs",
+  "crates/grokrs-tool/src/tools/git_add.rs",
+  "crates/grokrs-tool/src/tools/git_commit.rs",
+]
+files_modify = [
+  "crates/grokrs-tool/Cargo.toml",
+  "crates/grokrs-tool/src/tools/mod.rs",
+  "crates/grokrs-tool/src/registry.rs",
+]
+acceptance = [
+  "git_status tool returns working tree status (modified, staged, untracked files)",
+  "git_diff tool returns diff of staged or unstaged changes",
+  "git_add tool stages specified files (workspace-relative paths only)",
+  "git_commit tool creates a commit with the given message",
+  "Commit messages automatically prefixed with '[grokrs-agent]'",
+  "git_status and git_diff have trust_rank 0 (available to all trust levels)",
+  "git_add has trust_rank 1 (InteractiveTrusted and above)",
+  "git_commit has trust_rank 2 (AdminTrusted only)",
+  "All git tools scoped to WorkspaceRoot -- cannot access parent repos",
+  "git2 crate used for all operations -- no subprocess spawning",
+  "Graceful error when workspace is not a git repo: ToolError with clear message",
+  "git_add validates paths through WorkspacePath before staging",
+  "Unit tests for each git tool using tempdir with git init",
+  "Unit tests verify trust_rank assignments",
+  "Unit tests verify effect classification",
+]
+produces = ["ART:git-tools"]
+consumes = []
+critical_decisions = [
+  "git2 (libgit2) instead of shelling out to git -- avoids ProcessSpawn effects and PATH dependency.",
+  "Commit prefix '[grokrs-agent]' for audit trail -- makes it easy to identify agent-created commits.",
+  "Trust levels mirror the risk: read-only git ops are safe (rank 0), staging is moderate (rank 1), committing is high-risk (rank 2).",
+  "No git push -- that's a network operation with high blast radius. Users push manually.",
+]
+constraints = [
+  "git2 adds ~1MB to binary and requires libgit2 system dependency or vendored build.",
+  "No support for git operations that require credentials (push, fetch, clone) -- read/write only within local repo.",
+]
+failure_modes = [
+  "Merge conflicts during commit -- return error, let user resolve manually.",
+  "Large diffs exceed token limits -- truncate with '[truncated]' marker.",
+  "Workspace is a submodule -- git2 handles this transparently.",
+]
+rationale = "Claude Code's git integration is a key differentiator. Agent-driven commits enable 'fix this bug and commit the fix' workflows that reduce friction."
+
+[units.U48]
+name = "Agent memory: cross-session semantic context persistence"
+summary = """
+Add a lightweight key-value memory system that persists across \
+agent sessions. Enables the agent to remember decisions, user \
+preferences, and codebase facts. Changes: (1) New table 'memories' \
+in store: id, key, value, category (fact/decision/preference), \
+created_at, updated_at, access_count. (2) New StoreClient methods: \
+save_memory, get_memory, list_memories, delete_memory, \
+search_memories (prefix/substring match). (3) New tools in \
+grokrs-tool: remember (save a memory), recall (search memories), \
+forget (delete a memory). (4) Agent system prompt includes \
+relevant memories from previous sessions. (5) Memory retrieval \
+uses simple substring matching -- no embedding search. (6) \
+Configurable memory limit (default 50 entries)."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = []
+blocks = ["U51", "U53"]
+estimated_loc = 550
+files_create = [
+  "crates/grokrs-store/src/memory.rs",
+  "crates/grokrs-tool/src/tools/remember.rs",
+  "crates/grokrs-tool/src/tools/recall.rs",
+  "crates/grokrs-tool/src/tools/forget.rs",
+]
+files_modify = [
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/migrations.rs",
+  "crates/grokrs-tool/src/tools/mod.rs",
+  "crates/grokrs-tool/src/registry.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+]
+acceptance = [
+  "V3 migration creates 'memories' table with: id, key, value, category, created_at, updated_at, access_count",
+  "save_memory stores key-value pair with category and timestamp",
+  "get_memory retrieves by exact key",
+  "list_memories returns all memories, optionally filtered by category",
+  "search_memories finds memories by substring match on key or value",
+  "delete_memory removes by key",
+  "access_count incremented on each get/search hit",
+  "remember tool: trust_rank 1, classified as FsWrite (writes to local store)",
+  "recall tool: trust_rank 0, classified as FsRead",
+  "forget tool: trust_rank 1, classified as FsWrite",
+  "Agent system prompt includes top-N most relevant memories (by access_count and recency)",
+  "Memory limit configurable via [agent] config (default 50)",
+  "Oldest/least-accessed memories evicted when limit exceeded",
+  "Unit tests for CRUD operations on memories table",
+  "Unit tests for search and eviction logic",
+  "Unit tests for memory inclusion in agent system prompt",
+]
+produces = ["ART:agent-memory"]
+consumes = []
+critical_decisions = [
+  "Simple substring search, not embeddings -- avoids adding an ML dependency for a CLI tool.",
+  "Memories are workspace-local (in .grokrs/state.db) -- different projects have different memories.",
+  "Memory tools at trust_rank 1 -- the agent can remember things in interactive mode but not in untrusted mode.",
+  "Access_count + recency for retrieval ranking -- simple but effective without ML.",
+]
+constraints = [
+  "Memory limit prevents unbounded growth of the store.",
+  "No cross-workspace memory sharing -- each .grokrs/state.db is independent.",
+]
+failure_modes = [
+  "Stale memories mislead the agent -- mitigated by updated_at tracking and manual forget tool.",
+  "Too many memories pollute the system prompt -- configurable limit + relevance ranking.",
+]
+rationale = "Claude Code's project memory is a key UX differentiator. Cross-session context reduces 'cold start' friction where the agent forgets everything between sessions."
+
+[units.U49]
+name = "Config profiles: --profile flag for dev/staging/prod configs"
+summary = """
+Add config profile support so users can maintain multiple \
+configurations and switch between them. Changes: (1) --profile NAME \
+flag on all CLI commands. (2) Profile resolution: \
+configs/grokrs.NAME.toml overrides configs/grokrs.toml. (3) \
+GROKRS_PROFILE env var as alternative to --profile. (4) Profile \
+inheritance: profile config merges on top of base config (profile \
+values override base values, unset fields inherit from base). (5) \
+`grokrs show-config --profile NAME` shows merged config."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = []
+blocks = ["U53", "U54"]
+estimated_loc = 250
+files_create = [
+  "configs/grokrs.dev.toml",
+]
+files_modify = [
+  "crates/grokrs-core/src/config.rs",
+  "crates/grokrs-cli/src/main.rs",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "grokrs --profile dev chat loads configs/grokrs.dev.toml merged on top of configs/grokrs.toml",
+  "GROKRS_PROFILE=dev has same effect as --profile dev",
+  "--profile flag takes precedence over GROKRS_PROFILE env var",
+  "Profile config values override base config values",
+  "Unset fields in profile inherit from base config",
+  "Missing profile file produces clear error: 'Profile not found: configs/grokrs.dev.toml'",
+  "grokrs show-config --profile dev shows the merged result",
+  "Example dev profile created with approval_mode = 'allow' and verbose logging",
+  "Unit tests for config merge logic (overlay semantics)",
+  "Unit tests for profile resolution order (flag > env > default)",
+]
+produces = ["ART:config-profiles"]
+consumes = []
+critical_decisions = [
+  "File-based profiles (grokrs.NAME.toml) rather than inline profile sections -- keeps TOML simple.",
+  "Merge semantics: profile overrides base at the top-level section granularity, not field-by-field within sections.",
+  "GROKRS_PROFILE env var enables CI/CD usage without modifying command lines.",
+]
+constraints = [
+  "Profile name must be a valid filename component -- alphanumeric + hyphens + underscores only.",
+]
+failure_modes = [
+  "User creates circular profile inheritance -- not supported, profiles only override base config.",
+]
+rationale = "Multiple environments (dev with allow-all, staging with restricted network, prod with deny-by-default) are common. Without profiles, users must maintain separate config files and pass --config paths manually."
+
+[units.U50]
+name = "Prompt cache CLI flag: --cache-key for server-side prompt caching"
+summary = """
+Expose the existing prompt_cache_key API field in the CLI. The \
+Responses API already supports prompt_cache_key in \
+CreateResponseBuilder -- this unit surfaces it in CLI commands. \
+Changes: (1) Add --cache-key KEY flag to `grokrs chat` and \
+`grokrs agent` commands. (2) When set, includes prompt_cache_key \
+in API requests. (3) Display cache hit/miss in usage output \
+(cached_tokens from Usage type). (4) Document in help text."""
+layer = 2
+tier = 3
+status = "done"
+depends_on = []
+blocks = ["U53"]
+estimated_loc = 120
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+]
+acceptance = [
+  "grokrs chat --cache-key my-system-prompt includes prompt_cache_key in Responses API requests",
+  "grokrs agent --cache-key my-tools includes prompt_cache_key in requests",
+  "Usage display shows cached_tokens when present (e.g., 'tokens: 500 input (200 cached), 100 output')",
+  "Help text explains --cache-key purpose and when to use it",
+  "Unit test: --cache-key value propagated to CreateResponseBuilder",
+]
+produces = ["ART:prompt-cache-flag"]
+consumes = []
+critical_decisions = [
+  "Cache key is user-provided, not auto-generated -- the user knows which prompts are stable enough to cache.",
+]
+constraints = [
+  "Prompt caching is server-side -- grokrs just passes the key, xAI manages the cache.",
+]
+failure_modes = [
+  "Cache key doesn't match any cached prompt -- server treats it as a cache miss, no error.",
+]
+rationale = "Prompt caching can reduce costs by 50%+ for repeated system prompts. The API support is already implemented -- this just exposes it in the CLI."
+
+# ===========================================================================
+# LAYER 3 -- Polish, testing, documentation (depends on implementation units)
+# ===========================================================================
+
+[units.U51]
+name = "Integration tests for R2 features"
+summary = """
+End-to-end integration tests for all R2 features using mock servers. \
+Tests cover: encrypted reasoning round-trip, headless agent execution, \
+OTEL span emission, MCP client tool discovery and execution, git \
+tools in a temp repo, agent memory CRUD, config profile merging, \
+cost report aggregation, voice agent WebSocket handshake (mock). \
+Each test runs against a wiremock or mock server, not the real API."""
+layer = 3
+tier = 3
+status = "done"
+depends_on = ["U40", "U42", "U43", "U44", "U46", "U47", "U48"]
+blocks = []
+estimated_loc = 800
+files_create = [
+  "crates/grokrs-api/tests/encrypted_reasoning.rs",
+  "crates/grokrs-api/tests/voice_agent.rs",
+  "crates/grokrs-cli/tests/headless_agent.rs",
+  "crates/grokrs-cli/tests/cost_report.rs",
+  "crates/grokrs-tool/tests/git_tools.rs",
+  "crates/grokrs-tool/tests/mcp_adapter.rs",
+  "crates/grokrs-store/tests/memory.rs",
+]
+files_modify = []
+acceptance = [
+  "All integration tests pass with `cargo test`",
+  "Tests use wiremock for HTTP mocking, no real API calls",
+  "Voice agent test validates WebSocket handshake and message framing",
+  "Headless agent test validates JSON output format and exit codes",
+  "MCP adapter test validates tool discovery and invocation via mock MCP server",
+  "Git tools test operates on a tempdir git repository",
+  "Memory test validates CRUD + eviction in isolated SQLite database",
+  "Cost report test validates SQL aggregations on seeded transcript data",
+  "No test requires network access or API keys",
+]
+produces = ["ART:r2-integration-tests"]
+consumes = ["ART:encrypted-reasoning", "ART:voice-agent", "ART:headless-mode", "ART:otel-observability", "ART:mcp-client", "ART:git-tools", "ART:agent-memory"]
+critical_decisions = [
+  "All tests mock-based -- no flaky network dependencies.",
+  "Each feature gets its own test file for isolation and parallelism.",
+]
+constraints = [
+  "Integration tests may need tokio::test for async operations.",
+]
+failure_modes = [
+  "Mock server doesn't accurately represent xAI wire format -- keep mocks in sync with types/.",
+]
+rationale = "CLAUDE.md mandates: 'All testing (unit + integration + edge cases)'. No feature ships without integration tests."
+
+[units.U52]
+name = "Doctor updates for R2 features"
+summary = """
+Update `grokrs doctor` to check and report on R2 feature status. \
+New checks: (1) Voice Agent: check if audio dependencies available \
+(cpal feature enabled). (2) OTEL: check if otel feature enabled, \
+check OTLP endpoint reachability if configured. (3) MCP: check \
+configured MCP server connectivity. (4) Git: check if workspace is \
+a git repo. (5) Model freshness: warn if default model in config \
+is deprecated. (6) Memory: report memory count and store size."""
+layer = 3
+tier = 3
+status = "done"
+depends_on = ["U42", "U43", "U44", "U46"]
+blocks = []
+estimated_loc = 200
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/doctor.rs",
+]
+acceptance = [
+  "grokrs doctor reports voice agent capability (audio feature enabled/disabled)",
+  "grokrs doctor reports OTEL status (feature enabled, endpoint configured/reachable)",
+  "grokrs doctor reports MCP server connectivity for each configured server",
+  "grokrs doctor reports git repo status (is workspace a git repo, clean/dirty)",
+  "grokrs doctor warns if configured default model is not in API model list",
+  "grokrs doctor reports agent memory count and store file size",
+  "All new checks have pass/warn/fail status icons",
+  "Existing doctor checks not broken",
+]
+produces = ["ART:r2-doctor"]
+consumes = ["ART:voice-agent", "ART:headless-mode", "ART:otel-observability", "ART:mcp-client"]
+critical_decisions = [
+  "Doctor checks are diagnostic only -- they never modify state.",
+]
+constraints = [
+  "MCP connectivity check should have a short timeout (2s) to avoid blocking doctor output.",
+]
+failure_modes = [
+  "Doctor hangs on MCP check -- timeout prevents this.",
+]
+rationale = "Doctor is the first thing users run. It should reflect all available features."
+
+[units.U53]
+name = "Help text and documentation for R2 features"
+summary = """
+Update CLI help text, README.md, ARCHITECTURE.md, and CLAUDE.md \
+to document all R2 features. Add usage examples for each new \
+command and flag. Update the CLI Commands section in CLAUDE.md."""
+layer = 3
+tier = 3
+status = "done"
+depends_on = ["U41", "U42", "U43", "U44", "U45", "U46", "U47", "U48", "U49", "U50"]
+blocks = []
+estimated_loc = 300
+files_create = []
+files_modify = [
+  "README.md",
+  "ARCHITECTURE.md",
+  "CLAUDE.md",
+  "crates/grokrs-cli/src/main.rs",
+]
+acceptance = [
+  "README.md includes examples for: voice, --headless, --cache-key, --profile, cost reporting",
+  "ARCHITECTURE.md updated with: WebSocket transport, MCP client, git tools, memory store",
+  "CLAUDE.md CLI Commands section includes all new commands and flags",
+  "CLAUDE.md Architecture section mentions new crate modules",
+  "Clap help text for all new flags is descriptive and includes examples",
+  "No broken links or stale references in documentation",
+]
+produces = ["ART:r2-docs"]
+consumes = ["ART:model-freshness", "ART:voice-agent", "ART:headless-mode", "ART:otel-observability", "ART:cost-reporting", "ART:mcp-client", "ART:git-tools", "ART:agent-memory", "ART:config-profiles", "ART:prompt-cache-flag"]
+critical_decisions = [
+  "Documentation updates are a single unit because they touch the same files and should be consistent.",
+]
+constraints = [
+  "CLAUDE.md is the primary reference for AI agents working on this codebase -- accuracy is critical.",
+]
+failure_modes = [
+  "Docs drift from implementation -- mitigated by making this the last unit (depends on all implementation units).",
+]
+rationale = "CLAUDE.md mandates: 'All documentation (not \"we'll document later\")'. Documentation ships with the code."
+
+[units.U54]
+name = "Example config extensions for R2 features"
+summary = """
+Update grokrs.example.toml with new configuration sections and \
+comments for R2 features: [mcp] servers section, [agent] memory \
+settings, voice agent settings, OTEL endpoint, profile examples."""
+layer = 3
+tier = 3
+status = "done"
+depends_on = ["U49"]
+blocks = []
+estimated_loc = 80
+files_create = []
+files_modify = [
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "Example config includes commented [mcp] section with server definitions",
+  "Example config includes [agent] memory_limit setting with default value and comment",
+  "Example config includes OTEL endpoint configuration with comment",
+  "Example config references profile support in header comment",
+  "All new config sections have explanatory comments",
+  "Example config is valid TOML that parses without errors",
+]
+produces = ["ART:r2-example-config"]
+consumes = ["ART:config-profiles"]
+critical_decisions = [
+  "New sections are commented out by default -- existing users' configs are not affected.",
+]
+constraints = [
+  "Example config must remain parseable by AppConfig::load() even with new sections.",
+]
+failure_modes = []
+rationale = "Example config is the primary config reference for users. All new features need documented config options."
+
+[units.U55]
+name = "Deprecation notices for superseded patterns"
+summary = """
+Add deprecation warnings where R2 features supersede older patterns. \
+(1) Chat Completions API: add deprecation notice in CLI help for \
+`grokrs api chat` pointing to `grokrs chat`. (2) Old model names: \
+warn at startup if config references deprecated model names. (3) \
+approval_mode = 'allow': strengthen doctor warning about security \
+implications."""
+layer = 3
+tier = 3
+status = "done"
+depends_on = []
+blocks = []
+estimated_loc = 100
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/api.rs",
+  "crates/grokrs-cli/src/commands/doctor.rs",
+  "crates/grokrs-core/src/config.rs",
+]
+acceptance = [
+  "`grokrs api chat` help text includes deprecation notice pointing to `grokrs chat`",
+  "Config loader warns on stderr if model name matches a known-deprecated pattern",
+  "Doctor warning for approval_mode = 'allow' is prominent with security context",
+  "Deprecation warnings are informational -- they don't prevent operation",
+]
+produces = ["ART:r2-deprecations"]
+consumes = []
+critical_decisions = [
+  "Warnings only, never errors -- deprecated features continue to work.",
+]
+constraints = [
+  "CLAUDE.md says 'NO ACTIVE USERS' so migration paths aren't needed, but warnings are still good practice for future users.",
+]
+failure_modes = []
+rationale = "Clean deprecation hygiene prevents confusion when users encounter multiple ways to do the same thing."
+
+[units.U56]
+name = "End-to-end test suite validation"
+summary = """
+Run the complete test suite (cargo test --workspace), clippy, and \
+fmt to validate all R2 changes integrate correctly. Fix any \
+cross-crate issues, unused imports, or type mismatches introduced \
+by R2 units. This is the final gate before R2 is considered \
+complete."""
+layer = 3
+tier = 3
+status = "done"
+depends_on = ["U51", "U52", "U53", "U54", "U55"]
+blocks = []
+estimated_loc = 50
+files_create = []
+files_modify = []
+acceptance = [
+  "cargo fmt --all --check passes with no formatting issues",
+  "cargo clippy --workspace --all-targets passes with zero warnings",
+  "cargo test --workspace passes with all tests green",
+  "cargo build --release completes successfully",
+  "cargo build --release --features otel completes successfully",
+  "No unused imports or dead code warnings",
+  "All R2 unit acceptance criteria verified as passing",
+]
+produces = ["ART:r2-validated"]
+consumes = ["ART:r2-integration-tests", "ART:r2-doctor", "ART:r2-docs", "ART:r2-example-config", "ART:r2-deprecations"]
+critical_decisions = [
+  "This unit is intentionally a gate, not new code. It validates everything else.",
+]
+constraints = [
+  "Must be the last unit executed.",
+]
+failure_modes = [
+  "Cross-crate type mismatch -- fix in the originating unit, not here.",
+]
+rationale = "Final validation gate ensures all R2 features work together without regressions."

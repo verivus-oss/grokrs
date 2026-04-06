@@ -1,0 +1,126 @@
+[meta]
+title = "grokrs bootstrap traceability"
+source_spec = "docs/specs/00_SPEC.md"
+created = "2026-04-05"
+owners = ["grokrs"]
+ontology_version = 1
+
+[[intents]]
+id = "INT:G001"
+name = "Safe Rust-only Grok CLI scaffold"
+statement = "A repository consumer should be able to start from a Rust-only scaffold that encodes trust, path safety, and deny-by-default policy before adding model orchestration."
+rationale = "The repo is meant to set a higher baseline than convenience-first agent shells."
+derived_from = []
+realized_by = ["FEAT:G001", "REQ:G001"]
+
+[[features]]
+id = "FEAT:G001"
+name = "Safety-first bootstrap surface"
+summary = "Provide typed trust levels, workspace path validation, deny-by-default policy, a small CLI, and review artifacts."
+realizes = ["INT:G001"]
+constrained_by = ["REQ:G001", "REG:G001"]
+implemented_by = ["IMP:G001"]
+produces = ["OUT:G001"]
+
+[[requirements]]
+id = "REQ:G001"
+kind = "functional"
+statement = "The repository must include a buildable Cargo workspace with safety primitives, a sample CLI, configuration, and machine-readable planning and review artifacts."
+source = "docs/specs/00_SPEC.md"
+priority = "must"
+constrains = ["FEAT:G001", "IMP:G001"]
+verified_by = ["TEST:G001"]
+
+[[regulations]]
+id = "REG:G001"
+framework = "internal-safety-baseline"
+citation = "GROKRS-SAFE-001"
+statement = "Network and shell effects must be denied by default until explicit policy and approval infrastructure exist."
+constrains = ["REQ:G001", "IMP:G001"]
+verified_by = ["TEST:G002"]
+
+[[decisions]]
+id = "DEC:G001"
+title = "Bootstrap safety model before agent autonomy"
+summary = "Keep the first delivery focused on typed trust, rooted paths, and reviewable artifacts instead of full model execution."
+addresses = ["REQ:G001", "REG:G001"]
+shapes = ["IMP:G001", "CODE:G002", "CODE:G003"]
+supersedes = []
+
+[[implementations]]
+id = "IMP:G001"
+name = "Bootstrap workspace, policy, and artifacts"
+summary = "Add the initial crates, docs, config, script, and review bundle."
+implements = ["FEAT:G001", "REQ:G001"]
+guided_by = ["DEC:G001"]
+code = ["CODE:G001", "CODE:G002", "CODE:G003", "CODE:G004", "CODE:G005"]
+tests = ["TEST:G001", "TEST:G002"]
+downstream_outputs = ["OUT:G001"]
+
+[[code]]
+id = "CODE:G001"
+path = "Cargo.toml"
+symbol = ""
+realizes = ["IMP:G001", "REQ:G001"]
+
+[[code]]
+id = "CODE:G002"
+path = "crates/grokrs-cap/src/lib.rs"
+symbol = ""
+realizes = ["IMP:G001", "REG:G001"]
+
+[[code]]
+id = "CODE:G003"
+path = "crates/grokrs-policy/src/lib.rs"
+symbol = ""
+realizes = ["IMP:G001", "REG:G001"]
+
+[[code]]
+id = "CODE:G004"
+path = "crates/grokrs-cli/src/main.rs"
+symbol = "main"
+realizes = ["IMP:G001", "REQ:G001"]
+
+[[code]]
+id = "CODE:G005"
+path = "docs/reviews/bootstrap/2026-04-05/IMPLEMENTATION_DAG.toml"
+symbol = ""
+realizes = ["IMP:G001"]
+
+[[tests]]
+id = "TEST:G001"
+path = "crates/grokrs-cli/tests/cli_smoke.rs"
+kind = "integration"
+verifies = ["REQ:G001"]
+command = "cargo test"
+
+[[tests]]
+id = "TEST:G002"
+path = "crates/grokrs-policy/src/lib.rs"
+kind = "unit"
+verifies = ["REG:G001"]
+command = "cargo test -p grokrs-policy"
+
+[[outputs]]
+id = "OUT:G001"
+name = "Bootstrap-ready grokrs repository"
+description = "A buildable Rust-only scaffold with local docs, review artifacts, aivcs readiness, and sqry indexing support."
+realizes = ["FEAT:G001", "INT:G001"]
+
+[[relations]]
+from = "INT:G001"
+type = "realized_by"
+to = "FEAT:G001"
+
+[[relations]]
+from = "REQ:G001"
+type = "verified_by"
+to = "TEST:G001"
+
+[computed]
+root_intents = ["INT:G001"]
+terminal_outputs = ["OUT:G001"]
+unverified_requirements = []
+unmapped_code = []
+coverage_gaps = []
+

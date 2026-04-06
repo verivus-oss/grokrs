@@ -1,0 +1,181 @@
+# grokrs.example.toml — example configuration for grokrs
+#
+# Copy this file to grokrs.toml (or any path passed via --config) and
+# uncomment / adjust the sections you need.
+#
+# ── Profiles ────────────────────────────────────────────────────────────────
+# Named profile configs allow you to maintain environment-specific overrides
+# without duplicating the full configuration.
+#
+# Profile loading:
+#   --profile <name>              CLI flag (highest priority)
+#   GROKRS_PROFILE=<name>         environment variable fallback
+#
+# A profile named "dev" is loaded from grokrs.dev.toml in the same directory
+# as the base config file. Profile files are partial: only the keys present
+# in the profile file override the base; all other settings remain unchanged.
+#
+# Example profile files:
+#   configs/grokrs.dev.toml       — development overrides (e.g. allow_network)
+#   configs/grokrs.staging.toml   — staging overrides
+#   configs/grokrs.prod.toml      — production overrides
+#
+# Valid profile names: alphanumeric characters, hyphens, and underscores.
+#
+# ── Observability (OpenTelemetry) ────────────────────────────────────────────
+# grokrs emits OTLP/gRPC spans when the `otel` feature is enabled at build
+# time. The exporter endpoint is NOT configured here — it is resolved from:
+#
+#   --otel-endpoint <URL>         CLI flag (highest priority)
+#   GROKRS_OTEL_ENDPOINT=<URL>    environment variable fallback
+#
+# If neither is set, telemetry is silently disabled (no spans exported).
+# The OTLP endpoint should point to a Collector or backend, e.g.:
+#   GROKRS_OTEL_ENDPOINT=http://localhost:4317
+#
+# Span hierarchy: session > agent_iteration > tool_call > http_request
+#
+# ── Voice agent ──────────────────────────────────────────────────────────────
+# The `grokrs voice` command has no config-file section; all settings are
+# expressed as CLI flags. Key flags:
+#
+#   --text-only                   Text-only mode (no microphone/speaker)
+#   --model <MODEL>               Override model (e.g. grok-4-mini)
+#   --voice <ID>                  Voice ID: eve (default), ara, rex, sal, leo
+#   --language <BCP47>            Language code (default: en-US)
+#   --turn-detection <MODE>       server_vad (default) or manual
+#   --vad-sensitivity <LEVEL>     low, medium (default), high
+#   --system <PROMPT>             System instructions for the voice agent
+#   --max-duration <SECS>         Maximum session duration in seconds
+#
+# Audio capture/playback requires the `audio` cargo feature. Without it,
+# `--text-only` is enforced automatically.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+[workspace]
+name = "grokrs"
+root = "."
+
+[model]
+provider = "xai"
+default_model = "grok-4"
+
+[policy]
+allow_network = false
+allow_shell = false
+allow_workspace_writes = true
+max_patch_bytes = 1048576
+
+[session]
+# How grokrs resolves effects that require explicit approval (Decision::Ask).
+#
+#   "interactive" — (default) forward Ask to the approval broker. Until the
+#                   broker is implemented (spec 03), this is effectively a
+#                   denial: the transport returns ApprovalRequired.
+#   "deny"        — automatically deny any Ask decision. Fail-closed; no
+#                   interactive prompts.
+#   "allow"       — automatically approve any Ask decision. WARNING: this
+#                   bypasses the approval boundary entirely. Use only in
+#                   trusted, non-production environments where you accept
+#                   the risk of unsupervised network and shell access.
+#
+# Allow and Deny decisions from the policy engine are NEVER overridden by
+# this setting — only Ask decisions are affected.
+approval_mode = "interactive"
+transcript_dir = ".grokrs/sessions"
+
+[api]
+# Environment variable name holding the xAI API bearer token.
+# The actual secret is read from this env var at runtime — never stored in config.
+api_key_env = "XAI_API_KEY"
+base_url = "https://api.x.ai"
+timeout_secs = 120
+max_retries = 3
+
+# [management_api]
+# # Collections Management API configuration.
+# # Uses a different base URL and authentication key than the inference API.
+# # The management key env var defaults to XAI_MANAGEMENT_API_KEY.
+# management_key_env = "XAI_MANAGEMENT_API_KEY"
+# base_url = "https://management-api.x.ai"
+# timeout_secs = 120
+# max_retries = 3
+
+# [store]
+# # SQLite WAL-backed persistence for runtime state.
+# # Path is relative to the workspace root. Database is created on first use.
+# # The .grokrs/ directory is added to .gitignore (runtime state, not version-controlled).
+# # File permissions are set to 0600 (owner read/write only) on Unix.
+# path = ".grokrs/state.db"
+
+# [agent]
+# # Configuration for `grokrs agent` command.
+# # All fields have defaults -- a bare [agent] section is valid.
+# #
+# # max_iterations: Maximum tool-calling iterations before aborting. Default: 10.
+# max_iterations = 10
+# #
+# # default_trust: Default trust level for agent sessions.
+# #   "untrusted"   -- (default) read-only tools (read_file, list_directory)
+# #   "interactive"  -- adds write_file
+# #   "admin"        -- adds run_command (shell execution)
+# default_trust = "untrusted"
+# #
+# # enable_search: Enable web_search and x_search tools by default. Default: false.
+# enable_search = false
+# #
+# # memory_limit: Maximum number of cross-session memories to persist.
+# # When the limit is exceeded, the oldest/least-accessed memories are evicted
+# # to make room for new ones. Increase this value for agents that need to
+# # retain more context across sessions; decrease it to reduce storage usage.
+# # Default: 50.
+# memory_limit = 50
+
+# [chat]
+# # Configuration for `grokrs chat` interactive REPL.
+# # All fields have defaults -- a bare [chat] section is valid.
+# #
+# # default_model: Override the model for chat sessions. Falls back to
+# #   [model].default_model when not set.
+# # default_model = "grok-4-mini"
+# #
+# # system_prompt: Default system instructions applied to every chat session.
+# # system_prompt = "You are a helpful assistant."
+# #
+# # stateful: Enable server-side conversation chaining by default. Default: false.
+# stateful = false
+# #
+# # history_file: Path to readline history file, relative to workspace root.
+# history_file = ".grokrs/chat_history"
+# #
+# # max_conversation_tokens: Token warning threshold. Default: 100000.
+# max_conversation_tokens = 100000
+
+# [mcp]
+# # MCP (Model Context Protocol) client-side hosting configuration.
+# # Defines persistent MCP server connections for tool discovery.
+# # MCP tools appear alongside built-in tools in agent sessions.
+# #
+# # Each server is defined under [mcp.servers.<name>]:
+# #   url:           MCP server URL (required).
+# #   label:         Human-readable label for tool prefixing. Defaults to the key name.
+# #   allowed_tools: Optional allowlist of tool names. When absent, all tools are registered.
+# #   trust_rank:    Minimum trust rank for this server's tools. Default: 1 (InteractiveTrusted).
+# #   timeout_secs:  Request timeout in seconds. Default: 30.
+# #
+# # Example:
+# # [mcp.servers.filesystem]
+# # url = "http://localhost:8080/mcp"
+# # label = "filesystem"
+# # trust_rank = 1
+# #
+# # [mcp.servers.database]
+# # url = "http://localhost:9090/mcp"
+# # label = "database"
+# # allowed_tools = ["query", "list_tables"]
+# # trust_rank = 2
+# #
+# # Ad-hoc servers can also be connected via the CLI:
+# #   grokrs agent 'task' --mcp-server http://localhost:8080/mcp
+

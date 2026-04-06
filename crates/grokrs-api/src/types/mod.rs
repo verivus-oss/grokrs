@@ -1,0 +1,25 @@
+pub mod api_key;
+pub mod batches;
+pub mod builtin_tools;
+#[deprecated(note = "Use the Responses API types instead")]
+pub mod chat;
+pub mod collection_documents;
+pub mod collections;
+pub mod common;
+pub mod documents;
+pub mod error;
+pub mod files;
+pub mod function_call;
+pub mod images;
+pub mod mcp_tool;
+pub mod message;
+pub mod model;
+pub mod responses;
+pub mod stream;
+pub mod structured_output;
+pub mod tokenize;
+pub mod tool;
+pub mod tts;
+pub mod usage;
+pub mod videos;
+pub mod voice;
