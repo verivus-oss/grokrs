@@ -94,9 +94,12 @@ mod tests {
     fn resolve_api_key_from_env() {
         // Use a unique env var name to avoid conflicts with other tests
         let var_name = "GROKRS_TEST_API_KEY_RESOLVE";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe { env::set_var(var_name, "test-key-value") };
         let result = resolve_api_key(var_name);
+        // SAFETY: Same unique var — no concurrent mutation possible.
         unsafe { env::remove_var(var_name) };
 
         let secret = result.expect("should resolve key");
@@ -106,7 +109,9 @@ mod tests {
     #[test]
     fn resolve_api_key_missing_env_var() {
         let var_name = "GROKRS_TEST_MISSING_VAR_THAT_DEFINITELY_DOES_NOT_EXIST";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe { env::remove_var(var_name) };
         let result = resolve_api_key(var_name);
         assert!(result.is_err());
@@ -121,9 +126,12 @@ mod tests {
     #[test]
     fn resolve_api_key_empty_env_var() {
         let var_name = "GROKRS_TEST_EMPTY_API_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe { env::set_var(var_name, "") };
         let result = resolve_api_key(var_name);
+        // SAFETY: Same unique var — no concurrent mutation possible.
         unsafe { env::remove_var(var_name) };
 
         assert!(result.is_err());

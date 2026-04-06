@@ -1031,6 +1031,7 @@ mod tests {
     // --- Profile / deep_merge ---
 
     use super::{deep_merge, resolve_profile, validate_profile_name};
+    use serial_test::serial;
     use std::io::Write;
 
     #[test]
@@ -1314,37 +1315,46 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn resolve_profile_flag_takes_precedence() {
         // Set env var, but flag should win.
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates `GROKRS_PROFILE` concurrently.
         unsafe {
             std::env::set_var("GROKRS_PROFILE", "staging");
         }
         let result = resolve_profile(Some("dev"));
         assert_eq!(result, Some("dev".to_owned()));
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: Same invariant — `#[serial]` prevents concurrent mutation.
         unsafe {
             std::env::remove_var("GROKRS_PROFILE");
         }
     }
 
     #[test]
+    #[serial]
     fn resolve_profile_falls_back_to_env() {
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates `GROKRS_PROFILE` concurrently.
         unsafe {
             std::env::set_var("GROKRS_PROFILE", "staging");
         }
         let result = resolve_profile(None);
         assert_eq!(result, Some("staging".to_owned()));
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: Same invariant — `#[serial]` prevents concurrent mutation.
         unsafe {
             std::env::remove_var("GROKRS_PROFILE");
         }
     }
 
     #[test]
+    #[serial]
     fn resolve_profile_none_when_nothing_set() {
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates `GROKRS_PROFILE` concurrently.
         unsafe {
             std::env::remove_var("GROKRS_PROFILE");
         }
@@ -1353,14 +1363,17 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn resolve_profile_ignores_empty_env() {
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates `GROKRS_PROFILE` concurrently.
         unsafe {
             std::env::set_var("GROKRS_PROFILE", "");
         }
         let result = resolve_profile(None);
         assert_eq!(result, None);
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: Same invariant — `#[serial]` prevents concurrent mutation.
         unsafe {
             std::env::remove_var("GROKRS_PROFILE");
         }

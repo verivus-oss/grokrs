@@ -102,6 +102,7 @@ mod tests {
     use grokrs_core::{
         AppConfig, ManagementApiConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
     };
+    use serial_test::serial;
 
     fn base_config() -> AppConfig {
         AppConfig {
@@ -138,14 +139,19 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn from_config_constructs_ok_with_valid_env_var() {
         let config = base_config();
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::set_var("GROKRS_TEST_MGMT_KEY", "test-mgmt-key");
         }
         let result = ManagementClient::from_config(&config, None);
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::remove_var("GROKRS_TEST_MGMT_KEY");
         }
@@ -153,6 +159,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn from_config_fails_when_env_var_missing() {
         let config = base_config();
         let unique_var = "GROKRS_TEST_MGMT_MISSING_VAR";
@@ -163,7 +170,9 @@ mod tests {
             timeout_secs: None,
             max_retries: None,
         });
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::remove_var(unique_var);
         }
@@ -181,16 +190,21 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn from_config_without_management_section_uses_defaults() {
         let mut config = base_config();
         config.management_api = None;
         // Without management_api section, it defaults to XAI_MANAGEMENT_API_KEY
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::set_var("XAI_MANAGEMENT_API_KEY", "default-mgmt-key");
         }
         let result = ManagementClient::from_config(&config, None);
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::remove_var("XAI_MANAGEMENT_API_KEY");
         }
@@ -198,14 +212,19 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn debug_output_does_not_contain_management_key() {
         let config = base_config();
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::set_var("GROKRS_TEST_MGMT_KEY", "super-secret-mgmt-key");
         }
         let client = ManagementClient::from_config(&config, None).unwrap();
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::remove_var("GROKRS_TEST_MGMT_KEY");
         }
@@ -222,17 +241,22 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn from_config_with_policy_gate() {
         use crate::transport::policy_gate::AllowAllGate;
 
         let config = base_config();
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::set_var("GROKRS_TEST_MGMT_KEY", "gate-mgmt-key");
         }
         let gate: Option<Arc<dyn PolicyGate>> = Some(Arc::new(AllowAllGate));
         let result = ManagementClient::from_config(&config, gate);
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::remove_var("GROKRS_TEST_MGMT_KEY");
         }
@@ -240,14 +264,19 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn collections_accessor_returns_client() {
         let config = base_config();
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::set_var("GROKRS_TEST_MGMT_KEY", "accessor-mgmt-key");
         }
         let client = ManagementClient::from_config(&config, None).unwrap();
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates this variable concurrently.
         unsafe {
             std::env::remove_var("GROKRS_TEST_MGMT_KEY");
         }

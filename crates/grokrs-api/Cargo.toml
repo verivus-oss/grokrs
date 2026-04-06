@@ -26,6 +26,7 @@ default = []
 otel = ["tracing", "tracing-opentelemetry"]
 
 [dev-dependencies]
+serial_test.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread"] }
 serde_json = { workspace = true }
 wiremock = "0.6"

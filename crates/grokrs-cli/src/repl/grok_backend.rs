@@ -490,13 +490,17 @@ mod tests {
             mcp: None,
         };
 
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var("GROKRS_TEST_BACKEND_KEY", "test-key-for-backend");
         }
         let client = GrokClient::from_config(&config, Some(Arc::new(AllowAllGate)))
             .expect("test client should build");
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var("GROKRS_TEST_BACKEND_KEY");
         }
@@ -865,7 +869,9 @@ mod tests {
 
         // Build a GrokClient via from_config with the mock server URL.
         let env_var = "GROKRS_TEST_STREAM_BACKEND_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(env_var, "stream-test-key");
         }
@@ -902,7 +908,9 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(env_var);
         }
@@ -953,7 +961,9 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_STATEFUL_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(env_var, "stateful-test-key");
         }
@@ -990,7 +1000,9 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(env_var);
         }
@@ -1032,7 +1044,9 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_ERR_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(env_var, "error-test-key");
         }
@@ -1069,7 +1083,9 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(env_var);
         }
@@ -1115,7 +1131,9 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_FAIL_EVENT_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(env_var, "fail-event-test-key");
         }
@@ -1152,7 +1170,9 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(env_var);
         }
@@ -1208,7 +1228,9 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_SYS_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(env_var, "sys-test-key");
         }
@@ -1245,7 +1267,9 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(env_var);
         }
@@ -1401,7 +1425,9 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_SEARCH_CITE_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(env_var, "search-cite-test-key");
         }
@@ -1438,7 +1464,9 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(env_var);
         }
@@ -1492,7 +1520,9 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_SEARCH_BODY_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(env_var, "search-body-test-key");
         }
@@ -1529,7 +1559,9 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(env_var);
         }

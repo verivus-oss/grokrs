@@ -376,11 +376,15 @@ mod tests {
         let root = workspace(&dir);
 
         // Set a secret env var that should be stripped.
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var("TEST_GROKRS_SECRET", "supersecret");
         }
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var("MY_API_KEY", "should_not_appear");
         }
@@ -410,11 +414,15 @@ mod tests {
         );
 
         // Clean up.
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var("TEST_GROKRS_SECRET");
         }
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var("MY_API_KEY");
         }

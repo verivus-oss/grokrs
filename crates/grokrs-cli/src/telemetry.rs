@@ -139,15 +139,20 @@ pub fn resolve_endpoint(cli_flag: Option<&str>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn resolve_endpoint_prefers_cli_flag() {
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates `GROKRS_OTEL_ENDPOINT`
+        // concurrently.
         unsafe {
             std::env::set_var("GROKRS_OTEL_ENDPOINT", "http://env:4317");
         }
         let result = resolve_endpoint(Some("http://cli:4317"));
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: Same invariant — `#[serial]` prevents concurrent mutation.
         unsafe {
             std::env::remove_var("GROKRS_OTEL_ENDPOINT");
         }
@@ -155,13 +160,17 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn resolve_endpoint_falls_back_to_env() {
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates `GROKRS_OTEL_ENDPOINT`
+        // concurrently.
         unsafe {
             std::env::set_var("GROKRS_OTEL_ENDPOINT", "http://env:4317");
         }
         let result = resolve_endpoint(None);
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: Same invariant — `#[serial]` prevents concurrent mutation.
         unsafe {
             std::env::remove_var("GROKRS_OTEL_ENDPOINT");
         }
@@ -169,8 +178,12 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn resolve_endpoint_returns_none_when_unset() {
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates `GROKRS_OTEL_ENDPOINT`
+        // concurrently.
         unsafe {
             std::env::remove_var("GROKRS_OTEL_ENDPOINT");
         }
@@ -187,8 +200,12 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn init_without_endpoint_returns_guard() {
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. The `#[serial]`
+        // attribute ensures no other test mutates `GROKRS_OTEL_ENDPOINT`
+        // concurrently.
         unsafe {
             std::env::remove_var("GROKRS_OTEL_ENDPOINT");
         }

@@ -21,6 +21,7 @@ default = []
 otel = ["tracing"]
 
 [dev-dependencies]
+serial_test.workspace = true
 tempfile = "3"
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tracing = { workspace = true }

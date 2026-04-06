@@ -104,7 +104,9 @@ fn check_network_allowed(config: &AppConfig) -> Result<()> {
 fn is_tty() -> bool {
     #[cfg(unix)]
     {
-        // SAFETY: STDOUT_FILENO (1) is always valid on Unix.
+        // SAFETY: `libc::isatty` requires a valid file descriptor.
+        // `STDOUT_FILENO` (fd 1) is guaranteed valid for the lifetime of the
+        // process on all POSIX systems, so the call cannot trigger UB.
         unsafe { libc::isatty(libc::STDOUT_FILENO) != 0 }
     }
     #[cfg(not(unix))]

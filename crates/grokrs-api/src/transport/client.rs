@@ -1007,7 +1007,9 @@ mod tests {
     #[test]
     fn from_env_reads_xai_api_key() {
         let var_name = "GROKRS_TEST_FROM_ENV_KEY";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(var_name, "test-api-key-from-env");
         }
@@ -1016,7 +1018,9 @@ mod tests {
             ..Default::default()
         };
         let client = HttpClient::from_env(config, None);
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(var_name);
         }
@@ -1041,7 +1045,9 @@ mod tests {
             api_key_env: Some("GROKRS_TEST_MISSING_ENV_VAR_XYZ".into()),
             ..Default::default()
         };
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var("GROKRS_TEST_MISSING_ENV_VAR_XYZ");
         }
@@ -1058,7 +1064,9 @@ mod tests {
     #[test]
     fn from_env_fails_when_env_var_empty() {
         let var_name = "GROKRS_TEST_EMPTY_FROM_ENV";
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::set_var(var_name, "");
         }
@@ -1067,7 +1075,9 @@ mod tests {
             ..Default::default()
         };
         let result = HttpClient::from_env(config, None);
-        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
+        // concurrent writes to the same env var are UB. This test uses a
+        // unique env var name not shared with any other test.
         unsafe {
             std::env::remove_var(var_name);
         }
