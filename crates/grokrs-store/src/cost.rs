@@ -30,12 +30,12 @@ pub struct CostRow {
     pub output_tokens: u64,
     /// Total reasoning tokens.
     pub reasoning_tokens: u64,
-    /// Total cost in USD ticks (1_000_000 ticks = $1.00 USD).
+    /// Total cost in USD ticks (`1_000_000` ticks = $1.00 USD).
     pub cost_ticks: i64,
 }
 
 impl CostRow {
-    /// Format cost_ticks as a USD string with 6 decimal places.
+    /// Format `cost_ticks` as a USD string with 6 decimal places.
     #[must_use]
     pub fn cost_usd(&self) -> String {
         format_usd(self.cost_ticks)
@@ -45,11 +45,11 @@ impl CostRow {
 /// The grouping dimension for a cost report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CostGroupBy {
-    /// Group by model name (extracted from request_body JSON).
+    /// Group by model name (extracted from `request_body` JSON).
     Model,
-    /// Group by date (DATE(request_at)).
+    /// Group by date (`DATE(request_at)`).
     Day,
-    /// Group by session_id.
+    /// Group by `session_id`.
     Session,
     /// Group by API endpoint.
     Endpoint,
@@ -103,7 +103,7 @@ impl CostSummary {
         format_usd(self.total_cost_ticks)
     }
 
-    /// Average cost per session in USD ticks. Returns 0 if session_count is 0.
+    /// Average cost per session in USD ticks. Returns 0 if `session_count` is 0.
     #[must_use]
     pub fn avg_cost_per_session_ticks(&self) -> i64 {
         if self.session_count == 0 {
@@ -128,7 +128,7 @@ impl CostSummary {
 
 /// Format cost ticks as USD with 6 decimal places.
 ///
-/// 1_000_000 ticks = $1.00 USD.
+/// `1_000_000` ticks = $1.00 USD.
 #[must_use]
 pub fn format_usd(ticks: i64) -> String {
     // RATIONALE: precision loss is inherent to f64 display; sub-cent
@@ -138,7 +138,7 @@ pub fn format_usd(ticks: i64) -> String {
     format!("${dollars:.6}")
 }
 
-/// Safely convert a non-negative `i64` (as returned by SQLite SUM/COUNT) to `u64`.
+/// Safely convert a non-negative `i64` (as returned by `SQLite` SUM/COUNT) to `u64`.
 fn i64_to_u64(value: i64, column: &'static str) -> Result<u64, StoreError> {
     u64::try_from(value).map_err(|_| StoreError::NegativeTokenCount { column, value })
 }
@@ -328,8 +328,8 @@ fn build_where_clause(filter: &CostFilter) -> (String, Vec<String>) {
 /// a time component so it works correctly with RFC 3339 timestamps stored in
 /// the database.
 ///
-/// For `since` (is_upper=false): append `T00:00:00Z` to include from start of day.
-/// For `until` (is_upper=true): append `T23:59:59Z` to include through end of day.
+/// For `since` (`is_upper=false)`: append `T00:00:00Z` to include from start of day.
+/// For `until` (`is_upper=true)`: append `T23:59:59Z` to include through end of day.
 fn normalise_date_filter(value: &str, is_upper: bool) -> String {
     let trimmed = value.trim();
     // Check if it's a bare date: exactly 10 chars matching YYYY-MM-DD pattern.
@@ -399,9 +399,9 @@ impl TableColumnWidths {
         reas: &str,
         cost: &str,
     ) {
-        write!(
+        writeln!(
             out,
-            "{:<gw$}  {:>rw$}  {:>iw$}  {:>ow$}  {:>zw$}  {:>cw$}\n",
+            "{:<gw$}  {:>rw$}  {:>iw$}  {:>ow$}  {:>zw$}  {:>cw$}",
             label,
             req,
             inp,
@@ -422,7 +422,7 @@ impl TableColumnWidths {
 /// Format cost rows as a plain-text table.
 ///
 /// Returns a multi-line string with fixed-width columns. The header row uses
-/// the group_by dimension label. Rows are already sorted by the query.
+/// the `group_by` dimension label. Rows are already sorted by the query.
 #[must_use]
 pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSummary) -> String {
     if rows.is_empty() {
@@ -521,9 +521,9 @@ pub fn format_csv(group_by: CostGroupBy, rows: &[CostRow]) -> String {
     let mut out = String::new();
 
     // Header.
-    write!(
+    writeln!(
         out,
-        "{},requests,input_tokens,output_tokens,reasoning_tokens,cost_ticks,cost_usd\n",
+        "{},requests,input_tokens,output_tokens,reasoning_tokens,cost_ticks,cost_usd",
         group_by.header()
     )
     .expect("String write is infallible");
@@ -532,9 +532,9 @@ pub fn format_csv(group_by: CostGroupBy, rows: &[CostRow]) -> String {
     for row in rows {
         // CSV-escape the group value if it contains commas or quotes.
         let group = csv_escape(&row.group);
-        write!(
+        writeln!(
             out,
-            "{group},{},{},{},{},{},{}\n",
+            "{group},{},{},{},{},{},{}",
             row.requests,
             row.input_tokens,
             row.output_tokens,

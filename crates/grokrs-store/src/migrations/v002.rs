@@ -1,6 +1,6 @@
-//! V2 migration: add ON DELETE CASCADE to transcripts FK, add response_id column.
+//! V2 migration: add ON DELETE CASCADE to transcripts FK, add `response_id` column.
 //!
-//! SQLite does not support `ALTER TABLE ... ADD CONSTRAINT` or modifying
+//! `SQLite` does not support `ALTER TABLE ... ADD CONSTRAINT` or modifying
 //! foreign key constraints in place. The only way to add `ON DELETE CASCADE`
 //! to an existing FK is to recreate the table. This migration:
 //!

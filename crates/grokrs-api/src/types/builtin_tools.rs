@@ -75,6 +75,11 @@ impl BuiltinTool {
     }
 
     /// Convert to a `serde_json::Value` suitable for use in the `tools` array.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value cannot be serialized to JSON. This is infallible
+    /// for the known enum variants and indicates a programming error.
     #[must_use]
     pub fn to_value(&self) -> serde_json::Value {
         serde_json::to_value(self).expect("BuiltinTool serialization is infallible")
@@ -137,6 +142,11 @@ pub struct SearchParameters {
 impl SearchParameters {
     /// Convert to a `serde_json::Value` suitable for use in
     /// `CreateResponseRequest::search_parameters`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value cannot be serialized to JSON. This is infallible
+    /// for the known struct layout and indicates a programming error.
     #[must_use]
     pub fn to_value(&self) -> serde_json::Value {
         serde_json::to_value(self).expect("SearchParameters serialization is infallible")

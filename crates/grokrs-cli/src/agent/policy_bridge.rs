@@ -13,7 +13,7 @@
 
 use grokrs_policy::Decision;
 
-/// Resolved decision after applying approval_mode logic.
+/// Resolved decision after applying `approval_mode` logic.
 ///
 /// Unlike [`Decision`] which has three variants, this enum collapses to
 /// two: the tool call either proceeds or it does not.

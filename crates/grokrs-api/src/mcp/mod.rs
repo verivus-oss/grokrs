@@ -9,7 +9,7 @@
 //!
 //! - [`types`] — MCP protocol types (JSON-RPC 2.0, tool definitions, tool results).
 //! - [`transport`] — Streamable HTTP transport for MCP protocol communication.
-//! - [`client`] — High-level MCP client (initialize, list_tools, call_tool).
+//! - [`client`] — High-level MCP client (initialize, `list_tools`, `call_tool`).
 //! - [`adapter`] — `McpToolAdapter` wrapping MCP tools as `ErasedTool` implementations.
 //!
 //! ## Usage Flow
@@ -24,7 +24,7 @@
 //!
 //! Every MCP tool invocation produces a `NetworkConnect` effect for the MCP
 //! server's host. The policy engine must approve this effect before the call
-//! proceeds. MCP tools default to trust rank 1 (InteractiveTrusted) — they
+//! proceeds. MCP tools default to trust rank 1 (`InteractiveTrusted`) — they
 //! are not available to Untrusted sessions unless explicitly configured.
 
 pub mod client;

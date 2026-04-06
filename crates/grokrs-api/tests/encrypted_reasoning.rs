@@ -1,7 +1,7 @@
 //! Integration tests for encrypted reasoning round-trip.
 //!
 //! These tests exercise the full cycle of:
-//! 1. Server returning a ResponseObject with `OutputItem::Reasoning` containing
+//! 1. Server returning a `ResponseObject` with `OutputItem::Reasoning` containing
 //!    `encrypted_content`.
 //! 2. Client extracting the encrypted blob and constructing an `InputItem::Reasoning`
 //!    for the next turn.
@@ -23,7 +23,7 @@ use grokrs_api::types::responses::{
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Build a mock Responses API response with reasoning + encrypted_content.
+/// Build a mock Responses API response with reasoning + `encrypted_content`.
 fn mock_reasoning_response(
     encrypted_blob: &str,
     reasoning_text: &str,

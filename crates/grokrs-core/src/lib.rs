@@ -41,7 +41,7 @@ pub struct AppConfig {
 pub struct ApiConfig {
     /// Environment variable name holding the API key (NOT the key itself).
     pub api_key_env: Option<String>,
-    /// Base URL for the xAI API (default: https://api.x.ai).
+    /// Base URL for the xAI API (default: `<https://api.x.ai>`).
     pub base_url: Option<String>,
     /// Request timeout in seconds (default: 120).
     pub timeout_secs: Option<u64>,
@@ -68,14 +68,14 @@ pub struct ManagementApiConfig {
     pub max_retries: Option<u32>,
 }
 
-/// Configuration for the SQLite persistence store.
+/// Configuration for the `SQLite` persistence store.
 ///
 /// Lives in `grokrs-core` (not `grokrs-store`) so the store crate can consume
 /// it without circular dependency. The `path` field is relative to the workspace
 /// root and defaults to `.grokrs/state.db`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct StoreConfig {
-    /// Path to the SQLite database file, relative to the workspace root.
+    /// Path to the `SQLite` database file, relative to the workspace root.
     /// Defaults to `.grokrs/state.db` when the field is absent.
     #[serde(default = "StoreConfig::default_path")]
     pub path: String,
@@ -235,7 +235,7 @@ pub struct McpServerConfig {
     #[serde(default)]
     pub allowed_tools: Option<Vec<String>>,
     /// Trust rank override for tools from this server.
-    /// Default: 1 (InteractiveTrusted).
+    /// Default: 1 (`InteractiveTrusted`).
     #[serde(default = "McpServerConfig::default_trust_rank")]
     pub trust_rank: u8,
     /// Request timeout in seconds for this server.

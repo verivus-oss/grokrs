@@ -8,9 +8,9 @@
 //! - Full conversation flow type serialization (config -> messages -> events)
 //! - Complex multi-message sequences
 //! - Edge cases in message framing
-//! - VoiceAgentClient construction and configuration
-//! - VoiceReceived enum handling
-//! - AudioData binary framing assumptions
+//! - `VoiceAgentClient` construction and configuration
+//! - `VoiceReceived` enum handling
+//! - `AudioData` binary framing assumptions
 //!
 //! No real WebSocket connections or API keys are needed.
 
@@ -28,13 +28,13 @@ use grokrs_api::types::voice::*;
 // ---------------------------------------------------------------------------
 
 /// Simulate the full wire-level message sequence of a voice session:
-/// 1. Client sends SessionConfig
-/// 2. Server sends SessionCreated
-/// 3. Client sends TextInput
-/// 4. Server sends StateChange(Thinking)
+/// 1. Client sends `SessionConfig`
+/// 2. Server sends `SessionCreated`
+/// 3. Client sends `TextInput`
+/// 4. Server sends `StateChange(Thinking)`
 /// 5. Server sends Transcript(Agent, interim)
 /// 6. Server sends Transcript(Agent, final)
-/// 7. Server sends AudioChunk metadata
+/// 7. Server sends `AudioChunk` metadata
 /// 8. Server sends Usage
 /// 9. Client sends Control(Close)
 /// 10. Server sends StateChange(Closed)

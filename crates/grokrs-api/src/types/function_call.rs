@@ -191,6 +191,11 @@ impl FunctionToolDefinition {
     ///
     /// This is a convenience for building `CreateResponseRequest::tools` which
     /// accepts `Vec<serde_json::Value>`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value cannot be serialized to JSON. This is infallible
+    /// for the known struct layout and indicates a programming error.
     #[must_use]
     pub fn to_responses_value(&self) -> serde_json::Value {
         serde_json::to_value(self.to_responses_definition())
@@ -199,6 +204,11 @@ impl FunctionToolDefinition {
 
     /// Serialize this definition to a `serde_json::Value` in the Chat
     /// Completions API nested format.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value cannot be serialized to JSON. This is infallible
+    /// for the known struct layout and indicates a programming error.
     #[must_use]
     pub fn to_chat_value(&self) -> serde_json::Value {
         serde_json::to_value(self.to_chat_definition())

@@ -1,14 +1,14 @@
 //! Integration tests for MCP adapter tool discovery and type handling.
 //!
 //! These tests validate:
-//! - McpToolAdapter construction and naming conventions
-//! - Effect classification (always NetworkConnect)
-//! - ErasedTool trait implementation
+//! - `McpToolAdapter` construction and naming conventions
+//! - Effect classification (always `NetworkConnect`)
+//! - `ErasedTool` trait implementation
 //! - MCP protocol type serialization for tool discovery and invocation
-//! - McpClient handshake flow via wiremock
+//! - `McpClient` handshake flow via `wiremock`
 //!
-//! The full MCP client flow (connect -> list_tools -> call_tool) is tested
-//! using wiremock to mock the MCP server HTTP endpoint.
+//! The full MCP client flow (connect -> `list_tools` -> `call_tool`) is tested
+//! using `wiremock` to mock the MCP server HTTP endpoint.
 
 use std::sync::Arc;
 

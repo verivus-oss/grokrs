@@ -5,7 +5,7 @@
 //! for a single model. `grokrs models pricing` shows a pricing comparison
 //! sorted by cost.
 //!
-//! These commands use `ModelsClient` directly — no ToolRegistry or AgentExecutor
+//! These commands use `ModelsClient` directly — no `ToolRegistry` or `AgentExecutor`
 //! needed. All model data is fetched from the API at runtime; nothing is hardcoded.
 
 use std::sync::Arc;
@@ -341,7 +341,7 @@ async fn run_list(client: &GrokClient, model_type: &str, json_output: bool) -> R
     Ok(())
 }
 
-/// Print common model metadata fields (ID, owned_by, created, modalities, etc.).
+/// Print common model metadata fields (ID, `owned_by`, created, modalities, etc.).
 fn print_model_common(
     title: &str,
     id: &str,

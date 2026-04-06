@@ -1,4 +1,4 @@
-//! API transcript logging: log_request, log_response, log_error, list_by_session.
+//! API transcript logging: `log_request`, `log_response`, `log_error`, `list_by_session`.
 //!
 //! `TranscriptRepo` is a borrowed handle into the `Store`'s connection. It
 //! implements a two-phase logging pattern: `log_request` records the outbound
@@ -11,7 +11,7 @@ use crate::StoreError;
 use crate::session::now;
 use crate::types::{TranscriptRecord, TranscriptUsage};
 
-/// Intermediate row read from SQLite with `i64` token columns, before
+/// Intermediate row read from `SQLite` with `i64` token columns, before
 /// validation and conversion to the public `TranscriptRecord` with `u64`
 /// token fields.
 struct RawTranscriptRow {
@@ -65,7 +65,7 @@ impl RawTranscriptRow {
     }
 }
 
-/// Safely convert a non-negative `i64` (as stored in SQLite) to `u64`.
+/// Safely convert a non-negative `i64` (as stored in `SQLite`) to `u64`.
 ///
 /// Returns `NegativeTokenCount` if the value is negative.
 fn i64_to_u64(value: i64, column: &'static str) -> Result<u64, StoreError> {
@@ -127,7 +127,7 @@ impl<'a> TranscriptRepo<'a> {
     /// Sets `response_at` to the current time and fills in status code, response
     /// body, token counts, and cost from the provided `usage`.
     ///
-    /// Token counts are stored as `i64` in SQLite (which has no unsigned integer
+    /// Token counts are stored as `i64` in `SQLite` (which has no unsigned integer
     /// type). The `u64` values in `TranscriptUsage` are converted via
     /// `i64::try_from`, which will fail if a value exceeds `i64::MAX` (~9.2e18
     /// tokens, which is not physically reachable).
@@ -243,8 +243,8 @@ impl<'a> TranscriptRepo<'a> {
     ///
     /// Returns the `response_id` from the most recent transcript entry
     /// (by autoincrement `id` DESC), which may be `None` if the latest
-    /// transcript has no response_id. This prevents callers from
-    /// accidentally resuming against a stale older response_id.
+    /// transcript has no `response_id`. This prevents callers from
+    /// accidentally resuming against a stale older `response_id`.
     ///
     /// # Errors
     ///
@@ -272,7 +272,7 @@ impl<'a> TranscriptRepo<'a> {
 
     /// Return all transcripts for a session, ordered by `request_at` ascending.
     ///
-    /// Token counts are stored as `i64` in SQLite and converted to `u64` on read.
+    /// Token counts are stored as `i64` in `SQLite` and converted to `u64` on read.
     /// Negative values (which should never occur if data was written through this
     /// API) produce a `NegativeTokenCount` error rather than silently wrapping.
     ///

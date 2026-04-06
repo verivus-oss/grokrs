@@ -172,6 +172,11 @@ impl McpClient {
     /// Must be called before `list_tools()` or `call_tool()`. Sends the
     /// `initialize` request followed by `notifications/initialized`.
     ///
+    /// # Panics
+    ///
+    /// Panics if `InitializeParams` cannot be serialized to JSON. This is
+    /// infallible for the known struct layout and indicates a programming error.
+    ///
     /// # Errors
     ///
     /// Returns [`McpClientError::Transport`] if the HTTP request fails.
@@ -259,6 +264,11 @@ impl McpClient {
     /// Invoke a tool on the MCP server.
     ///
     /// Requires [`connect()`](McpClient::connect) to have been called first.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ToolCallParams` cannot be serialized to JSON. This is
+    /// infallible for the known struct layout and indicates a programming error.
     ///
     /// # Errors
     ///

@@ -165,6 +165,10 @@ impl McpTransport {
     }
 
     /// Store the MCP session ID (received from `initialize` response headers).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `session_id` `RwLock` is poisoned.
     pub fn set_session_id(&self, id: String) {
         let mut guard = self.session_id.write().expect("session_id lock poisoned");
         *guard = Some(id);
@@ -174,6 +178,10 @@ impl McpTransport {
     ///
     /// This is the core transport method. Higher-level methods like
     /// `send_initialize`, `send_tools_list`, etc. are built on top.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `session_id` `RwLock` is poisoned.
     ///
     /// # Errors
     ///

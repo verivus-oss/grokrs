@@ -30,7 +30,7 @@ pub struct Session<T: TrustLevel> {
     state: SessionState,
     /// Count of state transitions for telemetry.
     state_transitions: u32,
-    /// Count of turns (transitions to RunningTurn) for telemetry.
+    /// Count of turns (transitions to `RunningTurn`) for telemetry.
     total_turns: u32,
     _trust: PhantomData<T>,
 }
@@ -96,7 +96,7 @@ impl<T: TrustLevel> Session<T> {
         self.state_transitions
     }
 
-    /// Return the total number of turns (transitions to RunningTurn).
+    /// Return the total number of turns (transitions to `RunningTurn`).
     #[must_use]
     pub fn total_turns(&self) -> u32 {
         self.total_turns

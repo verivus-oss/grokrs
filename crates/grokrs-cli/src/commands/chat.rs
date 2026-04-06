@@ -1,5 +1,5 @@
 //! Top-level `grokrs chat` command: interactive REPL with Grok API streaming
-//! and optional SQLite session persistence.
+//! and optional `SQLite` session persistence.
 //!
 //! Launches the interactive REPL ([`run_repl`]) with a [`GrokChatBackend`]
 //! connected to the xAI Grok Responses API. Supports model override, system
@@ -470,7 +470,7 @@ fn log_turn_response(
 }
 
 /// Resolve a session for --resume, supporting prefix match.
-/// Returns (session_id, reconstructed_conversation, last_response_id).
+/// Returns (`session_id`, `reconstructed_conversation`, `last_response_id`).
 fn resolve_resume_session(
     store: &Option<Store>,
     prefix: &str,
@@ -504,9 +504,9 @@ fn resolve_resume_session(
                 let mut msg =
                     format!("Ambiguous session ID prefix '{prefix}' matches {n} sessions:\n");
                 for s in &matches {
-                    write!(
+                    writeln!(
                         msg,
-                        "  {}  state={}  updated={}\n",
+                        "  {}  state={}  updated={}",
                         &s.id[..s.id.len().min(12)],
                         s.state,
                         s.updated_at,

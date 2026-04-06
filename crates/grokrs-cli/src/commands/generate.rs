@@ -4,7 +4,7 @@
 //! `grokrs generate video '<prompt>'` uses `VideosClient::generate()` + polling.
 //!
 //! These commands use the existing endpoint clients directly — they do NOT
-//! need the ToolRegistry or AgentExecutor.
+//! need the `ToolRegistry` or `AgentExecutor`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -182,8 +182,8 @@ fn parse_image_format(s: &str) -> Result<ImageResponseFormat> {
 
 /// Validate an output path through the WorkspacePath/policy system.
 ///
-/// Returns the validated WorkspacePath. Ensures the output path is
-/// workspace-relative and FsWrite is allowed by policy.
+/// Returns the validated `WorkspacePath`. Ensures the output path is
+/// workspace-relative and `FsWrite` is allowed by policy.
 fn validate_output_path(
     output: &std::path::Path,
     engine: &PolicyEngine,

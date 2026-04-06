@@ -1,7 +1,7 @@
 //! `remember` tool — persist a memory to the cross-session store.
 //!
 //! Saves a key-value pair with a category (fact, decision, preference) to the
-//! workspace-local SQLite store. If a memory with the same key already exists,
+//! workspace-local `SQLite` store. If a memory with the same key already exists,
 //! it is updated.
 
 use grokrs_cap::WorkspaceRoot;

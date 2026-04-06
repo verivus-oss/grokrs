@@ -1,4 +1,4 @@
-//! SQLite WAL-backed persistence for grokrs runtime state.
+//! `SQLite` WAL-backed persistence for grokrs runtime state.
 //!
 //! `grokrs-store` provides durable, queryable, crash-recoverable storage for
 //! session lifecycle state, API request/response transcripts, token usage, and
@@ -21,10 +21,10 @@
 //! shape for upcoming specs:
 //!
 //! - **approvals** — will record effect approval decisions (effect, decision,
-//!   decided_at, decided_by) linked to sessions. The approval broker spec will
+//!   `decided_at`, `decided_by`) linked to sessions. The approval broker spec will
 //!   add the Rust API.
 //! - **evidence** — will store attestation evidence with TTL (kind, payload,
-//!   created_at, expires_at) linked to sessions. The evidence/audit spec will
+//!   `created_at`, `expires_at`) linked to sessions. The evidence/audit spec will
 //!   add the Rust API.
 
 pub mod cost;
@@ -73,7 +73,7 @@ pub enum StoreError {
     #[error("migration error: {0}")]
     Migration(String),
 
-    /// An underlying SQLite error.
+    /// An underlying `SQLite` error.
     #[error("sqlite error: {0}")]
     Sql(#[from] rusqlite::Error),
 
@@ -93,13 +93,13 @@ pub enum StoreError {
     #[error("foreign key violation: {0}")]
     ForeignKeyViolation(String),
 
-    /// A token count read from SQLite was negative, which indicates data
+    /// A token count read from `SQLite` was negative, which indicates data
     /// corruption or a bug in the writing path.
     #[error("negative token count in column '{column}': {value}")]
     NegativeTokenCount { column: &'static str, value: i64 },
 }
 
-/// SQLite WAL-backed persistence store.
+/// `SQLite` WAL-backed persistence store.
 ///
 /// Holds a single `rusqlite::Connection`. The raw connection is never exposed
 /// publicly. Access data through the typed repository handles: [`sessions()`],
@@ -136,7 +136,7 @@ impl Store {
     /// Returns [`StoreError::SetPermissions`] if file permissions cannot be set (Unix).
     /// Returns [`StoreError::Migration`] if the database cannot be opened or a
     /// migration or pragma fails.
-    /// Returns [`StoreError::Sql`] on underlying SQLite errors.
+    /// Returns [`StoreError::Sql`] on underlying `SQLite` errors.
     pub fn open(workspace_root: &Path) -> Result<Self, StoreError> {
         Self::open_with_path(workspace_root, ".grokrs/state.db")
     }
@@ -155,7 +155,7 @@ impl Store {
     /// Returns [`StoreError::SetPermissions`] if file permissions cannot be set (Unix).
     /// Returns [`StoreError::Migration`] if the database cannot be opened or a
     /// migration or pragma fails.
-    /// Returns [`StoreError::Sql`] on underlying SQLite errors.
+    /// Returns [`StoreError::Sql`] on underlying `SQLite` errors.
     pub fn open_with_path(workspace_root: &Path, store_path: &str) -> Result<Self, StoreError> {
         // Validate store_path: reject absolute paths and `..` traversal.
         validate_store_path(store_path)?;

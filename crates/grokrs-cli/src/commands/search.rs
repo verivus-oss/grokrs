@@ -185,11 +185,11 @@ pub fn format_citations(citations: &[Citation]) -> String {
     for (i, cite) in citations.iter().enumerate() {
         match &cite.title {
             Some(title) => {
-                write!(out, "  [{}] {title} — {}\n", i + 1, cite.url)
+                writeln!(out, "  [{}] {title} — {}", i + 1, cite.url)
                     .expect("String write is infallible");
             }
             None => {
-                write!(out, "  [{}] {}\n", i + 1, cite.url).expect("String write is infallible");
+                writeln!(out, "  [{}] {}", i + 1, cite.url).expect("String write is infallible");
             }
         }
     }
@@ -245,6 +245,11 @@ pub fn extract_citations_from_output(
 ///
 /// Returns `Ok(())` if the date matches the expected format, or an error
 /// message suitable for display to the user.
+///
+/// # Panics
+///
+/// Panics if `month_s` or `day_s` cannot be parsed to `u32` after they have
+/// already been validated as numeric. This is unreachable by construction.
 ///
 /// # Errors
 ///

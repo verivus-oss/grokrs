@@ -234,6 +234,12 @@ fn extract_function_calls(response: &ResponseObject) -> Vec<PendingCall> {
 ///
 /// The final `ResponseObject` whose output contains no more function calls.
 ///
+/// # Panics
+///
+/// Panics if the initial `CreateResponseRequest` cannot be serialized to JSON.
+/// This is infallible for the known struct layout and indicates a programming
+/// error.
+///
 /// # Errors
 ///
 /// Returns `ToolLoopError` if the loop exceeds max iterations, a function
@@ -1165,7 +1171,7 @@ mod tests {
     }
 
     /// Stateless Mode B must only replay input-compatible `OutputItem` variants
-    /// (Message, FunctionCall, FunctionCallOutput) and skip server-side tool
+    /// (`Message`, `FunctionCall`, `FunctionCallOutput`) and skip server-side tool
     /// calls, reasoning traces, and unknown items.
     // Single cohesive integration test verifying stateless replay filtering;
     // the assertions form a sequential chain that is clearest in one function.
@@ -1379,9 +1385,9 @@ mod tests {
         assert_eq!(calls[1].call_id, "call_2");
     }
 
-    /// Verify that in stateless Mode B, McpCall items in the response output
+    /// Verify that in stateless Mode B, `McpCall` items in the response output
     /// are NOT replayed into the follow-up request's input array, while
-    /// FunctionCall items ARE replayed.
+    /// `FunctionCall` items ARE replayed.
     #[tokio::test]
     async fn tool_loop_mode_b_does_not_replay_mcp_call_items() {
         use crate::transport::auth::ApiKeySecret;

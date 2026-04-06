@@ -13,10 +13,10 @@ pub struct ApiErrorResponse {
 pub struct ApiErrorBody {
     /// A human-readable error message.
     pub message: String,
-    /// The error type (e.g., "invalid_request_error").
+    /// The error type (e.g., "`invalid_request_error`").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub r#type: Option<String>,
-    /// An error code (e.g., "model_not_found").
+    /// An error code (e.g., "`model_not_found`").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
 }

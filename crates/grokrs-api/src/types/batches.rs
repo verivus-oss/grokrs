@@ -216,6 +216,11 @@ impl BatchRequestItem {
     ///
     /// Enforces `method: "POST"` and `url: "/v1/chat/completions"` so that
     /// callers cannot accidentally mis-specify the endpoint.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the request body cannot be serialized to JSON. This is
+    /// infallible for known request structs and indicates a programming error.
     #[allow(deprecated)] // ChatCompletionRequest is deprecated but still needed for batch support
     #[must_use]
     pub fn chat_completion(custom_id: Option<String>, body: &ChatCompletionRequest) -> Self {
@@ -232,6 +237,11 @@ impl BatchRequestItem {
     ///
     /// Enforces `method: "POST"` and `url: "/v1/responses"` so that callers
     /// cannot accidentally mis-specify the endpoint.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the request body cannot be serialized to JSON. This is
+    /// infallible for known request structs and indicates a programming error.
     #[must_use]
     pub fn response(custom_id: Option<String>, body: &CreateResponseRequest) -> Self {
         Self {
@@ -247,6 +257,11 @@ impl BatchRequestItem {
     ///
     /// Enforces `method: "POST"` and `url: "/v1/images/generations"` so that
     /// callers cannot accidentally mis-specify the endpoint.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the request body cannot be serialized to JSON. This is
+    /// infallible for known request structs and indicates a programming error.
     #[must_use]
     pub fn image_generation(custom_id: Option<String>, body: &ImageGenerationRequest) -> Self {
         Self {
@@ -262,6 +277,11 @@ impl BatchRequestItem {
     ///
     /// Enforces `method: "POST"` and `url: "/v1/images/edits"` so that
     /// callers cannot accidentally mis-specify the endpoint.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the request body cannot be serialized to JSON. This is
+    /// infallible for known request structs and indicates a programming error.
     #[must_use]
     pub fn image_edit(custom_id: Option<String>, body: &ImageEditRequest) -> Self {
         Self {
@@ -276,6 +296,11 @@ impl BatchRequestItem {
     ///
     /// Enforces `method: "POST"` and `url: "/v1/videos/generations"` so that
     /// callers cannot accidentally mis-specify the endpoint.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the request body cannot be serialized to JSON. This is
+    /// infallible for known request structs and indicates a programming error.
     #[must_use]
     pub fn video_generation(custom_id: Option<String>, body: &VideoGenerationRequest) -> Self {
         Self {

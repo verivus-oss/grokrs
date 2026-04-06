@@ -1,7 +1,7 @@
 //! Embedded binary migration runner.
 //!
 //! Migrations are stored as `const &str` SQL in submodules (one per version).
-//! The runner tracks the current schema version using the SQLite `user_version`
+//! The runner tracks the current schema version using the `SQLite` `user_version`
 //! pragma (not a separate table) and applies only migrations whose version
 //! exceeds the current `user_version`.
 //!

@@ -262,9 +262,9 @@ mod tests {
         response_text: String,
         /// Canned token usage.
         response_usage: TokenUsage,
-        /// Whether clear() was called.
+        /// Whether `clear()` was called.
         cleared: Arc<Mutex<bool>>,
-        /// If set, send_message returns this error.
+        /// If set, `send_message` returns this error.
         error: Option<String>,
     }
 

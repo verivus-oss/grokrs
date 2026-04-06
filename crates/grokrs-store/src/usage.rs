@@ -1,4 +1,4 @@
-//! Usage accumulation: session_totals, all_totals.
+//! Usage accumulation: `session_totals`, `all_totals`.
 //!
 //! `UsageRepo` is a borrowed handle into the `Store`'s connection. It provides
 //! SQL-level aggregation of token counts and cost from the `transcripts` table.
@@ -9,7 +9,7 @@ use rusqlite::{Connection, params};
 use crate::StoreError;
 use crate::types::UsageSummary;
 
-/// Safely convert a non-negative `i64` (as returned by SQLite SUM) to `u64`.
+/// Safely convert a non-negative `i64` (as returned by `SQLite` SUM) to `u64`.
 ///
 /// Returns `NegativeTokenCount` if the value is negative, which should never
 /// happen for token counts written through our API (since `TranscriptUsage`
@@ -31,7 +31,7 @@ impl<'a> UsageRepo<'a> {
     /// Return aggregated usage for a single session.
     ///
     /// If the session has no transcripts, returns a zero-valued `UsageSummary`.
-    /// Token counts are validated as non-negative when converting from SQLite's
+    /// Token counts are validated as non-negative when converting from `SQLite`'s
     /// signed `i64` representation.
     ///
     /// # Errors
@@ -75,7 +75,7 @@ impl<'a> UsageRepo<'a> {
     /// Return aggregated usage across all sessions.
     ///
     /// If the database has no transcripts, returns a zero-valued `UsageSummary`.
-    /// Token counts are validated as non-negative when converting from SQLite's
+    /// Token counts are validated as non-negative when converting from `SQLite`'s
     /// signed `i64` representation.
     ///
     /// # Errors

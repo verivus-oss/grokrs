@@ -8,7 +8,7 @@
 //! - Category filtering
 //! - Interaction between operations (e.g., search affecting eviction order)
 //!
-//! Each test uses an isolated SQLite database via tempfile::tempdir.
+//! Each test uses an isolated `SQLite` database via `tempfile::tempdir`.
 
 use grokrs_store::Store;
 use grokrs_store::memory::MemoryCategory;

@@ -19,7 +19,7 @@ use crate::types::error::{ApiError, ApiErrorResponse};
 /// Configuration for the HTTP client.
 #[derive(Debug, Clone)]
 pub struct HttpClientConfig {
-    /// Base URL for the API (e.g., "https://api.x.ai").
+    /// Base URL for the API (e.g., "<https://api.x.ai>").
     pub base_url: String,
     /// Request timeout duration.
     pub timeout: Duration,

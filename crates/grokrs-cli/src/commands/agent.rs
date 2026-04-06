@@ -176,12 +176,12 @@ pub struct AgentArgs {
     pub task: Option<String>,
 
     /// Trust level for the session (untrusted, interactive, admin).
-    /// When omitted, falls back to [agent].default_trust config, then "untrusted".
+    /// When omitted, falls back to [agent].`default_trust` config, then "untrusted".
     #[arg(long)]
     pub trust: Option<String>,
 
     /// Maximum number of tool-calling iterations before aborting.
-    /// When omitted, falls back to [agent].max_iterations config, then 10.
+    /// When omitted, falls back to [agent].`max_iterations` config, then 10.
     #[arg(long)]
     pub max_iterations: Option<u32>,
 
@@ -211,7 +211,7 @@ pub struct AgentArgs {
 
     /// Run in headless mode (no TTY interaction, no color, no spinners).
     /// Suitable for CI/CD pipelines, GitHub Actions, cron jobs.
-    /// Sets approval_mode to 'deny' unless --approval-mode is specified.
+    /// Sets `approval_mode` to 'deny' unless --approval-mode is specified.
     #[arg(long)]
     pub headless: bool,
 
@@ -233,7 +233,7 @@ pub struct AgentArgs {
     /// Connect to an ad-hoc MCP server for this session.
     /// Discovers tools from the server and registers them alongside built-in tools.
     /// Can be specified multiple times for multiple servers.
-    /// Example: --mcp-server http://localhost:8080/mcp
+    /// Example: --mcp-server <http://localhost:8080/mcp>
     #[arg(long = "mcp-server", value_name = "URL")]
     pub mcp_servers: Vec<String>,
 

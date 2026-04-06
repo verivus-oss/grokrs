@@ -1,4 +1,4 @@
-//! Session persistence: create, transition, get, list_active.
+//! Session persistence: create, transition, get, `list_active`.
 //!
 //! `SessionRepo` is a borrowed handle into the `Store`'s connection. It provides
 //! CRUD operations for session lifecycle state. Trust levels and states are stored

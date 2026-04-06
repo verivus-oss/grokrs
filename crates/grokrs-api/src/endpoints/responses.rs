@@ -88,7 +88,7 @@ impl ResponsesClient {
     /// Create a response from a raw JSON request body — `POST /v1/responses`.
     ///
     /// This is useful when the request body contains fields that are not
-    /// representable by `CreateResponseRequest` (e.g., function_call_output
+    /// representable by `CreateResponseRequest` (e.g., `function_call_output`
     /// items in the input array for multi-turn function calling).
     ///
     /// # Errors

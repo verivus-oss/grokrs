@@ -60,11 +60,11 @@ pub struct VoiceArgs {
     #[arg(long, default_value = "en-US")]
     pub language: String,
 
-    /// Turn detection mode (server_vad or manual).
+    /// Turn detection mode (`server_vad` or manual).
     #[arg(long, default_value = "server_vad")]
     pub turn_detection: String,
 
-    /// VAD sensitivity (low, medium, high). Only applies with server_vad.
+    /// VAD sensitivity (low, medium, high). Only applies with `server_vad`.
     #[arg(long, default_value = "medium")]
     pub vad_sensitivity: String,
 

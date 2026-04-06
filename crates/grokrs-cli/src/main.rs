@@ -51,12 +51,12 @@ struct Cli {
 
     /// Configuration profile name (e.g., dev, staging, prod).
     /// Loads configs/grokrs.NAME.toml and merges it on top of the base config.
-    /// Overrides GROKRS_PROFILE env var.
+    /// Overrides `GROKRS_PROFILE` env var.
     #[arg(long, global = true)]
     profile: Option<String>,
 
-    /// OpenTelemetry OTLP exporter endpoint (e.g., http://localhost:4317).
-    /// Requires the 'otel' feature. Overrides GROKRS_OTEL_ENDPOINT env var.
+    /// OpenTelemetry OTLP exporter endpoint (e.g., <http://localhost:4317>).
+    /// Requires the 'otel' feature. Overrides `GROKRS_OTEL_ENDPOINT` env var.
     #[arg(long, global = true)]
     otel_endpoint: Option<String>,
 

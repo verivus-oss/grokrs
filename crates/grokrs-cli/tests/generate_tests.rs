@@ -396,7 +396,7 @@ async fn generate_video_polls_pending_then_done() {
 }
 
 /// `grokrs generate image` with an absolute output path should fail because
-/// WorkspacePath rejects absolute paths.
+/// `WorkspacePath` rejects absolute paths.
 #[tokio::test]
 async fn generate_image_rejects_absolute_output_path() {
     let server = MockServer::start().await;

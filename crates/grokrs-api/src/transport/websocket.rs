@@ -37,7 +37,7 @@ pub type WsSource = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 /// Configuration for the WebSocket client.
 #[derive(Debug, Clone)]
 pub struct WsClientConfig {
-    /// Base URL for the API (e.g., "wss://api.x.ai").
+    /// Base URL for the API (e.g., "<wss://api.x.ai>").
     pub base_url: String,
 
     /// Path for the voice agent endpoint (e.g., "/v1/voice-agent").

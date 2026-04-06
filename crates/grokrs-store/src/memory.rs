@@ -12,7 +12,7 @@ use crate::session::now;
 
 /// Category of a memory entry.
 ///
-/// Stored as a plain string in SQLite. Valid values are `"fact"`, `"decision"`,
+/// Stored as a plain string in `SQLite`. Valid values are `"fact"`, `"decision"`,
 /// and `"preference"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryCategory {
@@ -191,7 +191,7 @@ impl<'a> MemoryRepo<'a> {
 
     /// List all memories, optionally filtered by category.
     ///
-    /// Results are ordered by access_count DESC, updated_at DESC (most relevant first).
+    /// Results are ordered by `access_count` DESC, `updated_at` DESC (most relevant first).
     ///
     /// # Errors
     ///
@@ -264,7 +264,7 @@ impl<'a> MemoryRepo<'a> {
     /// Search memories by substring match on key or value.
     ///
     /// Matching records have their `access_count` incremented. Results are
-    /// ordered by access_count DESC, updated_at DESC.
+    /// ordered by `access_count` DESC, `updated_at` DESC.
     ///
     /// # Errors
     ///
@@ -351,7 +351,7 @@ impl<'a> MemoryRepo<'a> {
     /// Evict the oldest, least-accessed memories to bring the total count
     /// at or below `max_entries`.
     ///
-    /// Eviction order: lowest access_count first, then oldest updated_at.
+    /// Eviction order: lowest `access_count` first, then oldest `updated_at`.
     /// Returns the number of evicted memories.
     ///
     /// # Errors
@@ -380,7 +380,7 @@ impl<'a> MemoryRepo<'a> {
         Ok(to_evict)
     }
 
-    /// Retrieve the top-N memories ranked by access_count DESC, updated_at DESC.
+    /// Retrieve the top-N memories ranked by `access_count` DESC, `updated_at` DESC.
     ///
     /// Used for building the agent system prompt with the most relevant memories.
     ///

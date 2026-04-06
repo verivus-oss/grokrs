@@ -1,6 +1,6 @@
 //! Integration tests for cost report aggregation.
 //!
-//! These tests seed transcript data into an isolated SQLite database and verify
+//! These tests seed transcript data into an isolated `SQLite` database and verify
 //! that cost aggregation queries (by model, day, session, endpoint) produce
 //! correct results. Also tests the summary computation, date filtering, and
 //! output formatters.

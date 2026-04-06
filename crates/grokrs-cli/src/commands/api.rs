@@ -410,16 +410,16 @@ async fn run_chat(
     let session_id = uuid::Uuid::new_v4().to_string();
     let mut transcript_id: Option<i64> = None;
 
-    if let Some(ref s) = store {
-        if s.sessions().create(&session_id, "Untrusted").is_ok() {
-            let _ = s.sessions().transition(&session_id, "Ready");
-            let _ = s.sessions().transition(&session_id, "RunningTurn");
-            let body = serde_json::json!({"model": model, "prompt": prompt}).to_string();
-            transcript_id = s
-                .transcripts()
-                .log_request(&session_id, "/v1/responses", "POST", Some(&body))
-                .ok();
-        }
+    if let Some(ref s) = store
+        && s.sessions().create(&session_id, "Untrusted").is_ok()
+    {
+        let _ = s.sessions().transition(&session_id, "Ready");
+        let _ = s.sessions().transition(&session_id, "RunningTurn");
+        let body = serde_json::json!({"model": model, "prompt": prompt}).to_string();
+        transcript_id = s
+            .transcripts()
+            .log_request(&session_id, "/v1/responses", "POST", Some(&body))
+            .ok();
     }
 
     let request = CreateResponseBuilder::new(model, ResponseInput::Text(prompt.to_owned()))

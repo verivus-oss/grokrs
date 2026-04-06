@@ -1,4 +1,4 @@
-//! ChatBackend trait and response types for the REPL.
+//! `ChatBackend` trait and response types for the REPL.
 //!
 //! The backend trait decouples the REPL loop from any concrete API client,
 //! making it testable with mock backends and swappable for different providers.

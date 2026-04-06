@@ -1,11 +1,11 @@
 //! Integration tests for git tools operating on a real temp git repository.
 //!
-//! These tests exercise the full workflow: init repo -> create files -> git_status
-//! -> git_add -> git_diff -> git_commit, validating cross-tool interaction in
+//! These tests exercise the full workflow: init repo -> create files -> `git_status`
+//! -> `git_add` -> `git_diff` -> `git_commit`, validating cross-tool interaction in
 //! a realistic sequence.
 //!
 //! Each test uses `tempfile::tempdir` for isolation. No external git dependencies
-//! beyond libgit2 (bundled via git2 crate).
+//! beyond `libgit2` (bundled via `git2` crate).
 
 use grokrs_cap::WorkspaceRoot;
 use grokrs_tool::tools::git_add::{GitAddInput, GitAddTool};

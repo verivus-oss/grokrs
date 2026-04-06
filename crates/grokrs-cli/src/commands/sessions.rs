@@ -34,7 +34,7 @@ pub enum SessionsCommand {
         #[arg(long)]
         active: bool,
 
-        /// Filter by exact state (e.g. "Ready", "Closed", "RunningTurn")
+        /// Filter by exact state (e.g. "Ready", "Closed", "`RunningTurn`")
         #[arg(long)]
         state: Option<String>,
 
@@ -143,9 +143,9 @@ fn resolve_session_id(store: &Store, id_or_prefix: &str) -> Result<SessionRecord
             let mut msg =
                 format!("Ambiguous session ID prefix '{id_or_prefix}' matches {n} sessions:\n");
             for s in &matches {
-                write!(
+                writeln!(
                     msg,
-                    "  {}  state={}  updated={}\n",
+                    "  {}  state={}  updated={}",
                     &s.id[..s.id.len().min(12)],
                     s.state,
                     s.updated_at,

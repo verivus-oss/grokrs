@@ -44,10 +44,10 @@ pub struct LanguageModel {
     /// Alternative names for this model.
     #[serde(default)]
     pub aliases: Vec<String>,
-    /// Supported input modalities (e.g., ["text", "image"]).
+    /// Supported input modalities (e.g., `["text", "image"]`).
     #[serde(default)]
     pub input_modalities: Vec<String>,
-    /// Supported output modalities (e.g., ["text"]).
+    /// Supported output modalities (e.g., `["text"]`).
     #[serde(default)]
     pub output_modalities: Vec<String>,
     /// Price per prompt text token in integer ticks (cents per 100M tokens).
