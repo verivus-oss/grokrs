@@ -1,11 +1,11 @@
 [meta]
-title = "Clippy pedantic remediation: 797 warnings across 8 crates"
+title = "Clippy pedantic + AI slop remediation: 797 pedantic warnings + slop gap coverage"
 created = "2026-04-06"
 revised = "2026-04-06"
-total_units = 12
-tier1_units = ["P01", "P02", "P03"]
-tier2_units = ["P04", "P05", "P06", "P07"]
-tier3_units = ["P08", "P09", "P10", "P11", "P12"]
+total_units = 16
+tier1_units = ["P01", "P02", "P03", "P13"]
+tier2_units = ["P04", "P05", "P06", "P07", "P14", "P15"]
+tier3_units = ["P08", "P09", "P10", "P11", "P12", "P16"]
 
 # ---------------------------------------------------------------------------
 # CONTEXT
@@ -208,13 +208,15 @@ rationale = "52 warnings. Mechanical refactors that improve idiomatic Rust usage
 [units.P03]
 name = "Fix format string inefficiencies and uninlined format args"
 summary = """
-Fix 39 warnings: (1) format_push_string (21): replace \
+Fix 39+ warnings: (1) format_push_string (21): replace \
 s.push_str(&format!(...)) with write!(s, ...).unwrap() using \
 std::fmt::Write. This eliminates an intermediate String allocation. \
 (2) uninlined_format_args (18): replace format!(\"{}\", x) with \
-format!(\"{x}\") using the Rust 2021+ inline format syntax. Both \
-are mechanical transformations that improve performance (push_str) \
-and readability (inline args)."""
+format!(\"{x}\") using the Rust 2021+ inline format syntax. (3) \
+format_in_format_args: replace format!() nested inside another \
+format macro with direct interpolation. All are mechanical \
+transformations that improve performance and readability. \
+(AI Slop Guide P10: 'Formatting for Non-Display' coverage.)"""
 layer = 0
 tier = 1
 status = "pending"
@@ -237,6 +239,7 @@ files_modify = [
 acceptance = [
   "Zero clippy::format_push_string warnings remain",
   "Zero clippy::uninlined_format_args warnings remain",
+  "Zero clippy::format_in_format_args warnings remain",
   "All push_str(&format!(...)) replaced with write!(s, ...).unwrap() using std::fmt::Write",
   "All format!(\"{}\", var) replaced with format!(\"{var}\")",
   "use std::fmt::Write; import added where write! macro is used on Strings",
@@ -369,7 +372,10 @@ continue at end of loop body. (7) single_char_pattern (1): replace \
 \"x\" with 'x' in str methods. (8) bool params/struct fields (3): \
 group bools where appropriate. (9) option_as_ref (2): use \
 Option<&T> instead of &Option<T>. (10) misc (4): clone_on_ref, \
-unnecessary_wraps, explicit_iter, semicolon, needless_bool."""
+unnecessary_wraps, explicit_iter, semicolon, needless_bool. (11) \
+redundant_clone: remove .clone() calls where the value is not used \
+after the clone point. (AI Slop Guide P6: 'Unnecessary clone()' \
+coverage.)"""
 layer = 0
 tier = 2
 status = "pending"
@@ -404,6 +410,7 @@ files_modify = [
 acceptance = [
   "Zero clippy::unreadable_literal warnings — all numeric literals >=10_000 have _ separators",
   "Zero clippy::needless_raw_string_hashes warnings",
+  "Zero clippy::redundant_clone warnings",
   "Zero clippy::needless_pass_by_value warnings",
   "Zero clippy::missing_fields_in_debug warnings",
   "Zero clippy::manual_let_else warnings",
@@ -545,7 +552,7 @@ comment listing each error variant and when it occurs. Example: \
 layer = 2
 tier = 3
 status = "pending"
-depends_on = ["P01"]
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08"]
 blocks = ["P12"]
 estimated_loc = 300
 files_create = []
@@ -604,7 +611,7 @@ code references in docs."""
 layer = 2
 tier = 3
 status = "pending"
-depends_on = []
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08"]
 blocks = ["P12"]
 estimated_loc = 200
 files_create = []
@@ -672,7 +679,7 @@ that P01 didn't catch."""
 layer = 2
 tier = 3
 status = "pending"
-depends_on = ["P01"]
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08"]
 blocks = ["P12"]
 estimated_loc = 30
 files_create = []
@@ -704,6 +711,199 @@ critical_decisions = [
 rationale = "11 warnings. Small unit but touches the ToolSpec trait pattern across all tool files."
 
 # ===========================================================================
+# AI SLOP GAP COVERAGE -- Units identified by cross-referencing
+# AI_SLOP_REVIEW_GUIDE.md against the pedantic DAG
+# ===========================================================================
+
+[units.P13]
+name = "Prohibit unwrap() and expect() in production code"
+summary = """
+Systematically remove .unwrap() and .expect() from all production \
+code (crates/ excluding tests/). Replace with proper Result handling \
+(?, map_err, ok_or_else) or, in rare justified cases, keep expect() \
+with a detailed message that passes the 'useless message' test. \
+Test code may retain .unwrap()/.expect() but expect() messages must \
+be descriptive. Enable clippy::unwrap_used and clippy::expect_used \
+as workspace-level deny lints in clippy.toml or lib.rs. \
+(AI Slop Guide P1: 'Unwrap Abuse', P2: 'Expect With Useless Messages'.)"""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 200
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-api/src/transport/websocket.rs",
+  "crates/grokrs-api/src/endpoints/responses.rs",
+  "crates/grokrs-api/src/endpoints/voice.rs",
+  "crates/grokrs-api/src/mcp/client.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/voice.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-store/src/session.rs",
+]
+acceptance = [
+  "Zero .unwrap() calls in production code (non-test crate sources)",
+  "Every remaining .expect() has a message explaining the invariant, not just repeating the type",
+  "No expect messages like 'should be Some', 'failed to parse', 'cannot fail' — explain WHY it cannot fail",
+  "All replaced unwraps use ?, map_err, ok_or_else, or unwrap_or_default as appropriate",
+  "clippy::unwrap_used = 'deny' configured for non-test code",
+  "Zero test regressions",
+]
+produces = ["ART:no-unwrap"]
+consumes = []
+critical_decisions = [
+  "write!(s, ...).unwrap() is exempt — fmt::Write for String is infallible, but use write!(s, ...).expect('String write is infallible') for clarity.",
+  "Test code (.rs files in tests/ directories and #[cfg(test)] modules) is exempt from unwrap_used.",
+  "Constructors that validate invariants (e.g., WorkspacePath::new) may use expect() with the invariant as the message.",
+  "Regex::new() on compile-time-known patterns: use expect('regex is valid') — this is a legitimate use.",
+]
+rationale = "AI Slop Guide patterns P1 and P2. Unwrap abuse is the #1 AI code generation failure mode. Replacing with proper error handling improves robustness."
+
+[units.P14]
+name = "Replace unsafe indexing with bounds-checked access"
+summary = """
+Replace direct slice/vector indexing foo[i] with .get(i) or \
+.get_mut(i) where the index is not statically guaranteed to be \
+in bounds. .get() returns Option<&T> forcing bounds checking. \
+Keep direct indexing only where: (1) The index is a compile-time \
+constant and the collection size is known (e.g., args[0] after \
+checking args.len()). (2) The code is in a hot loop where the \
+bounds check is provably redundant. Enable clippy::indexing_slicing \
+as a workspace warning. \
+(AI Slop Guide P5: 'Unchecked Index Access'.)"""
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 80
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/streaming/parser.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-store/src/cost.rs",
+]
+acceptance = [
+  "Zero clippy::indexing_slicing warnings in production code (or each has documented #[allow] with bounds proof)",
+  "All replaced indexing uses .get()/.get_mut() with proper None handling",
+  "No panic-on-out-of-bounds possible in production code paths",
+  "Every #[allow(clippy::indexing_slicing)] has a comment proving the index is always in bounds",
+  "Zero test regressions",
+]
+produces = ["ART:safe-indexing"]
+consumes = []
+critical_decisions = [
+  "Test code is exempt — panicking on bad test data is acceptable.",
+  "Pattern: if let Some(item) = vec.get(i) { ... } else { return Err(...) }",
+  "For iteration: prefer .iter()/.iter_mut() over index-based loops entirely.",
+  "first()/last() preferred over [0]/[len-1].",
+]
+rationale = "AI Slop Guide pattern P5. Index panics are a top-5 Rust runtime error. Bounds-checked access eliminates them."
+
+[units.P15]
+name = "Fix iterator collection inefficiencies and string conversions"
+summary = """
+Fix two AI slop gap categories: (1) needless_collect: remove \
+.collect::<Vec<_>>() followed by .iter()/.into_iter() — iterate \
+directly without the intermediate allocation. (2) str_to_string / \
+string_to_string: standardize &str-to-String conversions. Prefer \
+.to_owned() over .to_string() for &str (avoids Display trait \
+indirection). Replace String::from(s) with s.to_owned() for \
+consistency. \
+(AI Slop Guide P8: 'Collecting When Iterating', P18: \
+'to_string() vs Into'.)"""
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 60
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-api/src/types/chat.rs",
+  "crates/grokrs-api/src/mcp/client.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-core/src/lib.rs",
+]
+acceptance = [
+  "Zero clippy::needless_collect warnings remain",
+  "Zero clippy::str_to_string warnings remain (if enabled)",
+  "No .collect::<Vec<_>>() immediately followed by .iter() or .into_iter()",
+  "Consistent string conversion pattern across codebase (.to_owned() for &str → String)",
+  "Zero test regressions",
+]
+produces = ["ART:iter-strings"]
+consumes = []
+critical_decisions = [
+  "collect() is legitimate when: the collection is used multiple times, or the iterator borrows data that changes.",
+  "to_owned() preferred over to_string() for &str because it avoids the Display trait vtable dispatch.",
+  "String::from() and to_owned() are equivalent for &str — pick one for consistency (to_owned()).",
+  "Do not change .to_string() on non-str types (e.g., i32.to_string()) — that's the correct method.",
+]
+rationale = "AI Slop Guide patterns P8 and P18. Iterator inefficiencies and inconsistent string conversions are hallmarks of AI-generated Rust."
+
+[units.P16]
+name = "Audit unsafe blocks and ensure SAFETY comments"
+summary = """
+Audit every unsafe block in the codebase. Each must have a \
+// SAFETY: comment immediately above explaining why the unsafe \
+operation is sound. If no justification exists, rewrite to use \
+safe alternatives. This covers both edition 2024 unsafe env \
+operations (set_var/remove_var in tests) and any other unsafe \
+blocks. \
+(AI Slop Guide P3: 'Unsafe Without Justification'.)"""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["P13"]
+blocks = ["P12"]
+estimated_loc = 30
+files_create = []
+files_modify = [
+  "crates/grokrs-core/src/lib.rs",
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-api/src/transport/auth.rs",
+  "crates/grokrs-api/src/management/client.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-cli/src/telemetry.rs",
+  "crates/grokrs-tool/src/tools/run_command.rs",
+]
+acceptance = [
+  "Every unsafe block has a // SAFETY: comment on the line(s) immediately preceding it",
+  "Each SAFETY comment explains the specific invariant that makes the operation sound",
+  "No SAFETY comments that just say 'safe' or 'trust me' — explain the invariant",
+  "Any unsafe block without a valid justification has been rewritten to use safe code",
+  "grep -rn 'unsafe' across all .rs files shows zero blocks without preceding SAFETY comment",
+  "Zero test regressions",
+]
+produces = ["ART:safe-unsafe"]
+consumes = ["ART:no-unwrap"]
+critical_decisions = [
+  "set_var/remove_var in tests: SAFETY comment explains single-threaded test execution or #[serial] annotation.",
+  "If a test uses set_var without #[serial], consider refactoring to avoid env mutation entirely.",
+  "No new unsafe blocks should be added — prefer safe abstractions.",
+]
+rationale = "AI Slop Guide pattern P3. Unjustified unsafe is a critical safety gap. Every unsafe block must prove its soundness."
+
+# ===========================================================================
 # LAYER 3 -- Final validation
 # ===========================================================================
 
@@ -719,20 +919,22 @@ cross-unit conflicts or regressions discovered during validation."""
 layer = 3
 tier = 3
 status = "pending"
-depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11"]
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P13", "P14", "P15", "P16"]
 blocks = []
 estimated_loc = 20
 files_create = []
 files_modify = []
 acceptance = [
   "cargo clippy --workspace --all-targets -- -W clippy::pedantic reports zero warnings (excluding deprecated chat.rs)",
+  "cargo clippy --workspace -- -W clippy::unwrap_used -W clippy::indexing_slicing reports zero warnings in non-test code",
   "cargo test --workspace passes with all tests green",
   "cargo build --release completes successfully",
   "cargo fmt --all --check reports no formatting issues",
   "No #[allow(clippy::*)] without an accompanying justification comment",
+  "grep -rn 'unsafe' shows zero blocks without preceding // SAFETY: comment",
 ]
 produces = ["ART:pedantic-clean"]
-consumes = ["ART:must-use", "ART:closures-combinators", "ART:format-strings", "ART:match-arms", "ART:safe-casts", "ART:misc-quality", "ART:items-hoisted", "ART:short-functions", "ART:errors-doc", "ART:panics-doc-markdown", "ART:str-lifetimes"]
+consumes = ["ART:must-use", "ART:closures-combinators", "ART:format-strings", "ART:match-arms", "ART:safe-casts", "ART:misc-quality", "ART:items-hoisted", "ART:short-functions", "ART:errors-doc", "ART:panics-doc-markdown", "ART:str-lifetimes", "ART:no-unwrap", "ART:safe-indexing", "ART:iter-strings", "ART:safe-unsafe"]
 critical_decisions = [
   "The deprecated chat.rs module warnings (45 total) are excluded from the zero-warning target — that module is intentionally deprecated.",
   "Any new #[allow] added during P01-P11 must have a justification comment.",
