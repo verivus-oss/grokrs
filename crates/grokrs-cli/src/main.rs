@@ -277,29 +277,10 @@ fn doctor(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-/// Report on competitive feature readiness based on configuration.
-///
-/// Each feature reports "ready" or "blocked: <reason>" with actionable
-/// fix instructions. No API calls are made — readiness is config-based only.
-fn doctor_features(
-    config: &AppConfig,
-    otel_endpoint: Option<&str>,
-    workspace_root: &std::path::Path,
-) {
+/// Check core feature readiness (chat, agent, search, generate, models, sessions).
+fn doctor_core_features(config: &AppConfig, network_ready: bool, network_decision: &Decision) {
     let engine = PolicyEngine::new(config.policy.clone());
 
-    println!();
-    println!("--- feature status ---");
-
-    // Chat capability: requires network access.
-    let network_decision = engine.evaluate(&Effect::NetworkConnect {
-        host: "api.x.ai".to_owned(),
-    });
-    let network_ready = match &network_decision {
-        Decision::Allow { .. } => true,
-        Decision::Ask { .. } => config.session.approval_mode == "allow",
-        Decision::Deny { .. } => false,
-    };
     if network_ready {
         println!("chat=ready");
     } else {
@@ -308,11 +289,12 @@ fn doctor_features(
         );
     }
 
-    // Agent capability: report tools per trust level.
     let registry = grokrs_tool::registry::default_registry();
-    let untrusted_count = registry.available_tools(0).len();
-    let interactive_count = registry.available_tools(1).len();
-    let admin_count = registry.available_tools(2).len();
+    let (untrusted_count, interactive_count, admin_count) = (
+        registry.available_tools(0).len(),
+        registry.available_tools(1).len(),
+        registry.available_tools(2).len(),
+    );
     if network_ready {
         println!(
             "agent=ready (tools: untrusted={untrusted_count}, interactive={interactive_count}, admin={admin_count})"
@@ -323,7 +305,6 @@ fn doctor_features(
         );
     }
 
-    // Policy status for key effects.
     let fs_write_decision = engine.evaluate(&Effect::FsWrite(
         grokrs_cap::WorkspacePath::new("test.txt").expect("static path is valid"),
     ));
@@ -338,41 +319,46 @@ fn doctor_features(
         "policy_process_spawn={}",
         format_decision_short(&spawn_decision)
     );
-    println!(
-        "policy_network={}",
-        format_decision_short(&network_decision)
-    );
+    println!("policy_network={}", format_decision_short(network_decision));
 
-    // Search capability: ready if network + search tools available.
-    if network_ready {
-        println!("search=ready (web_search, x_search via --search/--x-search flags)");
-    } else {
-        println!("search=blocked: requires network access");
+    let network_features = [
+        (
+            "search",
+            "ready (web_search, x_search via --search/--x-search flags)",
+            "blocked: requires network access",
+        ),
+        (
+            "generate",
+            "ready (image, video via grokrs generate)",
+            "blocked: requires network access",
+        ),
+        (
+            "models",
+            "ready (list, info, pricing via grokrs models)",
+            "blocked: requires network access",
+        ),
+    ];
+    for (name, ready_msg, blocked_msg) in &network_features {
+        println!(
+            "{name}={}",
+            if network_ready {
+                ready_msg
+            } else {
+                blocked_msg
+            }
+        );
     }
 
-    // Media generation: ready if network.
-    if network_ready {
-        println!("generate=ready (image, video via grokrs generate)");
-    } else {
-        println!("generate=blocked: requires network access");
-    }
-
-    // Model discovery: ready if network.
-    if network_ready {
-        println!("models=ready (list, info, pricing via grokrs models)");
-    } else {
-        println!("models=blocked: requires network access");
-    }
-
-    // Session management: ready if store works.
-    let store_ok = config.store.as_ref().is_none_or(|s| !s.path.is_empty()); // Default path works
+    let store_ok = config.store.as_ref().is_none_or(|s| !s.path.is_empty());
     if store_ok {
         println!("sessions=ready (list, show, transcript, clean via grokrs sessions)");
     } else {
         println!("sessions=blocked: store path is empty");
     }
+}
 
-    // Approval bypass warning — prominently flagged due to security implications.
+/// Print approval mode status with security warning if set to "allow".
+fn doctor_approval_mode(config: &AppConfig) {
     if config.session.approval_mode == "allow" {
         println!(
             "approval_mode=allow  *** SECURITY WARNING ***\n\
@@ -395,15 +381,12 @@ fn doctor_features(
         println!("approval_mode={}", config.session.approval_mode);
     }
 
-    // Agent config (if present).
     if let Some(ref agent) = config.agent {
         println!(
             "agent_config: max_iterations={} default_trust={} enable_search={}",
             agent.max_iterations, agent.default_trust, agent.enable_search
         );
     }
-
-    // Chat config (if present).
     if let Some(ref chat) = config.chat {
         let model = chat.default_model.as_deref().unwrap_or("(inherit)");
         println!(
@@ -411,10 +394,15 @@ fn doctor_features(
             model, chat.stateful, chat.max_conversation_tokens
         );
     }
+}
 
-    // ---- R2 Feature Checks ----
-
-    // Voice agent / audio capability.
+/// Check R2 features: voice, otel, MCP, git, model freshness, memory/store.
+fn doctor_r2_features(
+    config: &AppConfig,
+    otel_endpoint: Option<&str>,
+    workspace_root: &std::path::Path,
+) {
+    // Voice agent / audio.
     if cfg!(feature = "audio") {
         println!("[ok] voice_agent=enabled (audio feature compiled in)");
     } else {
@@ -423,9 +411,8 @@ fn doctor_features(
         );
     }
 
-    // OpenTelemetry / OTLP status.
+    // OpenTelemetry.
     if cfg!(feature = "otel") {
-        // Resolve effective endpoint: CLI flag > GROKRS_OTEL_ENDPOINT env var.
         let effective_endpoint = otel_endpoint
             .map(ToOwned::to_owned)
             .or_else(|| std::env::var("GROKRS_OTEL_ENDPOINT").ok());
@@ -439,15 +426,14 @@ fn doctor_features(
         println!("[--] otel=disabled (otel feature not compiled in; rebuild with --features otel)");
     }
 
-    // MCP server configuration.
+    // MCP servers.
     match config.mcp.as_ref() {
         None => println!("[--] mcp=not configured (add [mcp] section to enable)"),
         Some(mcp) if mcp.servers.is_empty() => {
-            println!("[--] mcp=configured but no servers defined");
+            println!("[--] mcp=configured but no servers defined")
         }
         Some(mcp) => {
-            let count = mcp.servers.len();
-            println!("[ok] mcp={count} server(s) configured");
+            println!("[ok] mcp={} server(s) configured", mcp.servers.len());
             let mut names: Vec<&str> = mcp.servers.keys().map(String::as_str).collect();
             names.sort_unstable();
             for name in names {
@@ -461,104 +447,119 @@ fn doctor_features(
         }
     }
 
-    // Git repository status.
-    {
-        // Walk up from cwd looking for a .git entry (handles submodules and worktrees too).
-        let mut git_root = None;
-        let mut dir = workspace_root.to_owned();
-        loop {
-            if dir.join(".git").exists() {
-                git_root = Some(dir.clone());
-                break;
-            }
-            match dir.parent() {
-                Some(p) => dir = p.to_owned(),
-                None => break,
-            }
+    // Git repository.
+    let mut git_root = None;
+    let mut dir = workspace_root.to_owned();
+    loop {
+        if dir.join(".git").exists() {
+            git_root = Some(dir.clone());
+            break;
         }
-        match git_root {
-            Some(ref root) => println!("[ok] git=repo detected at {}", root.display()),
-            None => {
-                println!("[warn] git=not a git repository (workspace not under version control)");
-            }
+        match dir.parent() {
+            Some(p) => dir = p.to_owned(),
+            None => break,
         }
     }
+    match git_root {
+        Some(ref root) => println!("[ok] git=repo detected at {}", root.display()),
+        None => println!("[warn] git=not a git repository (workspace not under version control)"),
+    }
 
-    // Model freshness check — warn if configured model looks deprecated.
+    doctor_model_freshness(config);
+    doctor_memory_store(config, workspace_root);
+}
+
+/// Check whether configured model names look deprecated.
+fn doctor_model_freshness(config: &AppConfig) {
+    const DEPRECATED_PATTERNS: &[&str] = &[
+        "grok-1",
+        "grok-beta",
+        "-preview",
+        "-legacy",
+        "-old",
+        "-deprecated",
+    ];
+    let default_model = &config.model.default_model;
+    if DEPRECATED_PATTERNS
+        .iter()
+        .any(|pat| default_model.contains(pat))
     {
-        // Known deprecated or legacy model name substrings.
-        const DEPRECATED_PATTERNS: &[&str] = &[
-            "grok-1",
-            "grok-beta",
-            "-preview",
-            "-legacy",
-            "-old",
-            "-deprecated",
-        ];
-        let default_model = &config.model.default_model;
-        let is_deprecated = DEPRECATED_PATTERNS
+        println!(
+            "[warn] model_freshness=WARN default_model={default_model} appears deprecated; update [model].default_model"
+        );
+    } else {
+        println!("[ok] model_freshness=ok default_model={default_model}");
+    }
+    if let Some(ref chat) = config.chat
+        && let Some(ref chat_model) = chat.default_model
+        && DEPRECATED_PATTERNS
             .iter()
-            .any(|pat| default_model.contains(pat));
-        if is_deprecated {
-            println!(
-                "[warn] model_freshness=WARN default_model={default_model} appears deprecated; update [model].default_model"
-            );
-        } else {
-            println!("[ok] model_freshness=ok default_model={default_model}");
-        }
+            .any(|pat| chat_model.contains(pat))
+    {
+        println!(
+            "[warn] model_freshness=WARN chat.default_model={chat_model} appears deprecated; update [chat].default_model"
+        );
+    }
+}
 
-        // Also check chat.default_model override if set.
-        if let Some(ref chat) = config.chat
-            && let Some(ref chat_model) = chat.default_model
-        {
-            let chat_deprecated = DEPRECATED_PATTERNS
-                .iter()
-                .any(|pat| chat_model.contains(pat));
-            if chat_deprecated {
+/// Check agent memory count and store file size.
+fn doctor_memory_store(config: &AppConfig, workspace_root: &std::path::Path) {
+    let store_path = config
+        .store
+        .as_ref()
+        .map_or(".grokrs/state.db", |s| s.path.as_str());
+    let db_full_path = workspace_root.join(store_path);
+    if db_full_path.exists() {
+        let size_kb = std::fs::metadata(&db_full_path)
+            .map(|m| m.len())
+            .unwrap_or(0)
+            / 1024;
+        match grokrs_store::Store::open_with_path(workspace_root, store_path) {
+            Ok(store) => {
+                let memory_count = store.memories().count().unwrap_or(0);
+                let memory_limit = config.agent.as_ref().map_or(50, |a| a.memory_limit);
+                store.close().ok();
                 println!(
-                    "[warn] model_freshness=WARN chat.default_model={chat_model} appears deprecated; update [chat].default_model"
+                    "[ok] memory={memory_count}/{memory_limit} entries store_size={size_kb}KB ({})",
+                    db_full_path.display()
                 );
             }
+            Err(e) => println!(
+                "[warn] memory=store open error: {e} path={}",
+                db_full_path.display()
+            ),
         }
+    } else {
+        println!("[--] memory=store not created yet (run an agent task to initialise)");
     }
+}
 
-    // Agent memory count and store size.
-    {
-        let store_path = config
-            .store
-            .as_ref()
-            .map_or(".grokrs/state.db", |s| s.path.as_str());
-        let db_full_path = workspace_root.join(store_path);
+/// Report on competitive feature readiness based on configuration.
+///
+/// Each feature reports "ready" or "blocked: <reason>" with actionable
+/// fix instructions. No API calls are made — readiness is config-based only.
+fn doctor_features(
+    config: &AppConfig,
+    otel_endpoint: Option<&str>,
+    workspace_root: &std::path::Path,
+) {
+    let engine = PolicyEngine::new(config.policy.clone());
 
-        if db_full_path.exists() {
-            // Report store file size.
-            let size_bytes = std::fs::metadata(&db_full_path)
-                .map(|m| m.len())
-                .unwrap_or(0);
-            let size_kb = size_bytes / 1024;
+    println!();
+    println!("--- feature status ---");
 
-            // Open store and query memory count.
-            match grokrs_store::Store::open_with_path(workspace_root, store_path) {
-                Ok(store) => {
-                    let memory_count = store.memories().count().unwrap_or(0);
-                    let memory_limit = config.agent.as_ref().map_or(50, |a| a.memory_limit);
-                    store.close().ok();
-                    println!(
-                        "[ok] memory={memory_count}/{memory_limit} entries store_size={size_kb}KB ({})",
-                        db_full_path.display()
-                    );
-                }
-                Err(e) => {
-                    println!(
-                        "[warn] memory=store open error: {e} path={}",
-                        db_full_path.display()
-                    );
-                }
-            }
-        } else {
-            println!("[--] memory=store not created yet (run an agent task to initialise)");
-        }
-    }
+    let network_decision = engine.evaluate(&Effect::NetworkConnect {
+        host: "api.x.ai".to_owned(),
+    });
+    let network_ready = match &network_decision {
+        Decision::Allow { .. } => true,
+        Decision::Ask { .. } => config.session.approval_mode == "allow",
+        Decision::Deny { .. } => false,
+    };
+
+    doctor_core_features(config, network_ready, &network_decision);
+    doctor_approval_mode(config);
+    doctor_r2_features(config, otel_endpoint, workspace_root);
 }
 
 /// Format a policy decision as a short status string.

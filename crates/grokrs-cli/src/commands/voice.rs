@@ -88,32 +88,12 @@ pub struct VoiceArgs {
 /// 5. Create session record in store.
 /// 6. Connect to voice agent and enter interactive loop.
 /// 7. On exit, close session and print summary.
-pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
-    // Check if audio is available (compile-time feature).
-    let text_only = args.text_only || !audio_feature_available();
-
-    if !audio_feature_available() && !args.text_only {
-        eprintln!(
-            "warning: audio feature not enabled at build time; falling back to --text-only mode"
-        );
-    }
-
-    // --- Network policy check ---
-    check_network_policy(config)?;
-
-    // --- Resolve API key ---
+/// Build the WebSocket config from application config.
+fn build_ws_config(config: &AppConfig) -> WsClientConfig {
     let api_config = config.api.as_ref();
-    let api_key_env = api_config
-        .and_then(|a| a.api_key_env.as_deref())
-        .unwrap_or("XAI_API_KEY");
-    let api_key = resolve_api_key(api_key_env)
-        .map_err(|e| anyhow::anyhow!("failed to resolve API key: {e}"))?;
-
-    // --- Build WebSocket config ---
     let base_url = api_config.and_then(|a| a.base_url.as_ref()).map_or_else(
         || "wss://api.x.ai".into(),
         |u| {
-            // Convert https:// to wss:// for WebSocket.
             if let Some(rest) = u.strip_prefix("https://") {
                 format!("wss://{rest}")
             } else if let Some(rest) = u.strip_prefix("http://") {
@@ -123,17 +103,18 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
             }
         },
     );
-
-    let ws_config = WsClientConfig {
+    WsClientConfig {
         base_url,
         endpoint_path: "/v1/voice-agent".into(),
         ..WsClientConfig::default()
-    };
+    }
+}
 
-    // --- Build policy gate ---
+/// Build a network policy gate for the voice client.
+fn build_voice_policy_gate(config: &AppConfig) -> Arc<dyn PolicyGate> {
     let engine = PolicyEngine::new(config.policy.clone());
     let approval_mode = config.session.approval_mode.clone();
-    let gate: Arc<dyn PolicyGate> = Arc::new(FnPolicyGate::new(move |host: &str| {
+    Arc::new(FnPolicyGate::new(move |host: &str| {
         let effect = Effect::NetworkConnect {
             host: host.to_owned(),
         };
@@ -150,9 +131,11 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
                 reason: reason.to_owned(),
             },
         }
-    }));
+    }))
+}
 
-    // --- Build voice config ---
+/// Parse voice-related CLI arguments into a `VoiceConfig`.
+fn parse_voice_config(args: &VoiceArgs, config: &AppConfig) -> Result<VoiceConfig> {
     let voice_id: VoiceId = args
         .voice
         .parse()
@@ -163,7 +146,6 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
         "manual" => TurnDetectionMode::Manual,
         other => bail!("unknown turn detection mode '{other}'; expected: server_vad, manual"),
     };
-
     let vad_sensitivity = match args.vad_sensitivity.as_str() {
         "low" => VadSensitivity::Low,
         "medium" => VadSensitivity::Medium,
@@ -176,8 +158,8 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
         .clone()
         .unwrap_or_else(|| config.model.default_model.clone());
 
-    let voice_config = VoiceConfig {
-        model: model.clone(),
+    Ok(VoiceConfig {
+        model,
         voice: voice_id,
         language: args.language.clone(),
         turn_detection,
@@ -185,21 +167,41 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
         system_instructions: args.system.clone(),
         max_duration_secs: args.max_duration,
         ..VoiceConfig::default()
-    };
+    })
+}
 
-    // --- Build client ---
+pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
+    let text_only = args.text_only || !audio_feature_available();
+    if !audio_feature_available() && !args.text_only {
+        eprintln!(
+            "warning: audio feature not enabled at build time; falling back to --text-only mode"
+        );
+    }
+
+    check_network_policy(config)?;
+
+    let api_config = config.api.as_ref();
+    let api_key_env = api_config
+        .and_then(|a| a.api_key_env.as_deref())
+        .unwrap_or("XAI_API_KEY");
+    let api_key = resolve_api_key(api_key_env)
+        .map_err(|e| anyhow::anyhow!("failed to resolve API key: {e}"))?;
+
+    let ws_config = build_ws_config(config);
+    let gate = build_voice_policy_gate(config);
+    let voice_config = parse_voice_config(args, config)?;
+    let model = &voice_config.model;
+
     let client = VoiceAgentClient::new(ws_config, api_key, Some(gate));
 
-    // --- Store integration (best-effort) ---
+    // Store integration (best-effort).
     let store = open_store_best_effort(config);
     let session_id = uuid::Uuid::new_v4().to_string();
 
-    // Create session in store.
     {
         let mut session = Session::<Untrusted>::new(&session_id);
         session.transition(SessionState::Ready);
     }
-
     if let Some(ref s) = store {
         if let Err(e) = s.sessions().create(&session_id, "Untrusted") {
             eprintln!("warning: failed to persist session: {e}");
@@ -208,10 +210,10 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
         }
     }
 
-    // --- Print session info ---
     let mode_str = if text_only { "text-only" } else { "audio" };
     eprintln!(
-        "grokrs voice | model={model} | voice={voice_id} | mode={mode_str} | session={}",
+        "grokrs voice | model={model} | voice={} | mode={mode_str} | session={}",
+        voice_config.voice,
         &session_id[..session_id.len().min(8)]
     );
     if text_only {
@@ -222,7 +224,6 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
         eprintln!("Type /exit or press Ctrl-D to quit, /mute to toggle microphone.\n");
     }
 
-    // --- Connect ---
     eprintln!("Connecting to voice agent...");
     let (mut event_rx, sink) = client
         .connect(voice_config)
@@ -233,23 +234,19 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
         let _ = s.sessions().transition(&session_id, "RunningTurn");
     }
 
-    // --- Interactive loop ---
     let result = if text_only {
         run_text_mode(&client, &sink, &mut event_rx, store.as_ref(), &session_id).await
     } else {
-        // Audio mode delegates to the audio module when feature is available.
         #[cfg(feature = "audio")]
         {
             run_audio_mode(&client, &sink, &mut event_rx, store.as_ref(), &session_id).await
         }
         #[cfg(not(feature = "audio"))]
         {
-            // Should not reach here due to earlier fallback, but be safe.
             run_text_mode(&client, &sink, &mut event_rx, store.as_ref(), &session_id).await
         }
     };
 
-    // --- Cleanup ---
     eprintln!("\nClosing voice session...");
     let _ = client.close(&sink).await;
 
@@ -265,13 +262,105 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
             }
         }
     }
-
-    // Close store (best-effort).
     if let Some(s) = store {
         let _ = s.close();
     }
 
     result
+}
+
+/// Handle a single voice event, returning whether the session should close.
+async fn handle_voice_event(
+    client: &VoiceAgentClient,
+    sink: &Arc<tokio::sync::Mutex<grokrs_api::transport::websocket::WsSink>>,
+    voice_event: &VoiceEvent,
+    store: Option<&Store>,
+    session_id: &str,
+    transcript_log: &mut Vec<(String, String)>,
+) -> bool {
+    match voice_event {
+        VoiceEvent::SessionCreated {
+            session_id: sid, ..
+        } => {
+            eprintln!("[voice] Session created: {}", &sid[..sid.len().min(12)]);
+        }
+        VoiceEvent::Transcript {
+            role,
+            text,
+            is_final,
+        } => {
+            if *is_final {
+                println!("[{role}] {text}");
+                transcript_log.push((role.to_string(), text.clone()));
+                if let Some(s) = store {
+                    let body =
+                        serde_json::json!({"role": role.to_string(), "text": text}).to_string();
+                    if let Ok(tid) = s.transcripts().log_request(
+                        session_id,
+                        "/v1/voice-agent",
+                        "WS",
+                        Some(&body),
+                    ) {
+                        let usage = grokrs_store::types::TranscriptUsage::default();
+                        let _ = s
+                            .transcripts()
+                            .log_response(tid, 200, Some(text), &usage, None);
+                    }
+                }
+            } else {
+                eprint!("\r[{role}] {text}...");
+            }
+        }
+        VoiceEvent::FunctionCall {
+            call_id,
+            name,
+            arguments,
+        } => {
+            eprintln!("[voice] Function call: {name}({arguments})");
+            eprintln!("[voice] Call ID: {call_id}");
+            eprintln!(
+                "[voice] Function calling in voice text-only mode is not yet connected to tool execution."
+            );
+            let result_str = serde_json::json!({"error": "function execution not available in text-only voice mode"}).to_string();
+            if let Err(e) = client
+                .send_function_result(sink, call_id, &result_str)
+                .await
+            {
+                eprintln!("[voice] Failed to send function result: {e}");
+            }
+        }
+        VoiceEvent::StateChange { state, reason } => {
+            let reason_str = reason.as_deref().unwrap_or("");
+            eprintln!("[voice] State: {state} {reason_str}");
+            if *state == VoiceSessionState::Closed {
+                return true;
+            }
+        }
+        VoiceEvent::Error {
+            code,
+            message,
+            fatal,
+        } => {
+            eprintln!("[voice] Error ({code}): {message}");
+            if *fatal {
+                eprintln!("[voice] Fatal error -- session ending.");
+                return true;
+            }
+        }
+        VoiceEvent::Pong => {}
+        VoiceEvent::AudioChunk { .. } => {}
+        VoiceEvent::Usage {
+            input_tokens,
+            output_tokens,
+            input_audio_secs,
+            output_audio_secs,
+        } => {
+            eprintln!(
+                "[voice] Usage: input_tokens={input_tokens} output_tokens={output_tokens} audio_in={input_audio_secs:.1}s audio_out={output_audio_secs:.1}s"
+            );
+        }
+    }
+    false
 }
 
 /// Run the text-only interactive loop.
@@ -290,124 +379,34 @@ async fn run_text_mode(
 
     let stdin = BufReader::new(io::stdin());
     let mut lines = stdin.lines();
-
-    // Use a select loop to handle both stdin input and server events.
-    let mut session_closed = false;
-    let mut transcript_log: Vec<(String, String)> = Vec::new(); // (role, text)
+    let mut transcript_log: Vec<(String, String)> = Vec::new();
 
     loop {
         tokio::select! {
             biased;
 
-            // Check for incoming events from the server.
             event = event_rx.recv() => {
                 match event {
                     Some(Ok(VoiceReceived::Event(voice_event))) => {
-                        match &voice_event {
-                            VoiceEvent::SessionCreated { session_id: sid, .. } => {
-                                eprintln!("[voice] Session created: {}", &sid[..sid.len().min(12)]);
-                            }
-                            VoiceEvent::Transcript { role, text, is_final } => {
-                                if *is_final {
-                                    println!("[{role}] {text}");
-                                    transcript_log.push((role.to_string(), text.clone()));
-
-                                    // Log transcript to store.
-                                    if let Some(s) = store {
-                                        let body = serde_json::json!({
-                                            "role": role.to_string(),
-                                            "text": text,
-                                        }).to_string();
-                                        let endpoint = "/v1/voice-agent";
-                                        let method = "WS";
-                                        if let Ok(tid) = s.transcripts().log_request(
-                                            session_id, endpoint, method, Some(&body),
-                                        ) {
-                                            let usage = grokrs_store::types::TranscriptUsage::default();
-                                            let _ = s.transcripts().log_response(
-                                                tid, 200, Some(text), &usage, None,
-                                            );
-                                        }
-                                    }
-                                } else {
-                                    // Interim transcript -- show with indicator.
-                                    eprint!("\r[{role}] {text}...");
-                                }
-                            }
-                            VoiceEvent::FunctionCall { call_id, name, arguments } => {
-                                eprintln!("[voice] Function call: {name}({arguments})");
-                                eprintln!("[voice] Call ID: {call_id}");
-                                eprintln!("[voice] Function calling in voice text-only mode is not yet connected to tool execution.");
-                                // Send a stub result for now.
-                                let result_str = serde_json::json!({
-                                    "error": "function execution not available in text-only voice mode"
-                                }).to_string();
-                                if let Err(e) = client.send_function_result(sink, call_id, &result_str).await {
-                                    eprintln!("[voice] Failed to send function result: {e}");
-                                }
-                            }
-                            VoiceEvent::StateChange { state, reason } => {
-                                let reason_str = reason.as_deref().unwrap_or("");
-                                eprintln!("[voice] State: {state} {reason_str}");
-                                if *state == VoiceSessionState::Closed {
-                                    session_closed = true;
-                                }
-                            }
-                            VoiceEvent::Error { code, message, fatal } => {
-                                eprintln!("[voice] Error ({code}): {message}");
-                                if *fatal {
-                                    eprintln!("[voice] Fatal error -- session ending.");
-                                    session_closed = true;
-                                }
-                            }
-                            VoiceEvent::Pong => {
-                                // Heartbeat response -- no user-facing output.
-                            }
-                            VoiceEvent::AudioChunk { sequence, .. } => {
-                                // In text-only mode, ignore audio chunks.
-                                // Log for debugging if needed.
-                                let _ = sequence;
-                            }
-                            VoiceEvent::Usage { input_tokens, output_tokens, input_audio_secs, output_audio_secs } => {
-                                eprintln!(
-                                    "[voice] Usage: input_tokens={input_tokens} output_tokens={output_tokens} audio_in={input_audio_secs:.1}s audio_out={output_audio_secs:.1}s"
-                                );
-                            }
-                        }
-                        if session_closed {
+                        if handle_voice_event(client, sink, &voice_event, store, session_id, &mut transcript_log).await {
                             break;
                         }
                     }
-                    Some(Ok(VoiceReceived::Audio(_))) => {
-                        // In text-only mode, ignore audio data.
-                    }
-                    Some(Err(e)) => {
-                        eprintln!("[voice] Transport error: {e}");
-                        break;
-                    }
-                    None => {
-                        // Channel closed -- server disconnected.
-                        eprintln!("[voice] Connection closed.");
-                        break;
-                    }
+                    Some(Ok(VoiceReceived::Audio(_))) => {}
+                    Some(Err(e)) => { eprintln!("[voice] Transport error: {e}"); break; }
+                    None => { eprintln!("[voice] Connection closed."); break; }
                 }
             }
 
-            // Read user input from stdin.
             line = lines.next_line() => {
                 match line {
                     Ok(Some(input)) => {
                         let trimmed = input.trim();
-                        if trimmed.is_empty() {
-                            continue;
-                        }
+                        if trimmed.is_empty() { continue; }
 
-                        // Handle slash commands.
                         if trimmed.starts_with('/') {
                             match trimmed {
-                                "/exit" | "/quit" => {
-                                    break;
-                                }
+                                "/exit" | "/quit" => break,
                                 "/interrupt" => {
                                     if let Err(e) = client.send_control(sink, ControlAction::Interrupt).await {
                                         eprintln!("[voice] Failed to send interrupt: {e}");
@@ -427,26 +426,18 @@ async fn run_text_mode(
                             }
                         }
 
-                        // Send text to voice agent.
                         if let Err(e) = client.send_text(sink, trimmed).await {
                             eprintln!("[voice] Failed to send text: {e}");
                             break;
                         }
                     }
-                    Ok(None) => {
-                        // EOF (Ctrl-D).
-                        break;
-                    }
-                    Err(e) => {
-                        eprintln!("[voice] Input error: {e}");
-                        break;
-                    }
+                    Ok(None) => break,
+                    Err(e) => { eprintln!("[voice] Input error: {e}"); break; }
                 }
             }
         }
     }
 
-    // Print session summary.
     if !transcript_log.is_empty() {
         eprintln!(
             "\n[voice] Session summary: {} transcript(s)",

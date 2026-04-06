@@ -38,6 +38,9 @@ use grokrs_api::types::voice::*;
 /// 8. Server sends Usage
 /// 9. Client sends Control(Close)
 /// 10. Server sends StateChange(Closed)
+// End-to-end serialization test covering the full 12-step voice conversation
+// protocol; splitting would break the sequential flow narrative the test documents.
+#[allow(clippy::too_many_lines)]
 #[tokio::test]
 async fn full_conversation_flow_serialization() {
     // 1. Client -> Server: Session config

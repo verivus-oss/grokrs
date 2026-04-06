@@ -243,44 +243,49 @@ pub fn run(args: &ChatArgs, config: &AppConfig, rt: &tokio::runtime::Handle) -> 
     );
 
     // --- Cleanup ---
-    if let Some(ref s) = store {
-        match &result {
-            Ok(()) => {
-                let _ = s.sessions().transition(&session_id, "Closed");
-            }
-            Err(e) => {
-                let _ = s
-                    .sessions()
-                    .transition(&session_id, &format!("Failed: {e}"));
-            }
-        }
+    finalize_chat_session(&store, &session_id, &result, args.cache_key.as_deref());
 
-        // Print usage summary from store.
-        if let Ok(summary) = s.usage().session_totals(&session_id)
-            && summary.request_count > 0
-        {
-            eprintln!(
-                "[session {}] requests={} input_tokens={} output_tokens={} reasoning_tokens={}",
-                &session_id[..session_id.len().min(8)],
-                summary.request_count,
-                summary.total_input_tokens,
-                summary.total_output_tokens,
-                summary.total_reasoning_tokens,
-            );
-        }
-
-        // Print cache key in use, if any.
-        if let Some(ref key) = args.cache_key {
-            eprintln!("[cache] prompt_cache_key={key:?} (see turn usage for cached_tokens)");
-        }
-    }
-
-    // Close store (best-effort).
     if let Some(s) = store {
         let _ = s.close();
     }
 
     result
+}
+
+/// Finalize a chat session: transition to terminal state and print usage summary.
+fn finalize_chat_session(
+    store: &Option<Store>,
+    session_id: &str,
+    result: &Result<()>,
+    cache_key: Option<&str>,
+) {
+    let Some(ref s) = *store else { return };
+
+    match result {
+        Ok(()) => {
+            let _ = s.sessions().transition(session_id, "Closed");
+        }
+        Err(e) => {
+            let _ = s.sessions().transition(session_id, &format!("Failed: {e}"));
+        }
+    }
+
+    if let Ok(summary) = s.usage().session_totals(session_id)
+        && summary.request_count > 0
+    {
+        eprintln!(
+            "[session {}] requests={} input_tokens={} output_tokens={} reasoning_tokens={}",
+            &session_id[..session_id.len().min(8)],
+            summary.request_count,
+            summary.total_input_tokens,
+            summary.total_output_tokens,
+            summary.total_reasoning_tokens,
+        );
+    }
+
+    if let Some(key) = cache_key {
+        eprintln!("[cache] prompt_cache_key={key:?} (see turn usage for cached_tokens)");
+    }
 }
 
 /// Run the REPL loop with per-turn store logging.
@@ -372,34 +377,13 @@ fn run_repl_with_store<B: ChatBackend>(
                 ));
 
                 // Log response after receiving (best-effort).
-                if let Some(tid) = transcript_id
-                    && let Some(s) = store
-                {
-                    let new_turn_added = conversation.turn_count() > turn_count_pre;
-                    if new_turn_added {
-                        if let Some(last_turn) = conversation.turns().last() {
-                            let usage = grokrs_store::types::TranscriptUsage {
-                                cost_in_usd_ticks: None,
-                                input_tokens: Some(last_turn.usage.input_tokens),
-                                output_tokens: Some(last_turn.usage.output_tokens),
-                                reasoning_tokens: None,
-                            };
-                            let resp_body = if last_turn.assistant_response.is_empty() {
-                                None
-                            } else {
-                                Some(last_turn.assistant_response.as_str())
-                            };
-                            let resp_id = conversation.last_response_id();
-                            let _ = s
-                                .transcripts()
-                                .log_response(tid, 200, resp_body, &usage, resp_id);
-                        }
-                    } else {
-                        // No turn recorded -- error occurred.
-                        let _ = s.transcripts().log_error(tid, "no response recorded");
-                    }
-                    let _ = s.sessions().transition(session_id, "Ready");
-                }
+                log_turn_response(
+                    store,
+                    session_id,
+                    transcript_id,
+                    &conversation,
+                    turn_count_pre,
+                );
 
                 if outcome == repl::LineOutcome::Exit {
                     break;
@@ -442,6 +426,42 @@ fn run_repl_with_store<B: ChatBackend>(
     }
 
     Ok(())
+}
+
+/// Log a completed turn's response to the store (best-effort).
+fn log_turn_response(
+    store: Option<&Store>,
+    session_id: &str,
+    transcript_id: Option<i64>,
+    conversation: &ConversationHistory,
+    turn_count_pre: usize,
+) {
+    let (Some(tid), Some(s)) = (transcript_id, store) else {
+        return;
+    };
+    let new_turn_added = conversation.turn_count() > turn_count_pre;
+    if new_turn_added {
+        if let Some(last_turn) = conversation.turns().last() {
+            let usage = grokrs_store::types::TranscriptUsage {
+                cost_in_usd_ticks: None,
+                input_tokens: Some(last_turn.usage.input_tokens),
+                output_tokens: Some(last_turn.usage.output_tokens),
+                reasoning_tokens: None,
+            };
+            let resp_body = if last_turn.assistant_response.is_empty() {
+                None
+            } else {
+                Some(last_turn.assistant_response.as_str())
+            };
+            let resp_id = conversation.last_response_id();
+            let _ = s
+                .transcripts()
+                .log_response(tid, 200, resp_body, &usage, resp_id);
+        }
+    } else {
+        let _ = s.transcripts().log_error(tid, "no response recorded");
+    }
+    let _ = s.sessions().transition(session_id, "Ready");
 }
 
 /// Resolve a session for --resume, supporting prefix match.

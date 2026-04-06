@@ -338,6 +338,77 @@ fn normalise_date_filter(value: &str, is_upper: bool) -> String {
 // Output formatters
 // ---------------------------------------------------------------------------
 
+/// Column widths for the cost table.
+struct TableColumnWidths {
+    group: usize,
+    requests: usize,
+    input: usize,
+    output: usize,
+    reasoning: usize,
+    cost: usize,
+}
+
+impl TableColumnWidths {
+    /// Compute column widths from the header label and data rows.
+    fn compute(header: &str, rows: &[CostRow]) -> Self {
+        let max_col = |f: fn(&CostRow) -> usize, minimum: usize| -> usize {
+            rows.iter().map(f).max().unwrap_or(0).max(minimum)
+        };
+        Self {
+            group: max_col(|r| r.group.len(), header.len().max(7)),
+            requests: max_col(|r| format_u64(r.requests).len(), 8),
+            input: max_col(|r| format_u64(r.input_tokens).len(), 12),
+            output: max_col(|r| format_u64(r.output_tokens).len(), 13),
+            reasoning: max_col(|r| format_u64(r.reasoning_tokens).len(), 16),
+            cost: max_col(|r| r.cost_usd().len(), 10),
+        }
+    }
+
+    fn total_width(&self) -> usize {
+        self.group
+            + 2
+            + self.requests
+            + 2
+            + self.input
+            + 2
+            + self.output
+            + 2
+            + self.reasoning
+            + 2
+            + self.cost
+    }
+
+    /// Write a single data row into `out`.
+    fn write_row(
+        &self,
+        out: &mut String,
+        label: &str,
+        req: &str,
+        inp: &str,
+        outp: &str,
+        reas: &str,
+        cost: &str,
+    ) {
+        write!(
+            out,
+            "{:<gw$}  {:>rw$}  {:>iw$}  {:>ow$}  {:>zw$}  {:>cw$}\n",
+            label,
+            req,
+            inp,
+            outp,
+            reas,
+            cost,
+            gw = self.group,
+            rw = self.requests,
+            iw = self.input,
+            ow = self.output,
+            zw = self.reasoning,
+            cw = self.cost,
+        )
+        .expect("String write is infallible");
+    }
+}
+
 /// Format cost rows as a plain-text table.
 ///
 /// Returns a multi-line string with fixed-width columns. The header row uses
@@ -349,115 +420,43 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
     }
 
     let header = group_by.header();
-
-    // Compute column widths.
-    let group_width = rows
-        .iter()
-        .map(|r| r.group.len())
-        .max()
-        .unwrap_or(0)
-        .max(header.len())
-        .max(7); // minimum width for "TOTAL" summary line
-
-    let requests_width = rows
-        .iter()
-        .map(|r| format_u64(r.requests).len())
-        .max()
-        .unwrap_or(0)
-        .max(8); // "requests"
-
-    let input_width = rows
-        .iter()
-        .map(|r| format_u64(r.input_tokens).len())
-        .max()
-        .unwrap_or(0)
-        .max(12); // "input_tokens"
-
-    let output_width = rows
-        .iter()
-        .map(|r| format_u64(r.output_tokens).len())
-        .max()
-        .unwrap_or(0)
-        .max(13); // "output_tokens"
-
-    let reasoning_width = rows
-        .iter()
-        .map(|r| format_u64(r.reasoning_tokens).len())
-        .max()
-        .unwrap_or(0)
-        .max(16); // "reasoning_tokens"
-
-    let cost_width = rows
-        .iter()
-        .map(|r| r.cost_usd().len())
-        .max()
-        .unwrap_or(0)
-        .max(10); // "cost_usd"
-
+    let widths = TableColumnWidths::compute(header, rows);
     let mut out = String::new();
 
     // Header line.
-    write!(
-        out,
-        "{:<gw$}  {:>rw$}  {:>iw$}  {:>ow$}  {:>zw$}  {:>cw$}\n",
-        header.to_uppercase(),
+    widths.write_row(
+        &mut out,
+        &header.to_uppercase(),
         "REQUESTS",
         "INPUT_TOKENS",
         "OUTPUT_TOKENS",
         "REASONING_TOKENS",
         "COST_USD",
-        gw = group_width,
-        rw = requests_width,
-        iw = input_width,
-        ow = output_width,
-        zw = reasoning_width,
-        cw = cost_width,
-    )
-    .expect("String write is infallible");
+    );
 
     // Separator line.
-    let total_width = group_width
-        + 2
-        + requests_width
-        + 2
-        + input_width
-        + 2
-        + output_width
-        + 2
-        + reasoning_width
-        + 2
-        + cost_width;
-    out.push_str(&"-".repeat(total_width));
+    out.push_str(&"-".repeat(widths.total_width()));
     out.push('\n');
 
     // Data rows.
     for row in rows {
-        write!(
-            out,
-            "{:<gw$}  {:>rw$}  {:>iw$}  {:>ow$}  {:>zw$}  {:>cw$}\n",
-            row.group,
-            format_u64(row.requests),
-            format_u64(row.input_tokens),
-            format_u64(row.output_tokens),
-            format_u64(row.reasoning_tokens),
-            row.cost_usd(),
-            gw = group_width,
-            rw = requests_width,
-            iw = input_width,
-            ow = output_width,
-            zw = reasoning_width,
-            cw = cost_width,
-        )
-        .expect("String write is infallible");
+        widths.write_row(
+            &mut out,
+            &row.group,
+            &format_u64(row.requests),
+            &format_u64(row.input_tokens),
+            &format_u64(row.output_tokens),
+            &format_u64(row.reasoning_tokens),
+            &row.cost_usd(),
+        );
     }
 
     // Summary separator + summary line.
-    out.push_str(&"=".repeat(total_width));
+    out.push_str(&"=".repeat(widths.total_width()));
     out.push('\n');
 
     let total_tokens =
         summary.total_input_tokens + summary.total_output_tokens + summary.total_reasoning_tokens;
-
     write!(
         out,
         "Total: {} requests, {} tokens, {} | {} sessions, avg {}/session",

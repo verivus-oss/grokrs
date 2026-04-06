@@ -159,6 +159,98 @@ pub async fn run(command: &ModelsCommand, config: &AppConfig) -> Result<()> {
     }
 }
 
+/// Format modalities as "input->output" or "-" if both empty.
+fn format_modalities(input: &[String], output: &[String]) -> String {
+    if input.is_empty() && output.is_empty() {
+        "-".to_string()
+    } else {
+        let i = input.join(",");
+        let o = output.join(",");
+        format!("{i}->{o}")
+    }
+}
+
+/// Format a price with optional color, returning the display string.
+fn fmt_price_colored(price: Option<i64>, use_color: bool) -> String {
+    let s = fmt_price(price);
+    price.map(|p| price_color(p, &s, use_color)).unwrap_or(s)
+}
+
+/// Print JSON-serialized output and return early if `json_output` is true.
+/// Returns `true` if JSON was printed (caller should return `Ok(())`).
+fn print_json_if_requested<T: serde::Serialize>(data: &T, json_output: bool) -> Result<bool> {
+    if json_output {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(data).context("failed to serialize model list")?
+        );
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// List language models with pricing table.
+fn print_language_models(models: &[grokrs_api::types::model::LanguageModel], use_color: bool) {
+    println!(
+        "{:<30} {:<12} {:<12} {:<12} {:<25} {:<15}",
+        bold("MODEL ID", use_color),
+        "PROMPT",
+        "COMPLETION",
+        "CACHED",
+        "MODALITIES",
+        "CONTEXT"
+    );
+    println!("{}", "-".repeat(106));
+
+    for m in models {
+        let modalities = format_modalities(&m.input_modalities, &m.output_modalities);
+        let context = m
+            .max_prompt_length
+            .map_or_else(|| "-".into(), |l| format!("{l}"));
+        println!(
+            "{:<30} {:<12} {:<12} {:<12} {:<25} {:<15}",
+            bold(&m.id, use_color),
+            fmt_price_colored(m.prompt_text_token_price, use_color),
+            fmt_price_colored(m.completion_text_token_price, use_color),
+            fmt_price_colored(m.cached_prompt_text_token_price, use_color),
+            modalities,
+            context,
+        );
+    }
+    println!("\nPrices are in integer ticks (cents per 100M tokens).");
+    println!("Total: {} language models", models.len());
+}
+
+/// List media models (image or video) with a single price column.
+fn print_media_models(
+    models: &[(String, String, Vec<String>, Vec<String>, Option<i64>)],
+    price_header: &str,
+    kind: &str,
+    use_color: bool,
+) {
+    println!(
+        "{:<30} {:<15} {:<25} {:<15}",
+        bold("MODEL ID", use_color),
+        price_header,
+        "MODALITIES",
+        "OWNED BY"
+    );
+    println!("{}", "-".repeat(85));
+
+    for (id, owned_by, input_mod, output_mod, price) in models {
+        let modalities = format_modalities(input_mod, output_mod);
+        println!(
+            "{:<30} {:<15} {:<25} {:<15}",
+            bold(id, use_color),
+            fmt_price_colored(*price, use_color),
+            modalities,
+            owned_by,
+        );
+    }
+    println!("\nTotal: {} {kind} models", models.len());
+}
+
 /// List models by type.
 async fn run_list(client: &GrokClient, model_type: &str, json_output: bool) -> Result<()> {
     let use_color = is_tty() && !json_output;
@@ -170,77 +262,14 @@ async fn run_list(client: &GrokClient, model_type: &str, json_output: bool) -> R
                 .list_language_models()
                 .await
                 .context("failed to list language models")?;
-
-            if json_output {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&list)
-                        .context("failed to serialize model list")?
-                );
+            if print_json_if_requested(&list, json_output)? {
                 return Ok(());
             }
-
             if list.models.is_empty() {
                 println!("No language models available.");
                 return Ok(());
             }
-
-            // Header.
-            println!(
-                "{:<30} {:<12} {:<12} {:<12} {:<25} {:<15}",
-                bold("MODEL ID", use_color),
-                "PROMPT",
-                "COMPLETION",
-                "CACHED",
-                "MODALITIES",
-                "CONTEXT"
-            );
-            println!("{}", "-".repeat(106));
-
-            for model in &list.models {
-                let modalities =
-                    if model.input_modalities.is_empty() && model.output_modalities.is_empty() {
-                        "-".to_string()
-                    } else {
-                        let input = model.input_modalities.join(",");
-                        let output = model.output_modalities.join(",");
-                        format!("{input}->{output}")
-                    };
-
-                let context = model
-                    .max_prompt_length
-                    .map_or_else(|| "-".into(), |l| format!("{l}"));
-
-                let prompt_str = fmt_price(model.prompt_text_token_price);
-                let completion_str = fmt_price(model.completion_text_token_price);
-                let cached_str = fmt_price(model.cached_prompt_text_token_price);
-
-                let prompt_display = model
-                    .prompt_text_token_price
-                    .map(|p| price_color(p, &prompt_str, use_color))
-                    .unwrap_or(prompt_str);
-                let completion_display = model
-                    .completion_text_token_price
-                    .map(|p| price_color(p, &completion_str, use_color))
-                    .unwrap_or(completion_str);
-                let cached_display = model
-                    .cached_prompt_text_token_price
-                    .map(|p| price_color(p, &cached_str, use_color))
-                    .unwrap_or(cached_str);
-
-                println!(
-                    "{:<30} {:<12} {:<12} {:<12} {:<25} {:<15}",
-                    bold(&model.id, use_color),
-                    prompt_display,
-                    completion_display,
-                    cached_display,
-                    modalities,
-                    context
-                );
-            }
-
-            println!("\nPrices are in integer ticks (cents per 100M tokens).");
-            println!("Total: {} language models", list.models.len());
+            print_language_models(&list.models, use_color);
         }
         "image" => {
             let list = client
@@ -248,56 +277,27 @@ async fn run_list(client: &GrokClient, model_type: &str, json_output: bool) -> R
                 .list_image_models()
                 .await
                 .context("failed to list image models")?;
-
-            if json_output {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&list)
-                        .context("failed to serialize model list")?
-                );
+            if print_json_if_requested(&list, json_output)? {
                 return Ok(());
             }
-
             if list.models.is_empty() {
                 println!("No image generation models available.");
                 return Ok(());
             }
-
-            println!(
-                "{:<30} {:<15} {:<25} {:<15}",
-                bold("MODEL ID", use_color),
-                "PER IMAGE",
-                "MODALITIES",
-                "OWNED BY"
-            );
-            println!("{}", "-".repeat(85));
-
-            for model in &list.models {
-                let modalities =
-                    if model.input_modalities.is_empty() && model.output_modalities.is_empty() {
-                        "-".to_string()
-                    } else {
-                        let input = model.input_modalities.join(",");
-                        let output = model.output_modalities.join(",");
-                        format!("{input}->{output}")
-                    };
-
-                let price_str = fmt_price(model.per_image_price);
-                let price_display = model
-                    .per_image_price
-                    .map(|p| price_color(p, &price_str, use_color))
-                    .unwrap_or(price_str);
-
-                println!(
-                    "{:<30} {:<15} {:<25} {:<15}",
-                    bold(&model.id, use_color),
-                    price_display,
-                    modalities,
-                    model.owned_by
-                );
-            }
-
-            println!("\nTotal: {} image generation models", list.models.len());
+            let rows: Vec<_> = list
+                .models
+                .iter()
+                .map(|m| {
+                    (
+                        m.id.clone(),
+                        m.owned_by.clone(),
+                        m.input_modalities.clone(),
+                        m.output_modalities.clone(),
+                        m.per_image_price,
+                    )
+                })
+                .collect();
+            print_media_models(&rows, "PER IMAGE", "image generation", use_color);
         }
         "video" => {
             let list = client
@@ -305,56 +305,27 @@ async fn run_list(client: &GrokClient, model_type: &str, json_output: bool) -> R
                 .list_video_models()
                 .await
                 .context("failed to list video models")?;
-
-            if json_output {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&list)
-                        .context("failed to serialize model list")?
-                );
+            if print_json_if_requested(&list, json_output)? {
                 return Ok(());
             }
-
             if list.models.is_empty() {
                 println!("No video generation models available.");
                 return Ok(());
             }
-
-            println!(
-                "{:<30} {:<15} {:<25} {:<15}",
-                bold("MODEL ID", use_color),
-                "PER SECOND",
-                "MODALITIES",
-                "OWNED BY"
-            );
-            println!("{}", "-".repeat(85));
-
-            for model in &list.models {
-                let modalities =
-                    if model.input_modalities.is_empty() && model.output_modalities.is_empty() {
-                        "-".to_string()
-                    } else {
-                        let input = model.input_modalities.join(",");
-                        let output = model.output_modalities.join(",");
-                        format!("{input}->{output}")
-                    };
-
-                let price_str = fmt_price(model.per_second_price);
-                let price_display = model
-                    .per_second_price
-                    .map(|p| price_color(p, &price_str, use_color))
-                    .unwrap_or(price_str);
-
-                println!(
-                    "{:<30} {:<15} {:<25} {:<15}",
-                    bold(&model.id, use_color),
-                    price_display,
-                    modalities,
-                    model.owned_by
-                );
-            }
-
-            println!("\nTotal: {} video generation models", list.models.len());
+            let rows: Vec<_> = list
+                .models
+                .iter()
+                .map(|m| {
+                    (
+                        m.id.clone(),
+                        m.owned_by.clone(),
+                        m.input_modalities.clone(),
+                        m.output_modalities.clone(),
+                        m.per_second_price,
+                    )
+                })
+                .collect();
+            print_media_models(&rows, "PER SECOND", "video generation", use_color);
         }
         other => bail!(
             "unknown model type: '{other}'\n\
@@ -365,42 +336,60 @@ async fn run_list(client: &GrokClient, model_type: &str, json_output: bool) -> R
     Ok(())
 }
 
+/// Print common model metadata fields (ID, owned_by, created, modalities, etc.).
+fn print_model_common(
+    title: &str,
+    id: &str,
+    owned_by: &str,
+    created: i64,
+    input_modalities: &[String],
+    output_modalities: &[String],
+    version: Option<&str>,
+    fingerprint: Option<&str>,
+    use_color: bool,
+) {
+    println!("{}", bold(title, use_color));
+    println!("{}", "-".repeat(50));
+    println!("ID:             {}", bold(id, use_color));
+    println!("Owned By:       {owned_by}");
+    println!("Created:        {created}");
+    if !input_modalities.is_empty() {
+        println!("Input:          {}", input_modalities.join(", "));
+    }
+    if !output_modalities.is_empty() {
+        println!("Output:         {}", output_modalities.join(", "));
+    }
+    if let Some(v) = version {
+        println!("Version:        {v}");
+    }
+    if let Some(fp) = fingerprint {
+        println!("Fingerprint:    {fp}");
+    }
+}
+
 /// Show detailed information for a single model.
 async fn run_info(client: &GrokClient, model_id: &str, json_output: bool) -> Result<()> {
     let use_color = is_tty() && !json_output;
 
     // Try language model first, then image, then video.
     if let Ok(model) = client.models().get_language_model(model_id).await {
-        if json_output {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&model).context("failed to serialize model info")?
-            );
+        if print_json_if_requested(&model, json_output)? {
             return Ok(());
         }
 
-        println!("{}", bold("Language Model", use_color));
-        println!("{}", "-".repeat(50));
-        println!("ID:             {}", bold(&model.id, use_color));
-        println!("Owned By:       {}", model.owned_by);
-        println!("Created:        {}", model.created);
-
+        print_model_common(
+            "Language Model",
+            &model.id,
+            &model.owned_by,
+            model.created,
+            &model.input_modalities,
+            &model.output_modalities,
+            model.version.as_deref(),
+            model.fingerprint.as_deref(),
+            use_color,
+        );
         if !model.aliases.is_empty() {
             println!("Aliases:        {}", model.aliases.join(", "));
-        }
-
-        if !model.input_modalities.is_empty() {
-            println!("Input:          {}", model.input_modalities.join(", "));
-        }
-        if !model.output_modalities.is_empty() {
-            println!("Output:         {}", model.output_modalities.join(", "));
-        }
-
-        if let Some(v) = &model.version {
-            println!("Version:        {v}");
-        }
-        if let Some(fp) = &model.fingerprint {
-            println!("Fingerprint:    {fp}");
         }
         if let Some(max) = model.max_prompt_length {
             println!("Context Window: {max} tokens");
@@ -409,86 +398,54 @@ async fn run_info(client: &GrokClient, model_id: &str, json_output: bool) -> Res
         println!();
         println!("{}", bold("Pricing (cents per 100M tokens)", use_color));
         println!("{}", "-".repeat(50));
-
-        let fields = [
+        for (label, price) in [
             ("Prompt Text", model.prompt_text_token_price),
             ("Completion Text", model.completion_text_token_price),
             ("Cached Prompt", model.cached_prompt_text_token_price),
             ("Prompt Image", model.prompt_image_token_price),
             ("Search", model.search_price),
             ("Image Gen", model.image_price),
-        ];
-
-        for (label, price) in &fields {
-            let display = fmt_price(*price);
-            let colored = price
-                .map(|p| price_color(p, &display, use_color))
-                .unwrap_or(display);
-            println!("  {label:<20} {colored}");
+        ] {
+            println!("  {label:<20} {}", fmt_price_colored(price, use_color));
         }
-
         return Ok(());
     }
 
     if let Ok(model) = client.models().get_image_model(model_id).await {
-        if json_output {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&model).context("failed to serialize model info")?
-            );
+        if print_json_if_requested(&model, json_output)? {
             return Ok(());
         }
-
-        println!("{}", bold("Image Generation Model", use_color));
-        println!("{}", "-".repeat(50));
-        println!("ID:             {}", bold(&model.id, use_color));
-        println!("Owned By:       {}", model.owned_by);
-        println!("Created:        {}", model.created);
-        if !model.input_modalities.is_empty() {
-            println!("Input:          {}", model.input_modalities.join(", "));
-        }
-        if !model.output_modalities.is_empty() {
-            println!("Output:         {}", model.output_modalities.join(", "));
-        }
-        if let Some(v) = &model.version {
-            println!("Version:        {v}");
-        }
-        if let Some(fp) = &model.fingerprint {
-            println!("Fingerprint:    {fp}");
-        }
+        print_model_common(
+            "Image Generation Model",
+            &model.id,
+            &model.owned_by,
+            model.created,
+            &model.input_modalities,
+            &model.output_modalities,
+            model.version.as_deref(),
+            model.fingerprint.as_deref(),
+            use_color,
+        );
         println!("Per Image:      {}", fmt_price(model.per_image_price));
-
         return Ok(());
     }
 
     if let Ok(model) = client.models().get_video_model(model_id).await {
-        if json_output {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&model).context("failed to serialize model info")?
-            );
+        if print_json_if_requested(&model, json_output)? {
             return Ok(());
         }
-
-        println!("{}", bold("Video Generation Model", use_color));
-        println!("{}", "-".repeat(50));
-        println!("ID:             {}", bold(&model.id, use_color));
-        println!("Owned By:       {}", model.owned_by);
-        println!("Created:        {}", model.created);
-        if !model.input_modalities.is_empty() {
-            println!("Input:          {}", model.input_modalities.join(", "));
-        }
-        if !model.output_modalities.is_empty() {
-            println!("Output:         {}", model.output_modalities.join(", "));
-        }
-        if let Some(v) = &model.version {
-            println!("Version:        {v}");
-        }
-        if let Some(fp) = &model.fingerprint {
-            println!("Fingerprint:    {fp}");
-        }
+        print_model_common(
+            "Video Generation Model",
+            &model.id,
+            &model.owned_by,
+            model.created,
+            &model.input_modalities,
+            &model.output_modalities,
+            model.version.as_deref(),
+            model.fingerprint.as_deref(),
+            use_color,
+        );
         println!("Per Second:     {}", fmt_price(model.per_second_price));
-
         return Ok(());
     }
 

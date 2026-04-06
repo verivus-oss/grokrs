@@ -263,6 +263,131 @@ async fn run_models(client: &GrokClient) -> Result<()> {
     Ok(())
 }
 
+/// Accumulated state from consuming a streaming response.
+struct StreamResult {
+    found_text: bool,
+    usage_input: u64,
+    usage_output: u64,
+    stream_error: Option<String>,
+    response_body: String,
+}
+
+/// Consume a parsed response stream, printing text deltas to stdout.
+async fn consume_response_stream(
+    mut stream: std::pin::Pin<
+        Box<
+            dyn futures::Stream<
+                    Item = Result<ResponseStreamEvent, grokrs_api::types::stream::StreamError>,
+                > + Send,
+        >,
+    >,
+) -> StreamResult {
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    let mut result = StreamResult {
+        found_text: false,
+        usage_input: 0,
+        usage_output: 0,
+        stream_error: None,
+        response_body: String::new(),
+    };
+
+    while let Some(event) = stream.next().await {
+        match event {
+            Ok(ResponseStreamEvent::ContentDelta { delta, .. }) => {
+                if let Some(text) = &delta.text {
+                    write!(out, "{text}").ok();
+                    out.flush().ok();
+                    result.response_body.push_str(text);
+                    result.found_text = true;
+                }
+            }
+            Ok(ResponseStreamEvent::OutputTextDelta { delta, .. }) => {
+                write!(out, "{delta}").ok();
+                out.flush().ok();
+                result.response_body.push_str(&delta);
+                result.found_text = true;
+            }
+            Ok(ResponseStreamEvent::FunctionCallArgumentsDone { arguments, .. }) => {
+                eprintln!("[function_call] {arguments}");
+            }
+            Ok(ResponseStreamEvent::ResponseCompleted { response }) => {
+                if let Some(usage) = response.get("usage") {
+                    result.usage_input = usage["input_tokens"].as_u64().unwrap_or(0);
+                    result.usage_output = usage["output_tokens"].as_u64().unwrap_or(0);
+                    let total = usage["total_tokens"]
+                        .as_u64()
+                        .unwrap_or(result.usage_input + result.usage_output);
+                    eprintln!(
+                        "\n[usage] input={} output={} total={total}",
+                        result.usage_input, result.usage_output
+                    );
+                }
+            }
+            Ok(_) => {} // Other events (created, in_progress, etc.) are ignored
+            Err(e) => {
+                result.stream_error = Some(e.to_string());
+                break;
+            }
+        }
+    }
+    result
+}
+
+/// Log stream results to store and finalize session state.
+fn finalize_chat_store(
+    store: &Option<Store>,
+    session_id: &str,
+    transcript_id: Option<i64>,
+    stream: &StreamResult,
+) {
+    let Some(ref s) = *store else { return };
+
+    if let Some(tid) = transcript_id {
+        if let Some(ref err) = stream.stream_error {
+            let _ = s.transcripts().log_error(tid, err);
+        } else {
+            let usage = TranscriptUsage {
+                cost_in_usd_ticks: None,
+                input_tokens: Some(stream.usage_input),
+                output_tokens: Some(stream.usage_output),
+                reasoning_tokens: None,
+            };
+            let body_ref = if stream.response_body.is_empty() {
+                None
+            } else {
+                Some(stream.response_body.as_str())
+            };
+            let _ = s
+                .transcripts()
+                .log_response(tid, 200, body_ref, &usage, None);
+        }
+    }
+
+    if stream.stream_error.is_some() {
+        let msg = stream.stream_error.as_deref().unwrap_or("unknown error");
+        let _ = s
+            .sessions()
+            .transition(session_id, &format!("Failed: {msg}"));
+    } else {
+        let _ = s.sessions().transition(session_id, "Ready");
+        let _ = s.sessions().transition(session_id, "Closed");
+    }
+
+    if let Ok(summary) = s.usage().session_totals(session_id)
+        && summary.request_count > 0
+    {
+        eprintln!(
+            "[session {}] requests={} input_tokens={} output_tokens={} reasoning_tokens={}",
+            &session_id[..8],
+            summary.request_count,
+            summary.total_input_tokens,
+            summary.total_output_tokens,
+            summary.total_reasoning_tokens,
+        );
+    }
+}
+
 /// Send a one-shot prompt via the Responses API with streaming output (store=false).
 ///
 /// When `store` is `Some`, creates a session, logs the request/response
@@ -281,13 +406,9 @@ async fn run_chat(
     let mut transcript_id: Option<i64> = None;
 
     if let Some(ref s) = store {
-        // Create session: Created state.
         if s.sessions().create(&session_id, "Untrusted").is_ok() {
-            // Transition to Ready.
             let _ = s.sessions().transition(&session_id, "Ready");
-            // Transition to RunningTurn before API call.
             let _ = s.sessions().transition(&session_id, "RunningTurn");
-            // Log the request.
             let body = serde_json::json!({"model": model, "prompt": prompt}).to_string();
             transcript_id = s
                 .transcripts()
@@ -301,16 +422,14 @@ async fn run_chat(
         .stream(true)
         .build();
 
-    let raw_stream = client
+    let raw_stream = match client
         .responses()
         .create_stream(&request)
         .await
-        .context("failed to create streaming response");
-
-    let raw_stream = match raw_stream {
+        .context("failed to create streaming response")
+    {
         Ok(s) => s,
         Err(e) => {
-            // Log error to store (best-effort).
             if let (Some(s), Some(tid)) = (&store, transcript_id) {
                 let _ = s.transcripts().log_error(tid, &e.to_string());
                 let _ = s
@@ -321,111 +440,18 @@ async fn run_chat(
         }
     };
 
-    let mut stream = parse_response_stream(raw_stream);
-    let stdout = std::io::stdout();
-    let mut out = stdout.lock();
-    let mut found_text = false;
-    let mut usage_input: u64 = 0;
-    let mut usage_output: u64 = 0;
-    let mut stream_error: Option<String> = None;
-    let mut response_body = String::new();
-
-    while let Some(event) = stream.next().await {
-        match event {
-            Ok(ResponseStreamEvent::ContentDelta { delta, .. }) => {
-                if let Some(text) = &delta.text {
-                    write!(out, "{text}").ok();
-                    out.flush().ok();
-                    response_body.push_str(text);
-                    found_text = true;
-                }
-            }
-            Ok(ResponseStreamEvent::OutputTextDelta { delta, .. }) => {
-                write!(out, "{delta}").ok();
-                out.flush().ok();
-                response_body.push_str(&delta);
-                found_text = true;
-            }
-            Ok(ResponseStreamEvent::FunctionCallArgumentsDone { arguments, .. }) => {
-                eprintln!("[function_call] {arguments}");
-            }
-            Ok(ResponseStreamEvent::ResponseCompleted { response }) => {
-                if let Some(usage) = response.get("usage") {
-                    usage_input = usage["input_tokens"].as_u64().unwrap_or(0);
-                    usage_output = usage["output_tokens"].as_u64().unwrap_or(0);
-                    let total = usage["total_tokens"]
-                        .as_u64()
-                        .unwrap_or(usage_input + usage_output);
-                    eprintln!("\n[usage] input={usage_input} output={usage_output} total={total}");
-                }
-            }
-            Ok(_) => {} // Other events (created, in_progress, etc.) are ignored
-            Err(e) => {
-                stream_error = Some(e.to_string());
-                break;
-            }
-        }
+    let stream_result = consume_response_stream(parse_response_stream(raw_stream)).await;
+    if stream_result.found_text {
+        println!();
     }
 
-    if found_text {
-        println!(); // trailing newline after streamed text
-    }
+    finalize_chat_store(&store, &session_id, transcript_id, &stream_result);
 
-    // Log to store (best-effort).
-    if let Some(ref s) = store {
-        if let Some(tid) = transcript_id {
-            if let Some(ref err) = stream_error {
-                let _ = s.transcripts().log_error(tid, err);
-            } else {
-                let usage = TranscriptUsage {
-                    cost_in_usd_ticks: None, // Not available from stream response
-                    input_tokens: Some(usage_input),
-                    output_tokens: Some(usage_output),
-                    reasoning_tokens: None,
-                };
-                let body_ref = if response_body.is_empty() {
-                    None
-                } else {
-                    Some(response_body.as_str())
-                };
-                let _ = s
-                    .transcripts()
-                    .log_response(tid, 200, body_ref, &usage, None);
-            }
-        }
-
-        // Transition session state.
-        if stream_error.is_some() {
-            let msg = stream_error.as_deref().unwrap_or("unknown error");
-            let _ = s
-                .sessions()
-                .transition(&session_id, &format!("Failed: {msg}"));
-        } else {
-            let _ = s.sessions().transition(&session_id, "Ready");
-            let _ = s.sessions().transition(&session_id, "Closed");
-        }
-
-        // Print usage summary to stderr.
-        if let Ok(summary) = s.usage().session_totals(&session_id)
-            && summary.request_count > 0
-        {
-            eprintln!(
-                "[session {}] requests={} input_tokens={} output_tokens={} reasoning_tokens={}",
-                &session_id[..8],
-                summary.request_count,
-                summary.total_input_tokens,
-                summary.total_output_tokens,
-                summary.total_reasoning_tokens,
-            );
-        }
-    }
-
-    // Close store (best-effort, consumes the store).
     if let Some(s) = store {
         let _ = s.close();
     }
 
-    if let Some(err) = stream_error {
+    if let Some(err) = stream_result.stream_error {
         bail!("stream error: {err}");
     }
 

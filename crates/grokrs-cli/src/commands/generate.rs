@@ -378,66 +378,59 @@ async fn run_image(
         output.to_str().context("output path must be valid UTF-8")?,
     )?);
 
+    save_image_data(image_data, &output_abs).await?;
+
+    if let Some(ref revised) = image_data.revised_prompt {
+        eprintln!("[generate] revised prompt: {revised}");
+    }
+
+    Ok(())
+}
+
+/// Write image data (URL or base64) to disk, creating parent directories as needed.
+async fn save_image_data(
+    image_data: &grokrs_api::types::images::ImageData,
+    output_abs: &std::path::Path,
+) -> Result<()> {
     // Create parent directories if needed.
     if let Some(parent) = output_abs.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create directory {}", parent.display()))?;
     }
 
-    if let Some(ref url) = image_data.url {
-        // Download the image from the URL.
+    let bytes = if let Some(ref url) = image_data.url {
         eprintln!("[generate] downloading image from URL...");
-        let bytes = reqwest::get(url)
+        reqwest::get(url)
             .await
             .context("failed to download image")?
             .bytes()
             .await
-            .context("failed to read image bytes")?;
-
-        if output_abs.exists() {
-            eprintln!(
-                "[generate] warning: overwriting existing file {}",
-                output_abs.display()
-            );
-        }
-
-        std::fs::write(&output_abs, &bytes)
-            .with_context(|| format!("failed to write image to {}", output_abs.display()))?;
-
-        eprintln!(
-            "[generate] wrote {} bytes to {}",
-            bytes.len(),
-            output_abs.display()
-        );
+            .context("failed to read image bytes")?
+            .to_vec()
     } else if let Some(ref b64) = image_data.b64_json {
-        // Decode base64 and write.
         use base64::Engine as _;
-        let bytes = base64::engine::general_purpose::STANDARD
+        base64::engine::general_purpose::STANDARD
             .decode(b64)
-            .context("failed to decode base64 image data")?;
-
-        if output_abs.exists() {
-            eprintln!(
-                "[generate] warning: overwriting existing file {}",
-                output_abs.display()
-            );
-        }
-
-        std::fs::write(&output_abs, &bytes)
-            .with_context(|| format!("failed to write image to {}", output_abs.display()))?;
-
-        eprintln!(
-            "[generate] wrote {} bytes to {}",
-            bytes.len(),
-            output_abs.display()
-        );
+            .context("failed to decode base64 image data")?
     } else {
         bail!("API returned image data with neither URL nor base64 content");
+    };
+
+    if output_abs.exists() {
+        eprintln!(
+            "[generate] warning: overwriting existing file {}",
+            output_abs.display()
+        );
     }
 
-    if let Some(ref revised) = image_data.revised_prompt {
-        eprintln!("[generate] revised prompt: {revised}");
-    }
+    std::fs::write(output_abs, &bytes)
+        .with_context(|| format!("failed to write image to {}", output_abs.display()))?;
+
+    eprintln!(
+        "[generate] wrote {} bytes to {}",
+        bytes.len(),
+        output_abs.display()
+    );
 
     Ok(())
 }

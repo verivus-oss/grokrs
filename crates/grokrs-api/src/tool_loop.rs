@@ -910,6 +910,9 @@ mod tests {
         }
     }
 
+    // Single cohesive integration test exercising multi-turn stateful chaining;
+    // splitting would obscure the sequential request-response assertions.
+    #[allow(clippy::too_many_lines)]
     #[tokio::test]
     async fn tool_loop_mode_a_stateful_chains_response_ids() {
         use crate::transport::auth::ApiKeySecret;
@@ -1164,6 +1167,9 @@ mod tests {
     /// Stateless Mode B must only replay input-compatible `OutputItem` variants
     /// (Message, FunctionCall, FunctionCallOutput) and skip server-side tool
     /// calls, reasoning traces, and unknown items.
+    // Single cohesive integration test verifying stateless replay filtering;
+    // the assertions form a sequential chain that is clearest in one function.
+    #[allow(clippy::too_many_lines)]
     #[tokio::test]
     async fn tool_loop_mode_b_filters_non_input_output_items() {
         use crate::transport::auth::ApiKeySecret;

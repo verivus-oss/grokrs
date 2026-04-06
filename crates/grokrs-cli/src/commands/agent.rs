@@ -544,72 +544,35 @@ fn emit_event(output_format: OutputFormat, event: &HeadlessEvent) {
     }
 }
 
-/// Execute the `grokrs agent` command.
-///
-/// Returns an [`AgentResult`] with the exit code. In interactive mode the
-/// exit code is always `Success` on `Ok(...)` (errors propagate via `?`).
-/// In headless mode the exit code distinguishes error categories.
-pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
-    // Resolve task (positional arg or stdin in headless mode).
-    let task = match resolve_task(args) {
-        Ok(t) => t,
-        Err(e) => {
-            emit_event(
-                args.output,
-                &HeadlessEvent::Error {
-                    message: format!("{e:#}"),
-                    exit_code: AgentExitCode::AgentError as u8,
-                },
-            );
-            return Err(e);
-        }
-    };
-
-    // Resolve approval mode: headless defaults to "deny" unless overridden.
-    let approval_mode = if let Some(ref mode) = args.approval_mode {
-        mode.clone()
-    } else if args.headless {
-        "deny".to_owned()
-    } else {
-        config.session.approval_mode.clone()
-    };
-
-    // Resolve timeout: headless defaults to 300s, interactive has none.
-    let timeout_secs: Option<u64> = args
-        .timeout
-        .or(if args.headless { Some(300) } else { None });
-
-    if let Err(e) = check_network_allowed(config) {
-        emit_event(
-            args.output,
-            &HeadlessEvent::Error {
-                message: format!("{e:#}"),
-                exit_code: AgentExitCode::PolicyDenial as u8,
-            },
-        );
-        if args.headless {
-            return Ok(AgentResult {
-                exit_code: AgentExitCode::PolicyDenial,
-            });
-        }
-        return Err(e);
+/// Close a store after transitioning the session to a terminal state.
+fn close_session_store(store: Option<Store>, session_id: &str, terminal_state: &str) {
+    if let Some(ref s) = store {
+        let _ = s.sessions().transition(session_id, terminal_state);
     }
+    if let Some(s) = store {
+        let _ = s.close();
+    }
+}
 
-    // CLI args override [agent] config defaults. Option-based: None = not provided.
-    let agent_config = config.agent.as_ref();
-    let trust_str = args
-        .trust
-        .as_deref()
-        .or_else(|| agent_config.map(|c| c.default_trust.as_str()))
-        .unwrap_or("untrusted");
-    let trust_rank = parse_trust_rank(trust_str)?;
-    let model = args.model.as_deref().unwrap_or(&config.model.default_model);
-
-    // Build tool registry and filter by trust rank.
+/// Build the tool registry, connect MCP servers, and validate tool availability.
+///
+/// Returns the tool definitions, MCP clients, resolved max iterations, and
+/// trust rank. Emits headless events and bails on validation failure.
+async fn build_tool_registry(
+    args: &AgentArgs,
+    config: &AppConfig,
+    approval_mode: &str,
+    trust_str: &str,
+    trust_rank: u8,
+) -> Result<(
+    grokrs_tool::registry::ToolRegistry,
+    Vec<ConnectedMcpServer>,
+    Vec<serde_json::Value>,
+)> {
     let mut registry = default_registry();
 
     // Connect to MCP servers (config-based + CLI ad-hoc).
-    let mcp_clients = connect_mcp_servers(args, config, &approval_mode, &mut registry).await;
+    let mcp_clients = connect_mcp_servers(args, config, approval_mode, &mut registry).await;
     if !mcp_clients.is_empty() {
         let mcp_tool_names: Vec<&str> = registry
             .available_tools(trust_rank)
@@ -623,7 +586,6 @@ pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
     }
 
     let tool_defs = registry.tool_definitions(trust_rank);
-
     if tool_defs.is_empty() {
         let msg = format!("no tools available at trust level '{trust_str}'");
         emit_event(
@@ -636,81 +598,40 @@ pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
         bail!("{msg}");
     }
 
-    let max_iterations = args
-        .max_iterations
-        .or_else(|| agent_config.map(|c| c.max_iterations))
-        .unwrap_or(10);
+    Ok((registry, mcp_clients, tool_defs))
+}
 
+/// Print agent diagnostic banner to stderr.
+fn emit_agent_banner(
+    args: &AgentArgs,
+    trust_str: &str,
+    model: &str,
+    max_iterations: u32,
+    tool_count: usize,
+    approval_mode: &str,
+    timeout_secs: Option<u64>,
+    registry: &grokrs_tool::registry::ToolRegistry,
+    trust_rank: u8,
+    search_config: &SearchConfig,
+) {
     eprintln!(
-        "[agent] trust={} model={} max_iterations={} tools={} headless={} approval_mode={}",
-        trust_str,
-        model,
-        max_iterations,
-        tool_defs.len(),
+        "[agent] trust={trust_str} model={model} max_iterations={max_iterations} \
+         tools={tool_count} headless={} approval_mode={approval_mode}",
         args.headless,
-        approval_mode,
     );
-
     if args.dry_run {
         eprintln!("[agent] dry-run mode: tools will not be executed");
     }
-
     if let Some(t) = timeout_secs {
         eprintln!("[agent] timeout: {t}s");
     }
-
-    // Show available tools.
     let tool_names: Vec<&str> = registry
         .available_tools(trust_rank)
         .iter()
         .map(|t| t.name())
         .collect();
     eprintln!("[agent] available tools: {}", tool_names.join(", "));
-
-    // Build API client.
-    let engine = PolicyEngine::new(config.policy.clone());
-    let gate = build_policy_gate(engine, &approval_mode);
-    let client =
-        GrokClient::from_config(config, Some(gate)).context("failed to construct API client")?;
-
-    // Build workspace root.
-    let workspace_root =
-        WorkspaceRoot::new(&env::current_dir().context("failed to resolve current directory")?)
-            .context("failed to construct workspace root")?;
-
-    // Build a second registry for the executor (includes MCP tools).
-    let mut executor_registry = default_registry();
-    // Re-connect MCP tools for the executor's registry (shared clients).
-    register_mcp_tools_from_clients(&mcp_clients, &mut executor_registry);
-
-    // Build the executor using the existing PolicyGatedExecutor.
-    let inner_executor = PolicyGatedExecutor::new(
-        executor_registry,
-        PolicyEngine::new(config.policy.clone()),
-        workspace_root,
-        approval_mode.clone(),
-        trust_rank,
-    );
-
-    let executor = LoggingExecutor {
-        inner: inner_executor,
-        dry_run: args.dry_run,
-        output_format: args.output,
-    };
-
-    // Resolve search config: CLI flags override [agent].enable_search.
-    let enable_search_from_config = agent_config.is_some_and(|c| c.enable_search);
-    let search_config = SearchConfig {
-        web_search: args.search || enable_search_from_config,
-        x_search: args.x_search,
-        citations: args.citations,
-        ..Default::default()
-    };
-
-    // Merge function tool definitions with built-in search tools.
-    let mut all_tools = tool_defs;
     if !search_config.is_empty() {
-        all_tools.extend(search_config.tool_values());
         let search_tool_names: Vec<&str> = search_config
             .builtin_tools()
             .iter()
@@ -718,39 +639,310 @@ pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
             .collect();
         eprintln!("[agent] search tools: {}", search_tool_names.join(", "));
     }
+}
 
-    // Store integration (best-effort) — opened early so memories can be
-    // included in the system prompt.
-    let store = open_store_best_effort(config);
+/// Handle the successful tool-loop response: print output, emit events, log to store.
+fn handle_success(
+    response: &grokrs_api::types::responses::ResponseObject,
+    output_format: OutputFormat,
+    store: Option<Store>,
+    session_id: &str,
+) -> AgentResult {
+    let text = extract_text_output(&response.output);
 
-    // Build the system prompt, including cross-session memories if available.
-    let memory_limit = agent_config.map_or(50, |c| c.memory_limit);
-    let system_prompt = build_system_prompt(args.system.as_deref(), &store, memory_limit);
-
-    // Build the initial request.
-    let mut builder = CreateResponseBuilder::new(model, ResponseInput::Text(task))
-        .store(false)
-        .tools(all_tools);
-
-    if let Some(ref instructions) = system_prompt {
-        builder = builder.instructions(instructions.clone());
+    if output_format == OutputFormat::Json {
+        if !text.is_empty() {
+            emit_event(
+                output_format,
+                &HeadlessEvent::Message {
+                    content: text.clone(),
+                },
+            );
+        }
+    } else if !text.is_empty() {
+        println!("{text}");
     }
 
-    // Search parameters (citations).
+    // Extract and display citations from search results.
+    let citations = search::extract_citations_from_output(&response.output);
+    if !citations.is_empty() && output_format == OutputFormat::Text {
+        eprint!("{}", search::format_citations(&citations));
+    }
+
+    // Print usage summary.
+    if let Some(usage) = &response.usage {
+        let total = usage
+            .total_tokens
+            .unwrap_or(usage.input_tokens + usage.output_tokens);
+        emit_event(
+            output_format,
+            &HeadlessEvent::Usage {
+                input_tokens: usage.input_tokens,
+                output_tokens: usage.output_tokens,
+                total_tokens: total,
+            },
+        );
+
+        let cached_tokens = usage
+            .prompt_tokens_details
+            .as_ref()
+            .and_then(|d| d.cached_tokens);
+        match cached_tokens {
+            Some(cached) if cached > 0 => {
+                eprintln!(
+                    "[usage] input={} ({cached} cached) output={} total={}",
+                    usage.input_tokens, usage.output_tokens, total,
+                );
+            }
+            _ => {
+                eprintln!(
+                    "[usage] input={} output={} total={}",
+                    usage.input_tokens, usage.output_tokens, total,
+                );
+            }
+        }
+    }
+
+    // Store: transition to Closed.
+    if let Some(ref s) = store {
+        let _ = s.sessions().transition(session_id, "Ready");
+    }
+    close_session_store(store, session_id, "Closed");
+
+    AgentResult {
+        exit_code: AgentExitCode::Success,
+    }
+}
+
+/// Handle a tool-loop error: emit events, log to store, and either return
+/// a headless result or bail.
+fn handle_error(
+    e: &ToolLoopError,
+    output_format: OutputFormat,
+    headless: bool,
+    store: Option<Store>,
+    session_id: &str,
+) -> Result<AgentResult> {
+    let exit_code = exit_code_for_tool_loop_error(e);
+
+    emit_event(
+        output_format,
+        &HeadlessEvent::Error {
+            message: e.to_string(),
+            exit_code: exit_code as u8,
+        },
+    );
+
+    close_session_store(store, session_id, &format!("Failed: {e}"));
+
+    if headless {
+        eprintln!("[agent] failed: {e}");
+        return Ok(AgentResult { exit_code });
+    }
+
+    bail!("agent failed: {e}");
+}
+
+/// Build the `LoggingExecutor` wrapping a `PolicyGatedExecutor`.
+fn build_executor(
+    args: &AgentArgs,
+    config: &AppConfig,
+    approval_mode: &str,
+    mcp_clients: &[ConnectedMcpServer],
+    trust_rank: u8,
+) -> Result<LoggingExecutor> {
+    let workspace_root =
+        WorkspaceRoot::new(&env::current_dir().context("failed to resolve current directory")?)
+            .context("failed to construct workspace root")?;
+
+    let mut executor_registry = default_registry();
+    register_mcp_tools_from_clients(mcp_clients, &mut executor_registry);
+
+    Ok(LoggingExecutor {
+        inner: PolicyGatedExecutor::new(
+            executor_registry,
+            PolicyEngine::new(config.policy.clone()),
+            workspace_root,
+            approval_mode.to_owned(),
+            trust_rank,
+        ),
+        dry_run: args.dry_run,
+        output_format: args.output,
+    })
+}
+
+/// Check network policy, emitting a headless error event on failure.
+/// In headless mode, returns `Ok(AgentResult)` for policy denial instead of `Err`.
+fn check_network_or_emit(args: &AgentArgs, config: &AppConfig) -> Result<()> {
+    if let Err(e) = check_network_allowed(config) {
+        emit_event(
+            args.output,
+            &HeadlessEvent::Error {
+                message: format!("{e:#}"),
+                exit_code: AgentExitCode::PolicyDenial as u8,
+            },
+        );
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// Resolve search config from CLI args and agent config.
+fn resolve_search_config(
+    args: &AgentArgs,
+    agent_config: Option<&grokrs_core::AgentConfig>,
+) -> SearchConfig {
+    let enable_search_from_config = agent_config.is_some_and(|c| c.enable_search);
+    SearchConfig {
+        web_search: args.search || enable_search_from_config,
+        x_search: args.x_search,
+        citations: args.citations,
+        ..Default::default()
+    }
+}
+
+/// Handle a timeout: emit events, close store, and return appropriate result.
+fn handle_timeout(
+    secs: u64,
+    args: &AgentArgs,
+    store: Option<Store>,
+    session_id: &str,
+) -> Result<AgentResult> {
+    let msg = format!("agent timed out after {secs}s");
+    eprintln!("[agent] {msg}");
+    emit_event(
+        args.output,
+        &HeadlessEvent::Error {
+            message: msg.clone(),
+            exit_code: AgentExitCode::Timeout as u8,
+        },
+    );
+    close_session_store(store, session_id, &format!("Failed: {msg}"));
+    if args.headless {
+        return Ok(AgentResult {
+            exit_code: AgentExitCode::Timeout,
+        });
+    }
+    bail!("{msg}");
+}
+
+/// Resolve task, emitting a headless error event on failure.
+fn resolve_task_with_event(args: &AgentArgs) -> Result<String> {
+    resolve_task(args).map_err(|e| {
+        emit_event(
+            args.output,
+            &HeadlessEvent::Error {
+                message: format!("{e:#}"),
+                exit_code: AgentExitCode::AgentError as u8,
+            },
+        );
+        e
+    })
+}
+
+/// Resolve approval mode: headless defaults to "deny" unless overridden.
+fn resolve_approval_mode(args: &AgentArgs, config: &AppConfig) -> String {
+    if let Some(ref mode) = args.approval_mode {
+        mode.clone()
+    } else if args.headless {
+        "deny".to_owned()
+    } else {
+        config.session.approval_mode.clone()
+    }
+}
+
+/// Assemble the initial `CreateResponse` request with tools, system prompt,
+/// search parameters, and optional prompt-cache key.
+fn build_initial_request(
+    model: &str,
+    task: String,
+    tools: Vec<serde_json::Value>,
+    system_prompt: Option<String>,
+    search_config: &SearchConfig,
+    cache_key: Option<&str>,
+) -> grokrs_api::types::responses::CreateResponseRequest {
+    let mut builder = CreateResponseBuilder::new(model, ResponseInput::Text(task))
+        .store(false)
+        .tools(tools);
+    if let Some(instructions) = system_prompt {
+        builder = builder.instructions(instructions);
+    }
     if let Some(params) = search_config.search_parameters() {
         builder = builder.search_parameters(params.to_value());
     }
-
-    // Prompt cache key: enables server-side prompt caching for the initial
-    // request (system prompt + tool definitions). Subsequent tool-loop turns
-    // reuse the same cached KV state automatically because the server matches
-    // on the key.
-    if let Some(ref key) = args.cache_key {
-        builder = builder.prompt_cache_key(key.clone());
+    if let Some(key) = cache_key {
+        builder = builder.prompt_cache_key(key.to_owned());
         eprintln!("[agent] prompt_cache_key={key:?}");
     }
+    builder.build()
+}
 
-    let request = builder.build();
+/// Execute the `grokrs agent` command.
+///
+/// Returns an [`AgentResult`] with the exit code. In interactive mode the
+/// exit code is always `Success` on `Ok(...)` (errors propagate via `?`).
+/// In headless mode the exit code distinguishes error categories.
+pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
+    let task = resolve_task_with_event(args)?;
+    let approval_mode = resolve_approval_mode(args, config);
+    let timeout_secs: Option<u64> = args
+        .timeout
+        .or(if args.headless { Some(300) } else { None });
+    check_network_or_emit(args, config)?;
+
+    let agent_config = config.agent.as_ref();
+    let trust_str = args
+        .trust
+        .as_deref()
+        .or_else(|| agent_config.map(|c| c.default_trust.as_str()))
+        .unwrap_or("untrusted");
+    let trust_rank = parse_trust_rank(trust_str)?;
+    let model = args.model.as_deref().unwrap_or(&config.model.default_model);
+
+    let (registry, mcp_clients, tool_defs) =
+        build_tool_registry(args, config, &approval_mode, trust_str, trust_rank).await?;
+    let max_iterations = args
+        .max_iterations
+        .or_else(|| agent_config.map(|c| c.max_iterations))
+        .unwrap_or(10);
+
+    let search_config = resolve_search_config(args, agent_config);
+
+    emit_agent_banner(
+        args,
+        trust_str,
+        model,
+        max_iterations,
+        tool_defs.len(),
+        &approval_mode,
+        timeout_secs,
+        &registry,
+        trust_rank,
+        &search_config,
+    );
+
+    let engine = PolicyEngine::new(config.policy.clone());
+    let gate = build_policy_gate(engine, &approval_mode);
+    let client =
+        GrokClient::from_config(config, Some(gate)).context("failed to construct API client")?;
+    let executor = build_executor(args, config, &approval_mode, &mcp_clients, trust_rank)?;
+
+    let mut all_tools = tool_defs;
+    if !search_config.is_empty() {
+        all_tools.extend(search_config.tool_values());
+    }
+
+    let store = open_store_best_effort(config);
+    let memory_limit = agent_config.map_or(50, |c| c.memory_limit);
+    let system_prompt = build_system_prompt(args.system.as_deref(), &store, memory_limit);
+    let request = build_initial_request(
+        model,
+        task,
+        all_tools,
+        system_prompt,
+        &search_config,
+        args.cache_key.as_deref(),
+    );
     let session_id = uuid::Uuid::new_v4().to_string();
 
     if let Some(ref s) = store
@@ -760,9 +952,7 @@ pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
         let _ = s.sessions().transition(&session_id, "RunningTurn");
     }
 
-    // Run the tool loop, optionally wrapped in a timeout.
     let loop_config = ToolLoopConfig { max_iterations };
-
     let responses_client = client.responses();
     let tool_loop_future =
         grokrs_api::tool_loop::run_tool_loop(&responses_client, request, &executor, loop_config);
@@ -771,146 +961,16 @@ pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
         match tokio::time::timeout(std::time::Duration::from_secs(secs), tool_loop_future).await {
             Ok(inner) => inner,
             Err(_elapsed) => {
-                let msg = format!("agent timed out after {secs}s");
-                eprintln!("[agent] {msg}");
-                emit_event(
-                    args.output,
-                    &HeadlessEvent::Error {
-                        message: msg.clone(),
-                        exit_code: AgentExitCode::Timeout as u8,
-                    },
-                );
-
-                // Store: transition to Failed.
-                if let Some(ref s) = store {
-                    let _ = s
-                        .sessions()
-                        .transition(&session_id, &format!("Failed: {msg}"));
-                }
-                if let Some(s) = store {
-                    let _ = s.close();
-                }
-
-                if args.headless {
-                    return Ok(AgentResult {
-                        exit_code: AgentExitCode::Timeout,
-                    });
-                }
-                bail!("{msg}");
+                return handle_timeout(secs, args, store, &session_id);
             }
         }
     } else {
         tool_loop_future.await
     };
 
-    let output_format = args.output;
-
     match result {
-        Ok(response) => {
-            // Extract and print text output.
-            let text = extract_text_output(&response.output);
-
-            if output_format == OutputFormat::Json {
-                // Emit message event.
-                if !text.is_empty() {
-                    emit_event(
-                        output_format,
-                        &HeadlessEvent::Message {
-                            content: text.clone(),
-                        },
-                    );
-                }
-            } else if !text.is_empty() {
-                println!("{text}");
-            }
-
-            // Extract and display citations from search results.
-            let citations = search::extract_citations_from_output(&response.output);
-            if !citations.is_empty() && output_format == OutputFormat::Text {
-                eprint!("{}", search::format_citations(&citations));
-            }
-
-            // Print usage summary.
-            if let Some(usage) = &response.usage {
-                let total = usage
-                    .total_tokens
-                    .unwrap_or(usage.input_tokens + usage.output_tokens);
-
-                emit_event(
-                    output_format,
-                    &HeadlessEvent::Usage {
-                        input_tokens: usage.input_tokens,
-                        output_tokens: usage.output_tokens,
-                        total_tokens: total,
-                    },
-                );
-
-                // Extract cached_tokens from prompt_tokens_details or
-                // input_tokens_details, whichever the server returned.
-                let cached_tokens = usage
-                    .prompt_tokens_details
-                    .as_ref()
-                    .and_then(|d| d.cached_tokens);
-
-                match cached_tokens {
-                    Some(cached) if cached > 0 => {
-                        eprintln!(
-                            "[usage] input={} ({cached} cached) output={} total={}",
-                            usage.input_tokens, usage.output_tokens, total,
-                        );
-                    }
-                    _ => {
-                        eprintln!(
-                            "[usage] input={} output={} total={}",
-                            usage.input_tokens, usage.output_tokens, total,
-                        );
-                    }
-                }
-            }
-
-            // Store: transition to Closed.
-            if let Some(ref s) = store {
-                let _ = s.sessions().transition(&session_id, "Ready");
-                let _ = s.sessions().transition(&session_id, "Closed");
-            }
-
-            // Close store (best-effort).
-            if let Some(s) = store {
-                let _ = s.close();
-            }
-
-            Ok(AgentResult {
-                exit_code: AgentExitCode::Success,
-            })
-        }
-        Err(e) => {
-            let exit_code = exit_code_for_tool_loop_error(&e);
-
-            emit_event(
-                output_format,
-                &HeadlessEvent::Error {
-                    message: e.to_string(),
-                    exit_code: exit_code as u8,
-                },
-            );
-
-            // Store: transition to Failed.
-            if let Some(ref s) = store {
-                let _ = s
-                    .sessions()
-                    .transition(&session_id, &format!("Failed: {e}"));
-            }
-            if let Some(s) = store {
-                let _ = s.close();
-            }
-
-            if args.headless {
-                eprintln!("[agent] failed: {e}");
-                return Ok(AgentResult { exit_code });
-            }
-
-            bail!("agent failed: {e}");
-        }
+        Ok(response) => Ok(handle_success(&response, args.output, store, &session_id)),
+        Err(e) => handle_error(&e, args.output, args.headless, store, &session_id),
     }
 }
 
