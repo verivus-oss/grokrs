@@ -273,7 +273,7 @@ fn headless_event_with_unicode_content() {
 #[test]
 fn headless_event_with_empty_strings() {
     let event = HeadlessEvent::ToolCall {
-        name: "".to_owned(),
+        name: String::new(),
         arguments: "{}".to_owned(),
     };
     let json = serde_json::to_string(&event).unwrap();

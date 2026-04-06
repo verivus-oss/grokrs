@@ -158,7 +158,7 @@ async fn non_2xx_parsed_into_api_error_with_request_id() {
                         "code": "model_not_found"
                     }
                 }))
-                .append_header("x-request-id", "req-test-12345"),
+                .append_header("x-request-id", "req-test-12_345"),
         )
         .expect(1)
         .mount(&server)
@@ -177,7 +177,7 @@ async fn non_2xx_parsed_into_api_error_with_request_id() {
             assert_eq!(api_err.message, "Invalid model");
             assert_eq!(api_err.error_type.as_deref(), Some("invalid_request_error"));
             assert_eq!(api_err.code.as_deref(), Some("model_not_found"));
-            assert_eq!(api_err.request_id.as_deref(), Some("req-test-12345"));
+            assert_eq!(api_err.request_id.as_deref(), Some("req-test-12_345"));
         }
         other => panic!("expected Api error, got: {other}"),
     }
@@ -442,13 +442,13 @@ async fn models_list_models_deserializes_correctly() {
             "data": [
                 {
                     "id": "grok-4",
-                    "created": 1700000000,
+                    "created": 1_700_000_000,
                     "owned_by": "xai",
                     "object": "model"
                 },
                 {
                     "id": "grok-4-mini",
-                    "created": 1700000001,
+                    "created": 1_700_000_001,
                     "owned_by": "xai"
                 }
             ]
@@ -476,7 +476,7 @@ async fn models_list_language_models_deserializes_correctly() {
             "models": [
                 {
                     "id": "grok-4",
-                    "created": 1700000000,
+                    "created": 1_700_000_000,
                     "owned_by": "xai",
                     "aliases": ["grok-latest"],
                     "input_modalities": ["text", "image"],
@@ -509,7 +509,7 @@ async fn models_get_model_with_url_encoded_id() {
         .and(path("/v1/models/org%2Fgrok-4"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "id": "org/grok-4",
-            "created": 1700000000,
+            "created": 1_700_000_000,
             "owned_by": "xai",
             "object": "model"
         })))
@@ -627,8 +627,8 @@ async fn files_list_deserializes_correctly() {
                 {
                     "id": "file-abc123",
                     "object": "file",
-                    "bytes": 12345,
-                    "created_at": 1700000000,
+                    "bytes": 12_345,
+                    "created_at": 1_700_000_000,
                     "filename": "data.jsonl",
                     "purpose": "assistants"
                 },
@@ -651,7 +651,7 @@ async fn files_list_deserializes_correctly() {
     assert_eq!(list.data.len(), 2);
     assert_eq!(list.data[0].id, "file-abc123");
     assert_eq!(list.data[0].filename.as_deref(), Some("data.jsonl"));
-    assert_eq!(list.data[0].bytes, Some(12345));
+    assert_eq!(list.data[0].bytes, Some(12_345));
     assert_eq!(list.data[1].id, "file-def456");
     assert_eq!(list.has_more, Some(false));
 }
@@ -665,8 +665,8 @@ async fn files_get_deserializes_correctly() {
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "id": "file-abc123",
             "object": "file",
-            "bytes": 12345,
-            "created_at": 1700000000,
+            "bytes": 12_345,
+            "created_at": 1_700_000_000,
             "filename": "data.jsonl",
             "purpose": "assistants"
         })))
@@ -679,7 +679,7 @@ async fn files_get_deserializes_correctly() {
     let file = client.get("file-abc123").await.unwrap();
     assert_eq!(file.id, "file-abc123");
     assert_eq!(file.purpose.as_deref(), Some("assistants"));
-    assert_eq!(file.bytes, Some(12345));
+    assert_eq!(file.bytes, Some(12_345));
 }
 
 #[tokio::test]

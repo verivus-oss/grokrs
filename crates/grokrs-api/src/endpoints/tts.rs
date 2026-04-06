@@ -224,8 +224,8 @@ mod tests {
                 "text": "Hallo",
                 "voice_id": "ara",
                 "output_format": "wav",
-                "sample_rate": 44100,
-                "bit_rate": 256000,
+                "sample_rate": 44_100,
+                "bit_rate": 256_000,
                 "language": "de-DE"
             })))
             .respond_with(ResponseTemplate::new(200).set_body_raw(fake_audio.clone(), "audio/wav"))
@@ -239,8 +239,8 @@ mod tests {
         let request = TtsRequest::new("Hallo", VoiceId::Ara, "de-DE")
             .unwrap()
             .with_output_format(TtsOutputFormat::Wav)
-            .with_sample_rate(44100)
-            .with_bit_rate(256000);
+            .with_sample_rate(44_100)
+            .with_bit_rate(256_000);
 
         let audio = client.generate(&request).await.unwrap();
         assert_eq!(audio, fake_audio);

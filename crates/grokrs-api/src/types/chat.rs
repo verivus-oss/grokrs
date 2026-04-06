@@ -679,7 +679,7 @@ mod tests {
         let completion: ChatCompletion = serde_json::from_str(json).unwrap();
         assert_eq!(completion.id, "chatcmpl-abc123");
         assert_eq!(completion.object.as_deref(), Some("chat.completion"));
-        assert_eq!(completion.created, Some(1700000000));
+        assert_eq!(completion.created, Some(1_700_000_000));
         assert_eq!(completion.model.as_deref(), Some("grok-4"));
         assert_eq!(completion.choices.len(), 1);
         assert_eq!(completion.choices[0].index, 0);
@@ -1029,7 +1029,7 @@ mod tests {
         let completion = ChatCompletion {
             id: "chatcmpl-rt".into(),
             object: Some("chat.completion".into()),
-            created: Some(1700000000),
+            created: Some(1_700_000_000),
             model: Some("grok-4".into()),
             choices: vec![ChatChoice {
                 index: 0,

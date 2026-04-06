@@ -1046,20 +1046,20 @@ mod tests {
     #[test]
     fn deep_merge_replaces_leaf_values() {
         let mut base: toml::Value = toml::from_str(
-            r#"
+            r"
             [policy]
             allow_network = false
             allow_shell = false
             max_patch_bytes = 1024
-        "#,
+        ",
         )
         .unwrap();
 
         let overlay: toml::Value = toml::from_str(
-            r#"
+            r"
             [policy]
             allow_network = true
-        "#,
+        ",
         )
         .unwrap();
 
@@ -1110,10 +1110,10 @@ mod tests {
         .unwrap();
 
         let overlay: toml::Value = toml::from_str(
-            r#"
+            r"
             [api]
             timeout_secs = 60
-        "#,
+        ",
         )
         .unwrap();
 

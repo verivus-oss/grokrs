@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn classify_rejects_empty_command() {
         let input = RunCommandInput {
-            command: "".into(),
+            command: String::new(),
             args: vec![],
         };
         let err = input.classify().unwrap_err();

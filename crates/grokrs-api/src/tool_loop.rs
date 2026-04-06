@@ -1275,7 +1275,7 @@ mod tests {
         );
 
         // Verify none of the filtered-out types leaked through.
-        for item in input.iter() {
+        for item in input {
             let item_type = item
                 .get("type")
                 .and_then(|v| v.as_str())
@@ -1476,7 +1476,7 @@ mod tests {
         );
 
         // Verify no mcp_call leaked through
-        for item in input.iter() {
+        for item in input {
             let item_type = item
                 .get("type")
                 .and_then(|v| v.as_str())

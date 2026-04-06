@@ -122,6 +122,10 @@ pub enum TextFormat {
 }
 
 /// Returns `false`, used as a serde default for the `store` field.
+///
+/// Serde requires the default function's return type to match the field type
+/// (`Option<bool>`), so the `Option` wrapper is intentional.
+#[allow(clippy::unnecessary_wraps)]
 fn default_store_false() -> Option<bool> {
     Some(false)
 }

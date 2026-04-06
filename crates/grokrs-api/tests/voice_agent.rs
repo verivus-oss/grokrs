@@ -249,12 +249,12 @@ async fn full_conversation_flow_serialization() {
     assert!(close_json.contains("\"action\":\"close\""));
 
     // 12. Server -> Client: Session closed
-    let closed_json = json!({
+    let state_change_json = json!({
         "type": "state_change",
         "state": "closed",
         "reason": "client requested close"
     });
-    let event: VoiceEvent = serde_json::from_value(closed_json).unwrap();
+    let event: VoiceEvent = serde_json::from_value(state_change_json).unwrap();
     match event {
         VoiceEvent::StateChange { state, reason } => {
             assert_eq!(state, VoiceSessionState::Closed);

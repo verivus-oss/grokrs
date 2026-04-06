@@ -1524,7 +1524,7 @@ mod tests {
         // Should not panic and should end with "..."
         assert!(summary.ends_with("..."));
         // Should be valid UTF-8 (no panic on Display).
-        let _ = summary.to_string();
+        let _ = summary.clone();
     }
 
     // =====================================================================

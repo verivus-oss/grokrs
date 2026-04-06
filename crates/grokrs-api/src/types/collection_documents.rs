@@ -286,7 +286,7 @@ mod tests {
         let meta = FileMetadata {
             filename: Some("data.csv".into()),
             content_type: Some("text/csv".into()),
-            size_bytes: Some(1048576),
+            size_bytes: Some(1_048_576),
         };
         let json = serde_json::to_string(&meta).unwrap();
         let parsed: FileMetadata = serde_json::from_str(&json).unwrap();
@@ -326,7 +326,7 @@ mod tests {
         let meta = parsed.file_metadata.unwrap();
         assert_eq!(meta.filename.as_deref(), Some("quarterly-report.pdf"));
         assert_eq!(meta.content_type.as_deref(), Some("application/pdf"));
-        assert_eq!(meta.size_bytes, Some(2048000));
+        assert_eq!(meta.size_bytes, Some(2_048_000));
         assert_eq!(
             parsed.last_indexed_at.as_deref(),
             Some("2026-04-02T00:05:00Z")

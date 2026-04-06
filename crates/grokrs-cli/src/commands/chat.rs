@@ -407,9 +407,7 @@ fn run_repl_with_store<B: ChatBackend>(
             }
 
             // Ctrl-C: cancel current input, show new prompt.
-            Err(ReadlineError::Interrupted) => {
-                continue;
-            }
+            Err(ReadlineError::Interrupted) => {}
 
             // Ctrl-D (EOF): exit cleanly.
             Err(ReadlineError::Eof) => {

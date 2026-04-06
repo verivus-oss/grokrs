@@ -97,23 +97,20 @@ impl FunctionExecutor for PolicyGatedExecutor {
         let started = std::time::Instant::now();
 
         // 1. Look up the tool in the registry.
-        let tool = match self.registry.get(name) {
-            Some(t) => t,
-            None => {
-                #[cfg(feature = "otel")]
-                tracing::Span::current().record("tool.policy_decision", "unknown_tool");
+        let Some(tool) = self.registry.get(name) else {
+            #[cfg(feature = "otel")]
+            tracing::Span::current().record("tool.policy_decision", "unknown_tool");
 
-                return Err(format!(
-                    "unknown tool '{name}'. Available tools: {}",
-                    self.registry
-                        .available_tools(self.trust_rank)
-                        .iter()
-                        .map(|t| t.name())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-                .into());
-            }
+            return Err(format!(
+                "unknown tool '{name}'. Available tools: {}",
+                self.registry
+                    .available_tools(self.trust_rank)
+                    .iter()
+                    .map(|t| t.name())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+            .into());
         };
 
         // Verify the tool is available at the current trust rank.
@@ -143,7 +140,7 @@ impl FunctionExecutor for PolicyGatedExecutor {
         // 3. Evaluate each effect through the policy engine.
         for effect in &effects {
             let decision = self.engine.evaluate(effect);
-            let resolved = resolve_decision(decision, &self.approval_mode);
+            let resolved = resolve_decision(&decision, &self.approval_mode);
             match resolved {
                 ResolvedDecision::Allow => { /* proceed */ }
                 ResolvedDecision::Deny { reason } => {

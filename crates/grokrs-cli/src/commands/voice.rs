@@ -110,9 +110,9 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("failed to resolve API key: {e}"))?;
 
     // --- Build WebSocket config ---
-    let base_url = api_config
-        .and_then(|a| a.base_url.as_ref())
-        .map(|u| {
+    let base_url = api_config.and_then(|a| a.base_url.as_ref()).map_or_else(
+        || "wss://api.x.ai".into(),
+        |u| {
             // Convert https:// to wss:// for WebSocket.
             if let Some(rest) = u.strip_prefix("https://") {
                 format!("wss://{rest}")
@@ -121,8 +121,8 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
             } else {
                 u.clone()
             }
-        })
-        .unwrap_or_else(|| "wss://api.x.ai".into());
+        },
+    );
 
     let ws_config = WsClientConfig {
         base_url,

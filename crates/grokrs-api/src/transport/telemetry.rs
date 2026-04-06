@@ -149,9 +149,8 @@ pub fn extract_usage_from_bytes(bytes: &[u8]) -> (Option<u64>, Option<u64>) {
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
         return (None, None);
     };
-    let usage = match value.get("usage") {
-        Some(u) => u,
-        None => return (None, None),
+    let Some(usage) = value.get("usage") else {
+        return (None, None);
     };
     let input = usage
         .get("input_tokens")

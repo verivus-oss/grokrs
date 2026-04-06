@@ -17,7 +17,7 @@
 /// atomically. The approvals and evidence tables are schema-only in this version
 /// (no Rust API); they exist so future specs can add Rust APIs without requiring
 /// a schema migration.
-pub const SQL: &str = r#"
+pub const SQL: &str = r"
 CREATE TABLE IF NOT EXISTS schema_versions (
     version     INTEGER PRIMARY KEY NOT NULL,
     applied_at  TEXT    NOT NULL
@@ -71,4 +71,4 @@ CREATE TABLE IF NOT EXISTS evidence (
 );
 
 CREATE INDEX IF NOT EXISTS idx_evidence_session_id ON evidence(session_id);
-"#;
+";

@@ -92,8 +92,8 @@ mod tests {
         let file = FileObject {
             id: "file-abc123".into(),
             object: Some("file".into()),
-            bytes: Some(12345),
-            created_at: Some(1700000000),
+            bytes: Some(12_345),
+            created_at: Some(1_700_000_000),
             filename: Some("data.jsonl".into()),
             purpose: Some("assistants".into()),
         };
@@ -140,9 +140,9 @@ mod tests {
     #[test]
     fn file_object_id_is_opaque_string() {
         // file_id should accept any string format, not just "file-*"
-        let json = r#"{"id": "completely-arbitrary-id-format-12345"}"#;
+        let json = r#"{"id": "completely-arbitrary-id-format-12_345"}"#;
         let file: FileObject = serde_json::from_str(json).unwrap();
-        assert_eq!(file.id, "completely-arbitrary-id-format-12345");
+        assert_eq!(file.id, "completely-arbitrary-id-format-12_345");
     }
 
     #[test]
@@ -153,7 +153,7 @@ mod tests {
                     id: "file-1".into(),
                     object: Some("file".into()),
                     bytes: Some(100),
-                    created_at: Some(1700000000),
+                    created_at: Some(1_700_000_000),
                     filename: Some("a.txt".into()),
                     purpose: Some("assistants".into()),
                 },
@@ -227,8 +227,8 @@ mod tests {
         let file: FileObject = serde_json::from_str(json).unwrap();
         assert_eq!(file.id, "file-abc123");
         assert_eq!(file.object.as_deref(), Some("file"));
-        assert_eq!(file.bytes, Some(12345));
-        assert_eq!(file.created_at, Some(1700000000));
+        assert_eq!(file.bytes, Some(12_345));
+        assert_eq!(file.created_at, Some(1_700_000_000));
         assert_eq!(file.filename.as_deref(), Some("training_data.jsonl"));
         assert_eq!(file.purpose.as_deref(), Some("fine-tune"));
     }

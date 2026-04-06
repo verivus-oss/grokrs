@@ -486,11 +486,11 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     // timestamp.  `doe` is non-negative by construction (day-of-era
     // ∈ [0, 146096]).  `year` is positive for all post-epoch dates.
     #[allow(clippy::cast_possible_wrap)]
-    let z = days as i64 + 719468;
-    let era = if z >= 0 { z } else { z - 146096 } / 146097;
+    let z = days as i64 + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     #[allow(clippy::cast_sign_loss)]
-    let doe = (z - era * 146097) as u64;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doe = (z - era * 146_097) as u64;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
     #[allow(clippy::cast_possible_wrap)]
     let y = yoe as i64 + era * 400;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);

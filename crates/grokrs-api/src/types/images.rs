@@ -295,7 +295,7 @@ mod tests {
             ]
         }"#;
         let resp: ImageResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(resp.created, Some(1700000000));
+        assert_eq!(resp.created, Some(1_700_000_000));
         assert_eq!(resp.data.len(), 1);
         assert_eq!(
             resp.data[0].url.as_deref(),

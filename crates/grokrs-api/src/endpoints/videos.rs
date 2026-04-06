@@ -498,7 +498,7 @@ mod tests {
         let client = VideosClient::new(http);
 
         let request = VideoGenerationRequest {
-            prompt: "".to_string(),
+            prompt: String::new(),
             model: None,
             image: None,
             reference_images: None,

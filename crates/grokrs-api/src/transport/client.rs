@@ -811,7 +811,7 @@ mod tests {
         match result.unwrap_err() {
             TransportError::InvalidBaseUrl { reason, .. } => {
                 assert!(
-                    reason.contains("userinfo") || reason.contains("@"),
+                    reason.contains("userinfo") || reason.contains('@'),
                     "reason should mention userinfo or @: {reason}"
                 );
             }

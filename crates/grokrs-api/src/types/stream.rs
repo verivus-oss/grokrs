@@ -510,7 +510,7 @@ mod tests {
         let chunk: ChatStreamChunk = serde_json::from_str(json).unwrap();
         assert_eq!(chunk.id, "chatcmpl-abc123");
         assert_eq!(chunk.object.as_deref(), Some("chat.completion.chunk"));
-        assert_eq!(chunk.created, Some(1700000000));
+        assert_eq!(chunk.created, Some(1_700_000_000));
         assert_eq!(chunk.model.as_deref(), Some("grok-4"));
         assert_eq!(chunk.choices.len(), 1);
         assert_eq!(chunk.choices[0].index, 0);

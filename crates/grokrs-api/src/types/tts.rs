@@ -384,8 +384,8 @@ mod tests {
             text: "Hello, world!".to_string(),
             voice_id: VoiceId::Eve,
             output_format: Some(TtsOutputFormat::Mp3),
-            sample_rate: Some(24000),
-            bit_rate: Some(128000),
+            sample_rate: Some(24_000),
+            bit_rate: Some(128_000),
             language: "en-US".to_string(),
         };
         let json = serde_json::to_string(&req).unwrap();
@@ -494,12 +494,12 @@ mod tests {
         let req = TtsRequest::new("Hello", VoiceId::Sal, "de-DE")
             .unwrap()
             .with_output_format(TtsOutputFormat::Wav)
-            .with_sample_rate(44100)
-            .with_bit_rate(256000);
+            .with_sample_rate(44_100)
+            .with_bit_rate(256_000);
 
         assert_eq!(req.output_format, Some(TtsOutputFormat::Wav));
-        assert_eq!(req.sample_rate, Some(44100));
-        assert_eq!(req.bit_rate, Some(256000));
+        assert_eq!(req.sample_rate, Some(44_100));
+        assert_eq!(req.bit_rate, Some(256_000));
         assert_eq!(req.language, "de-DE");
     }
 

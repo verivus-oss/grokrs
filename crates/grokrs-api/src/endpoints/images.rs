@@ -96,7 +96,7 @@ mod tests {
     async fn generate_sends_post_and_deserializes() {
         let server = MockServer::start().await;
         let response_body = serde_json::json!({
-            "created": 1700000000,
+            "created": 1_700_000_000,
             "data": [
                 {
                     "url": "https://example.com/generated.png",
@@ -131,7 +131,7 @@ mod tests {
         };
 
         let resp = client.generate(&request).await.unwrap();
-        assert_eq!(resp.created, Some(1700000000));
+        assert_eq!(resp.created, Some(1_700_000_000));
         assert_eq!(resp.data.len(), 1);
         assert_eq!(
             resp.data[0].url.as_deref(),
@@ -202,7 +202,7 @@ mod tests {
         let client = ImagesClient::new(http);
 
         let request = ImageGenerationRequest {
-            prompt: "".to_string(),
+            prompt: String::new(),
             model: "grok-2-image".to_string(),
             n: None,
             aspect_ratio: None,

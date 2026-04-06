@@ -362,7 +362,7 @@ impl ChatBackend for GrokChatBackend {
 
         // Update stateful chaining state.
         if self.stateful {
-            self.previous_response_id = response_id.clone();
+            self.previous_response_id.clone_from(&response_id);
         }
 
         Ok(ChatResponse {
@@ -378,7 +378,7 @@ impl ChatBackend for GrokChatBackend {
     }
 
     fn set_model(&mut self, model: &str) {
-        self.model = model.to_owned();
+        model.clone_into(&mut self.model);
     }
 
     fn set_system(&mut self, instructions: &str) {

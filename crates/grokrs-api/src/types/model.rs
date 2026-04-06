@@ -166,7 +166,7 @@ mod tests {
     fn model_round_trips() {
         let model = Model {
             id: "grok-4".into(),
-            created: 1700000000,
+            created: 1_700_000_000,
             owned_by: "xai".into(),
             object: Some("model".into()),
         };
@@ -190,13 +190,13 @@ mod tests {
             data: vec![
                 Model {
                     id: "grok-4".into(),
-                    created: 1700000000,
+                    created: 1_700_000_000,
                     owned_by: "xai".into(),
                     object: Some("model".into()),
                 },
                 Model {
                     id: "grok-4-mini".into(),
-                    created: 1700000001,
+                    created: 1_700_000_001,
                     owned_by: "xai".into(),
                     object: None,
                 },
@@ -220,7 +220,7 @@ mod tests {
     fn language_model_round_trips() {
         let lm = LanguageModel {
             id: "grok-4".into(),
-            created: 1700000000,
+            created: 1_700_000_000,
             owned_by: "xai".into(),
             object: Some("model".into()),
             aliases: vec!["grok-latest".into()],
@@ -231,8 +231,8 @@ mod tests {
             cached_prompt_text_token_price: Some(250),
             prompt_image_token_price: Some(800),
             search_price: Some(5000),
-            image_price: Some(10000),
-            max_prompt_length: Some(131072),
+            image_price: Some(10_000),
+            max_prompt_length: Some(131_072),
             fingerprint: Some("fp_abc123".into()),
             version: Some("2025-01-01".into()),
         };
@@ -260,7 +260,7 @@ mod tests {
         assert_eq!(lm.cached_prompt_text_token_price, Some(250i64));
         assert_eq!(lm.prompt_image_token_price, Some(800i64));
         assert_eq!(lm.search_price, Some(5000i64));
-        assert_eq!(lm.image_price, Some(10000i64));
+        assert_eq!(lm.image_price, Some(10_000i64));
     }
 
     #[test]
@@ -297,7 +297,7 @@ mod tests {
         let list = LanguageModelList {
             models: vec![LanguageModel {
                 id: "grok-4".into(),
-                created: 1700000000,
+                created: 1_700_000_000,
                 owned_by: "xai".into(),
                 object: None,
                 aliases: vec![],
@@ -324,14 +324,14 @@ mod tests {
     fn language_model_max_prompt_length() {
         let json = r#"{"id":"grok-4","created":0,"owned_by":"xai","max_prompt_length":131072}"#;
         let lm: LanguageModel = serde_json::from_str(json).unwrap();
-        assert_eq!(lm.max_prompt_length, Some(131072));
+        assert_eq!(lm.max_prompt_length, Some(131_072));
     }
 
     #[test]
     fn image_model_round_trips() {
         let im = ImageModel {
             id: "grok-2-image".into(),
-            created: 1700000000,
+            created: 1_700_000_000,
             owned_by: "xai".into(),
             input_modalities: vec!["text".into()],
             output_modalities: vec!["image".into()],
@@ -349,7 +349,7 @@ mod tests {
         let list = ImageModelList {
             models: vec![ImageModel {
                 id: "grok-2-image".into(),
-                created: 1700000000,
+                created: 1_700_000_000,
                 owned_by: "xai".into(),
                 input_modalities: vec!["text".into()],
                 output_modalities: vec!["image".into()],
@@ -368,7 +368,7 @@ mod tests {
     fn video_model_round_trips() {
         let vm = VideoModel {
             id: "grok-video".into(),
-            created: 1700000000,
+            created: 1_700_000_000,
             owned_by: "xai".into(),
             input_modalities: vec!["text".into()],
             output_modalities: vec!["video".into()],
@@ -386,7 +386,7 @@ mod tests {
         let list = VideoModelList {
             models: vec![VideoModel {
                 id: "grok-video".into(),
-                created: 1700000000,
+                created: 1_700_000_000,
                 owned_by: "xai".into(),
                 input_modalities: vec!["text".into()],
                 output_modalities: vec!["video".into()],

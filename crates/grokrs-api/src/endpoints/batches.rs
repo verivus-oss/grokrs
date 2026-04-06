@@ -415,7 +415,7 @@ mod tests {
             "object": "batch",
             "status": "created",
             "endpoint": "/v1/responses",
-            "created_at": 1700000000
+            "created_at": 1_700_000_000
         });
 
         Mock::given(method("POST"))
@@ -448,7 +448,7 @@ mod tests {
             "num_pending": 3,
             "num_success": 7,
             "num_error": 1,
-            "created_at": 1700000000
+            "created_at": 1_700_000_000
         });
 
         Mock::given(method("GET"))
@@ -969,7 +969,7 @@ mod tests {
             "object": "batch",
             "status": "created",
             "endpoint": "/v1/responses",
-            "created_at": 1700000000
+            "created_at": 1_700_000_000
         });
 
         Mock::given(method("POST"))

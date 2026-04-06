@@ -5,7 +5,7 @@
 //! preference), timestamps, and an access count for ranking.
 
 /// V3 migration SQL. Creates the memories table.
-pub const SQL: &str = r#"
+pub const SQL: &str = r"
 CREATE TABLE IF NOT EXISTS memories (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     key           TEXT    NOT NULL UNIQUE,
@@ -18,4 +18,4 @@ CREATE TABLE IF NOT EXISTS memories (
 
 CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
 CREATE INDEX IF NOT EXISTS idx_memories_key ON memories(key);
-"#;
+";

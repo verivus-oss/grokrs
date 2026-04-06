@@ -8,7 +8,7 @@ use grokrs_core::{AppConfig, check_deprecated_model, resolve_profile};
 use grokrs_policy::{Decision, Effect, PolicyEngine};
 use grokrs_session::{Session, SessionState};
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use commands::agent::AgentArgs;
 use commands::api::ApiCommand;
@@ -160,7 +160,7 @@ fn main() -> Result<()> {
         Command::Doctor => doctor(&cli),
         Command::ShowConfig { ref path } => {
             let config_path = path.clone().unwrap_or_else(|| cli.config.clone());
-            show_config(&cli, config_path)
+            show_config(&cli, &config_path)
         }
         Command::Eval { ref effect } => evaluate_effect(effect, &cli),
         Command::Chat(ref args) => {
@@ -365,7 +365,7 @@ fn doctor_features(
     }
 
     // Session management: ready if store works.
-    let store_ok = config.store.as_ref().map_or(true, |s| !s.path.is_empty()); // Default path works
+    let store_ok = config.store.as_ref().is_none_or(|s| !s.path.is_empty()); // Default path works
     if store_ok {
         println!("sessions=ready (list, show, transcript, clean via grokrs sessions)");
     } else {
@@ -479,7 +479,7 @@ fn doctor_features(
         match git_root {
             Some(ref root) => println!("[ok] git=repo detected at {}", root.display()),
             None => {
-                println!("[warn] git=not a git repository (workspace not under version control)")
+                println!("[warn] git=not a git repository (workspace not under version control)");
             }
         }
     }
@@ -530,9 +530,7 @@ fn doctor_features(
             .map_or(".grokrs/state.db", |s| s.path.as_str());
         let db_full_path = workspace_root.join(store_path);
 
-        if !db_full_path.exists() {
-            println!("[--] memory=store not created yet (run an agent task to initialise)");
-        } else {
+        if db_full_path.exists() {
             // Report store file size.
             let size_bytes = std::fs::metadata(&db_full_path)
                 .map(|m| m.len())
@@ -557,6 +555,8 @@ fn doctor_features(
                     );
                 }
             }
+        } else {
+            println!("[--] memory=store not created yet (run an agent task to initialise)");
         }
     }
 }
@@ -570,11 +570,11 @@ fn format_decision_short(decision: &Decision) -> &'static str {
     }
 }
 
-fn show_config(cli: &Cli, path: PathBuf) -> Result<()> {
+fn show_config(cli: &Cli, path: &Path) -> Result<()> {
     let profile = resolve_profile(cli.profile.as_deref());
     let config = match profile {
         Some(ref name) => {
-            AppConfig::load_with_profile(&path, Some(name.as_str())).with_context(|| {
+            AppConfig::load_with_profile(path, Some(name.as_str())).with_context(|| {
                 format!(
                     "failed to load config from {} with profile '{}'",
                     path.display(),
@@ -582,7 +582,7 @@ fn show_config(cli: &Cli, path: PathBuf) -> Result<()> {
                 )
             })?
         }
-        None => AppConfig::load(&path)
+        None => AppConfig::load(path)
             .with_context(|| format!("failed to load config from {}", path.display()))?,
     };
     if let Some(ref name) = profile {
@@ -606,11 +606,11 @@ fn evaluate_effect(effect: &EvalCommand, cli: &Cli) -> Result<()> {
     };
 
     let decision = engine.evaluate(&effect);
-    print_decision(decision);
+    print_decision(&decision);
     Ok(())
 }
 
-fn print_decision(decision: Decision) {
+fn print_decision(decision: &Decision) {
     match decision {
         Decision::Allow { reason } => println!("allow: {reason}"),
         Decision::Ask { reason } => println!("ask: {reason}"),

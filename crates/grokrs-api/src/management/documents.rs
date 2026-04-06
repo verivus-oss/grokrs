@@ -214,7 +214,7 @@ mod wiremock_tests {
             "file_metadata": {
                 "filename": "quarterly-report.pdf",
                 "content_type": "application/pdf",
-                "size_bytes": 1048576
+                "size_bytes": 1_048_576
             },
             "created_at": "2026-04-05T12:00:00Z"
         });
@@ -239,7 +239,7 @@ mod wiremock_tests {
         let meta = doc.file_metadata.unwrap();
         assert_eq!(meta.filename.as_deref(), Some("quarterly-report.pdf"));
         assert_eq!(meta.content_type.as_deref(), Some("application/pdf"));
-        assert_eq!(meta.size_bytes, Some(1048576));
+        assert_eq!(meta.size_bytes, Some(1_048_576));
     }
 
     #[tokio::test]

@@ -130,7 +130,7 @@ mod tests {
         let response_body = serde_json::json!({
             "id": "chatcmpl-mock-1",
             "object": "chat.completion",
-            "created": 1700000000,
+            "created": 1_700_000_000,
             "model": "grok-4",
             "choices": [
                 {

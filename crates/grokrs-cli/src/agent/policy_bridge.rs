@@ -37,16 +37,16 @@ pub enum ResolvedDecision {
 ///   - `"deny"` → `Deny`
 ///   - anything else → `Deny` (with "approval required" message)
 #[must_use]
-pub fn resolve_decision(decision: Decision, approval_mode: &str) -> ResolvedDecision {
+pub fn resolve_decision(decision: &Decision, approval_mode: &str) -> ResolvedDecision {
     match decision {
         Decision::Allow { .. } => ResolvedDecision::Allow,
         Decision::Deny { reason } => ResolvedDecision::Deny {
-            reason: reason.to_owned(),
+            reason: (*reason).to_owned(),
         },
         Decision::Ask { reason } => match approval_mode {
             "allow" => ResolvedDecision::Allow,
             "deny" => ResolvedDecision::Deny {
-                reason: reason.to_owned(),
+                reason: (*reason).to_owned(),
             },
             // "interactive" or any unrecognised value: approval broker not yet
             // available, so this is effectively a denial with a helpful message.
@@ -72,7 +72,7 @@ mod tests {
         };
         for mode in &["allow", "deny", "interactive", "unknown"] {
             assert_eq!(
-                resolve_decision(decision.clone(), mode),
+                resolve_decision(&decision, mode),
                 ResolvedDecision::Allow,
                 "Allow should pass through for approval_mode={mode}"
             );
@@ -85,7 +85,7 @@ mod tests {
             reason: "network access is denied by default",
         };
         for mode in &["allow", "deny", "interactive", "unknown"] {
-            let resolved = resolve_decision(decision.clone(), mode);
+            let resolved = resolve_decision(&decision, mode);
             assert!(
                 matches!(resolved, ResolvedDecision::Deny { .. }),
                 "Deny should pass through for approval_mode={mode}"
@@ -98,7 +98,10 @@ mod tests {
         let decision = Decision::Ask {
             reason: "network access requires explicit approval flow",
         };
-        assert_eq!(resolve_decision(decision, "allow"), ResolvedDecision::Allow);
+        assert_eq!(
+            resolve_decision(&decision, "allow"),
+            ResolvedDecision::Allow
+        );
     }
 
     #[test]
@@ -106,7 +109,7 @@ mod tests {
         let decision = Decision::Ask {
             reason: "network access requires explicit approval flow",
         };
-        let resolved = resolve_decision(decision, "deny");
+        let resolved = resolve_decision(&decision, "deny");
         match resolved {
             ResolvedDecision::Deny { reason } => {
                 assert!(reason.contains("network access requires explicit approval flow"));
@@ -120,7 +123,7 @@ mod tests {
         let decision = Decision::Ask {
             reason: "shell spawn requires explicit approval flow",
         };
-        let resolved = resolve_decision(decision, "interactive");
+        let resolved = resolve_decision(&decision, "interactive");
         match resolved {
             ResolvedDecision::Deny { reason } => {
                 assert!(reason.contains("approval required"));
@@ -136,7 +139,7 @@ mod tests {
         let decision = Decision::Ask {
             reason: "some effect",
         };
-        let resolved = resolve_decision(decision, "gibberish");
+        let resolved = resolve_decision(&decision, "gibberish");
         assert!(matches!(resolved, ResolvedDecision::Deny { .. }));
     }
 }

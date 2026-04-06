@@ -85,7 +85,7 @@ fn language_models_response() -> serde_json::Value {
         "models": [
             {
                 "id": "grok-4",
-                "created": 1700000000,
+                "created": 1_700_000_000,
                 "owned_by": "xai",
                 "aliases": ["grok-latest"],
                 "input_modalities": ["text", "image"],
@@ -93,11 +93,11 @@ fn language_models_response() -> serde_json::Value {
                 "prompt_text_token_price": 300,
                 "completion_text_token_price": 1500,
                 "cached_prompt_text_token_price": 150,
-                "max_prompt_length": 131072
+                "max_prompt_length": 131_072
             },
             {
                 "id": "grok-4-mini",
-                "created": 1700000001,
+                "created": 1_700_000_001,
                 "owned_by": "xai",
                 "aliases": [],
                 "input_modalities": ["text"],
@@ -105,7 +105,7 @@ fn language_models_response() -> serde_json::Value {
                 "prompt_text_token_price": 100,
                 "completion_text_token_price": 500,
                 "cached_prompt_text_token_price": 50,
-                "max_prompt_length": 131072
+                "max_prompt_length": 131_072
             }
         ]
     })
@@ -117,7 +117,7 @@ fn image_models_response() -> serde_json::Value {
         "models": [
             {
                 "id": "grok-2-image",
-                "created": 1700000000,
+                "created": 1_700_000_000,
                 "owned_by": "xai",
                 "input_modalities": ["text"],
                 "output_modalities": ["image"],
@@ -236,7 +236,7 @@ async fn models_info_shows_model_details() {
 
     let model_response = serde_json::json!({
         "id": "grok-4",
-        "created": 1700000000,
+        "created": 1_700_000_000,
         "owned_by": "xai",
         "aliases": ["grok-latest"],
         "input_modalities": ["text", "image"],
@@ -244,7 +244,7 @@ async fn models_info_shows_model_details() {
         "prompt_text_token_price": 300,
         "completion_text_token_price": 1500,
         "cached_prompt_text_token_price": 150,
-        "max_prompt_length": 131072,
+        "max_prompt_length": 131_072,
         "version": "2025-01-01"
     });
 

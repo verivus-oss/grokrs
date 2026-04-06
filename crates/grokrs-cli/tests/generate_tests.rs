@@ -131,7 +131,7 @@ async fn generate_image_downloads_and_saves_to_output() {
     // Mock: POST /v1/images/generations returns a URL pointing at the mock.
     let image_url = format!("{}/fake-images/cat.png", server.uri());
     let gen_response = serde_json::json!({
-        "created": 1700000000,
+        "created": 1_700_000_000,
         "data": [
             {
                 "url": image_url,

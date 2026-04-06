@@ -14,7 +14,7 @@
 //! since they also reference `sessions(id)` without CASCADE in V1.
 
 /// V2 migration SQL.
-pub const SQL: &str = r#"
+pub const SQL: &str = r"
 -- Ensure schema_versions exists for legacy V1 databases that predate this table.
 CREATE TABLE IF NOT EXISTS schema_versions (
     version     INTEGER PRIMARY KEY NOT NULL,
@@ -105,4 +105,4 @@ DROP TABLE IF EXISTS evidence;
 ALTER TABLE evidence_new RENAME TO evidence;
 
 CREATE INDEX IF NOT EXISTS idx_evidence_session_id ON evidence(session_id);
-"#;
+";

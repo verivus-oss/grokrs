@@ -40,7 +40,7 @@ use super::responses::{TextConfig, TextFormat};
 /// assert!(json.contains("\"json_schema\""));
 ///
 /// // Chat Completions API format
-/// let response_format = StructuredOutputBuilder::for_chat("weather", schema);
+/// let response_format = StructuredOutputBuilder::for_chat("weather", &schema);
 /// assert_eq!(response_format["type"], "json_schema");
 /// assert_eq!(response_format["json_schema"]["name"], "weather");
 /// ```
@@ -103,7 +103,7 @@ impl StructuredOutputBuilder {
     ///   }
     /// }
     /// ```
-    pub fn for_chat(name: impl Into<String>, schema: Value) -> Value {
+    pub fn for_chat(name: impl Into<String>, schema: &Value) -> Value {
         serde_json::json!({
             "type": "json_schema",
             "json_schema": {
@@ -116,7 +116,7 @@ impl StructuredOutputBuilder {
 
     /// Create a `serde_json::Value` for the Chat Completions API with a custom
     /// `strict` setting.
-    pub fn for_chat_with_strict(name: impl Into<String>, schema: Value, strict: bool) -> Value {
+    pub fn for_chat_with_strict(name: impl Into<String>, schema: &Value, strict: bool) -> Value {
         serde_json::json!({
             "type": "json_schema",
             "json_schema": {
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn for_chat_produces_correct_format() {
-        let val = StructuredOutputBuilder::for_chat("weather_data", sample_schema());
+        let val = StructuredOutputBuilder::for_chat("weather_data", &sample_schema());
 
         // Verify the nested format
         assert_eq!(val["type"], "json_schema");
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn for_chat_has_nested_json_schema() {
         let val =
-            StructuredOutputBuilder::for_chat("output", serde_json::json!({"type": "object"}));
+            StructuredOutputBuilder::for_chat("output", &serde_json::json!({"type": "object"}));
         let json = serde_json::to_string(&val).unwrap();
 
         // Must have the nested structure
@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn for_chat_with_strict_false() {
-        let val = StructuredOutputBuilder::for_chat_with_strict("loose", sample_schema(), false);
+        let val = StructuredOutputBuilder::for_chat_with_strict("loose", &sample_schema(), false);
         assert_eq!(val["json_schema"]["strict"], false);
     }
 
@@ -236,7 +236,7 @@ mod tests {
     fn responses_and_chat_formats_differ() {
         let schema = sample_schema();
         let responses_config = StructuredOutputBuilder::for_responses("test", schema.clone());
-        let chat_val = StructuredOutputBuilder::for_chat("test", schema);
+        let chat_val = StructuredOutputBuilder::for_chat("test", &schema);
 
         let responses_json = serde_json::to_string(&responses_config).unwrap();
         let chat_json = serde_json::to_string(&chat_val).unwrap();
@@ -273,7 +273,7 @@ mod tests {
             "type": "array",
             "items": { "type": "string" }
         });
-        let val = StructuredOutputBuilder::for_chat("list", schema.clone());
+        let val = StructuredOutputBuilder::for_chat("list", &schema);
         assert_eq!(val["json_schema"]["schema"], schema);
     }
 }
