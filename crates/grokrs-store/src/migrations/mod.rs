@@ -12,7 +12,7 @@ pub mod v001;
 pub mod v002;
 pub mod v003;
 
-use rusqlite::{params, Connection, Transaction};
+use rusqlite::{Connection, Transaction, params};
 
 use crate::StoreError;
 

@@ -24,7 +24,7 @@ use std::env;
 use std::io::{self, Read as _};
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, ValueEnum};
 use serde::Serialize;
 
@@ -1505,7 +1505,7 @@ mod tests {
         // '🦀' is 4 bytes.
         let s = "hi🦀bye";
         assert_eq!(s.len(), 9); // 2 + 4 + 3
-                                // Truncating at 3 would split the emoji — should back up to 2.
+        // Truncating at 3 would split the emoji — should back up to 2.
         assert_eq!(truncate_utf8(s, 3), "hi");
         // Truncating at 6 includes the full emoji.
         assert_eq!(truncate_utf8(s, 6), "hi🦀");

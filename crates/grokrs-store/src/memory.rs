@@ -5,10 +5,10 @@
 //! Memories are simple key-value pairs with a category tag, timestamps, and an
 //! access count used for ranking (most-accessed + most-recent first).
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
-use crate::session::now;
 use crate::StoreError;
+use crate::session::now;
 
 /// Category of a memory entry.
 ///

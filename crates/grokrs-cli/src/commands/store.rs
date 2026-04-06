@@ -7,8 +7,8 @@
 use anyhow::{Context, Result};
 use clap::{Subcommand, ValueEnum};
 use grokrs_core::AppConfig;
-use grokrs_store::cost::{self, CostFilter, CostGroupBy};
 use grokrs_store::Store;
+use grokrs_store::cost::{self, CostFilter, CostGroupBy};
 use std::path::Path;
 
 /// Store subcommands for inspecting persistence state.

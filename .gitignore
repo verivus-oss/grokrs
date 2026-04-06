@@ -5,3 +5,4 @@ target/
 .aivcs/
 .pytest_cache/
 .grokrs/
+*_security_report.md

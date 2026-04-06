@@ -7,9 +7,9 @@
 //!
 //! No network access or API keys required.
 
-use grokrs_store::cost::{format_table, format_usd, CostFilter, CostGroupBy};
-use grokrs_store::types::TranscriptUsage;
 use grokrs_store::Store;
+use grokrs_store::cost::{CostFilter, CostGroupBy, format_table, format_usd};
+use grokrs_store::types::TranscriptUsage;
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -624,7 +624,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "grokrs-api"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "bytes",
  "futures",
@@ -645,14 +645,14 @@ dependencies = [
 
 [[package]]
 name = "grokrs-cap"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "thiserror 1.0.69",
 ]
 
 [[package]]
 name = "grokrs-cli"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -686,7 +686,7 @@ dependencies = [
 
 [[package]]
 name = "grokrs-core"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "serde",
  "tempfile",
@@ -696,7 +696,7 @@ dependencies = [
 
 [[package]]
 name = "grokrs-policy"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "grokrs-cap",
  "grokrs-core",
@@ -704,7 +704,7 @@ dependencies = [
 
 [[package]]
 name = "grokrs-session"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "grokrs-cap",
  "tracing",
@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "grokrs-store"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "grokrs-core",
  "grokrs-store",
@@ -725,7 +725,7 @@ dependencies = [
 
 [[package]]
 name = "grokrs-tool"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "git2",
  "grokrs-api",

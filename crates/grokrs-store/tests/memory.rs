@@ -10,8 +10,8 @@
 //!
 //! Each test uses an isolated SQLite database via tempfile::tempdir.
 
-use grokrs_store::memory::MemoryCategory;
 use grokrs_store::Store;
+use grokrs_store::memory::MemoryCategory;
 
 // ---------------------------------------------------------------------------
 // Helpers

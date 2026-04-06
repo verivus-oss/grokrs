@@ -4,10 +4,10 @@
 //! SQL-level aggregation of token counts and cost from the `transcripts` table.
 //! NULL values are treated as zero via `COALESCE`.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
-use crate::types::UsageSummary;
 use crate::StoreError;
+use crate::types::UsageSummary;
 
 /// Safely convert a non-negative `i64` (as returned by SQLite SUM) to `u64`.
 ///

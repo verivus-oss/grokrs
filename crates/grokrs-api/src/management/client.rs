@@ -139,9 +139,15 @@ mod tests {
     #[test]
     fn from_config_constructs_ok_with_valid_env_var() {
         let config = base_config();
-        std::env::set_var("GROKRS_TEST_MGMT_KEY", "test-mgmt-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_MGMT_KEY", "test-mgmt-key");
+        }
         let result = ManagementClient::from_config(&config, None);
-        std::env::remove_var("GROKRS_TEST_MGMT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_MGMT_KEY");
+        }
         assert!(result.is_ok(), "expected Ok, got: {result:?}");
     }
 
@@ -156,7 +162,10 @@ mod tests {
             timeout_secs: None,
             max_retries: None,
         });
-        std::env::remove_var(unique_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(unique_var);
+        }
         let result = ManagementClient::from_config(&cfg, None);
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -175,18 +184,30 @@ mod tests {
         let mut config = base_config();
         config.management_api = None;
         // Without management_api section, it defaults to XAI_MANAGEMENT_API_KEY
-        std::env::set_var("XAI_MANAGEMENT_API_KEY", "default-mgmt-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("XAI_MANAGEMENT_API_KEY", "default-mgmt-key");
+        }
         let result = ManagementClient::from_config(&config, None);
-        std::env::remove_var("XAI_MANAGEMENT_API_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("XAI_MANAGEMENT_API_KEY");
+        }
         assert!(result.is_ok());
     }
 
     #[test]
     fn debug_output_does_not_contain_management_key() {
         let config = base_config();
-        std::env::set_var("GROKRS_TEST_MGMT_KEY", "super-secret-mgmt-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_MGMT_KEY", "super-secret-mgmt-key");
+        }
         let client = ManagementClient::from_config(&config, None).unwrap();
-        std::env::remove_var("GROKRS_TEST_MGMT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_MGMT_KEY");
+        }
 
         let debug = format!("{client:?}");
         assert!(
@@ -204,19 +225,31 @@ mod tests {
         use crate::transport::policy_gate::AllowAllGate;
 
         let config = base_config();
-        std::env::set_var("GROKRS_TEST_MGMT_KEY", "gate-mgmt-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_MGMT_KEY", "gate-mgmt-key");
+        }
         let gate: Option<Arc<dyn PolicyGate>> = Some(Arc::new(AllowAllGate));
         let result = ManagementClient::from_config(&config, gate);
-        std::env::remove_var("GROKRS_TEST_MGMT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_MGMT_KEY");
+        }
         assert!(result.is_ok());
     }
 
     #[test]
     fn collections_accessor_returns_client() {
         let config = base_config();
-        std::env::set_var("GROKRS_TEST_MGMT_KEY", "accessor-mgmt-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_MGMT_KEY", "accessor-mgmt-key");
+        }
         let client = ManagementClient::from_config(&config, None).unwrap();
-        std::env::remove_var("GROKRS_TEST_MGMT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_MGMT_KEY");
+        }
         let _collections: CollectionsClient = client.collections();
     }
 }

@@ -292,7 +292,9 @@ pub enum ConfigError {
         #[source]
         source: toml::de::Error,
     },
-    #[error("invalid profile name '{name}': profile names must be non-empty and contain only alphanumeric characters, hyphens, and underscores")]
+    #[error(
+        "invalid profile name '{name}': profile names must be non-empty and contain only alphanumeric characters, hyphens, and underscores"
+    )]
     InvalidProfileName { name: String },
     #[error("profile config not found: {path}")]
     ProfileNotFound { path: String },
@@ -1296,33 +1298,54 @@ mod tests {
     #[test]
     fn resolve_profile_flag_takes_precedence() {
         // Set env var, but flag should win.
-        std::env::set_var("GROKRS_PROFILE", "staging");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_PROFILE", "staging");
+        }
         let result = resolve_profile(Some("dev"));
         assert_eq!(result, Some("dev".to_owned()));
-        std::env::remove_var("GROKRS_PROFILE");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_PROFILE");
+        }
     }
 
     #[test]
     fn resolve_profile_falls_back_to_env() {
-        std::env::set_var("GROKRS_PROFILE", "staging");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_PROFILE", "staging");
+        }
         let result = resolve_profile(None);
         assert_eq!(result, Some("staging".to_owned()));
-        std::env::remove_var("GROKRS_PROFILE");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_PROFILE");
+        }
     }
 
     #[test]
     fn resolve_profile_none_when_nothing_set() {
-        std::env::remove_var("GROKRS_PROFILE");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_PROFILE");
+        }
         let result = resolve_profile(None);
         assert_eq!(result, None);
     }
 
     #[test]
     fn resolve_profile_ignores_empty_env() {
-        std::env::set_var("GROKRS_PROFILE", "");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_PROFILE", "");
+        }
         let result = resolve_profile(None);
         assert_eq!(result, None);
-        std::env::remove_var("GROKRS_PROFILE");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_PROFILE");
+        }
     }
 
     #[test]

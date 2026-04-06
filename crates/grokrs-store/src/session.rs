@@ -5,10 +5,10 @@
 //! as plain strings to avoid compile-time coupling with `grokrs-cap` or
 //! `grokrs-session`.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
-use crate::types::SessionRecord;
 use crate::StoreError;
+use crate::types::SessionRecord;
 
 /// Borrowed handle for session operations on the store's connection.
 pub struct SessionRepo<'a> {

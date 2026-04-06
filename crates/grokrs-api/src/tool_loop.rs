@@ -915,8 +915,8 @@ mod tests {
         use crate::transport::auth::ApiKeySecret;
         use crate::transport::client::{HttpClient, HttpClientConfig};
         use std::sync::Arc;
-        use wiremock::matchers::{method, path};
         use wiremock::Mock;
+        use wiremock::matchers::{method, path};
 
         let (server, bodies) = setup_recording_server().await;
 
@@ -1052,8 +1052,8 @@ mod tests {
         use crate::transport::auth::ApiKeySecret;
         use crate::transport::client::{HttpClient, HttpClientConfig};
         use std::sync::Arc;
-        use wiremock::matchers::{method, path};
         use wiremock::Mock;
+        use wiremock::matchers::{method, path};
 
         let (server, bodies) = setup_recording_server().await;
 
@@ -1169,8 +1169,8 @@ mod tests {
         use crate::transport::auth::ApiKeySecret;
         use crate::transport::client::{HttpClient, HttpClientConfig};
         use std::sync::Arc;
-        use wiremock::matchers::{method, path};
         use wiremock::Mock;
+        use wiremock::matchers::{method, path};
 
         let (server, bodies) = setup_recording_server().await;
 
@@ -1381,8 +1381,8 @@ mod tests {
         use crate::transport::auth::ApiKeySecret;
         use crate::transport::client::{HttpClient, HttpClientConfig};
         use std::sync::Arc;
-        use wiremock::matchers::{method, path};
         use wiremock::Mock;
+        use wiremock::matchers::{method, path};
 
         let (server, bodies) = setup_recording_server().await;
 

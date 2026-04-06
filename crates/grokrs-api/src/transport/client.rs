@@ -2,16 +2,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::Stream;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Method;
-use serde::de::DeserializeOwned;
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use crate::transport::auth::{resolve_api_key, ApiKeySecret};
+use crate::transport::auth::{ApiKeySecret, resolve_api_key};
 use crate::transport::error::TransportError;
 use crate::transport::policy_bridge::DenyAllGate;
 use crate::transport::policy_gate::{PolicyDecision, PolicyGate};
-use crate::transport::retry::{should_retry, RetryConfig};
+use crate::transport::retry::{RetryConfig, should_retry};
 use crate::transport::sse::SseStream;
 use crate::transport::telemetry::{self, RequestMeta, ResponseMeta};
 use crate::types::error::{ApiError, ApiErrorResponse};
@@ -211,7 +211,7 @@ impl HttpClient {
         method: Method,
         path: &str,
         body: &Req,
-    ) -> Result<impl Stream<Item = Result<String, TransportError>>, TransportError>
+    ) -> Result<impl Stream<Item = Result<String, TransportError>> + use<Req>, TransportError>
     where
         Req: Serialize,
     {
@@ -942,13 +942,19 @@ mod tests {
     #[test]
     fn from_env_reads_xai_api_key() {
         let var_name = "GROKRS_TEST_FROM_ENV_KEY";
-        std::env::set_var(var_name, "test-api-key-from-env");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(var_name, "test-api-key-from-env");
+        }
         let config = HttpClientConfig {
             api_key_env: Some(var_name.into()),
             ..Default::default()
         };
         let client = HttpClient::from_env(config, None);
-        std::env::remove_var(var_name);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(var_name);
+        }
 
         let client = client.expect("should construct from env");
         assert_eq!(client.api_key.expose(), "test-api-key-from-env");
@@ -970,7 +976,10 @@ mod tests {
             api_key_env: Some("GROKRS_TEST_MISSING_ENV_VAR_XYZ".into()),
             ..Default::default()
         };
-        std::env::remove_var("GROKRS_TEST_MISSING_ENV_VAR_XYZ");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_MISSING_ENV_VAR_XYZ");
+        }
         let result = HttpClient::from_env(config, None);
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -984,13 +993,19 @@ mod tests {
     #[test]
     fn from_env_fails_when_env_var_empty() {
         let var_name = "GROKRS_TEST_EMPTY_FROM_ENV";
-        std::env::set_var(var_name, "");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(var_name, "");
+        }
         let config = HttpClientConfig {
             api_key_env: Some(var_name.into()),
             ..Default::default()
         };
         let result = HttpClient::from_env(config, None);
-        std::env::remove_var(var_name);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(var_name);
+        }
 
         assert!(result.is_err());
         match result.unwrap_err() {

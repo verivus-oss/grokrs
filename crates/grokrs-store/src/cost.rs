@@ -8,7 +8,7 @@
 //! If the body does not parse or lacks a `"model"` field, the row is grouped
 //! under `"unknown"`.
 
-use rusqlite::{params_from_iter, Connection};
+use rusqlite::{Connection, params_from_iter};
 use serde::Serialize;
 
 use crate::StoreError;

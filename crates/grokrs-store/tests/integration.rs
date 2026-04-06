@@ -3,8 +3,8 @@
 //! Each test uses `tempfile::tempdir` for isolation — no shared state between
 //! tests. Tests exercise the public API surface end-to-end.
 
-use grokrs_store::types::{TranscriptUsage, UsageSummary};
 use grokrs_store::Store;
+use grokrs_store::types::{TranscriptUsage, UsageSummary};
 
 // ---------------------------------------------------------------------------
 // Helper

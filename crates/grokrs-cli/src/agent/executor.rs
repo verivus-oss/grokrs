@@ -16,7 +16,7 @@ use grokrs_cap::WorkspaceRoot;
 use grokrs_policy::PolicyEngine;
 use grokrs_tool::registry::ToolRegistry;
 
-use super::policy_bridge::{resolve_decision, ResolvedDecision};
+use super::policy_bridge::{ResolvedDecision, resolve_decision};
 
 /// A synchronous [`FunctionExecutor`] that gates every tool call through
 /// the policy engine before dispatching to the tool registry.

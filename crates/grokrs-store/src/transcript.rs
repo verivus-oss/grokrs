@@ -5,11 +5,11 @@
 //! request before the API call completes, then `log_response` or `log_error`
 //! fills in the result after the response arrives.
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
+use crate::StoreError;
 use crate::session::now;
 use crate::types::{TranscriptRecord, TranscriptUsage};
-use crate::StoreError;
 
 /// Intermediate row read from SQLite with `i64` token columns, before
 /// validation and conversion to the public `TranscriptRecord` with `u64`

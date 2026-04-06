@@ -88,9 +88,10 @@ mod tests {
     fn resolve_api_key_from_env() {
         // Use a unique env var name to avoid conflicts with other tests
         let var_name = "GROKRS_TEST_API_KEY_RESOLVE";
-        env::set_var(var_name, "test-key-value");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe { env::set_var(var_name, "test-key-value") };
         let result = resolve_api_key(var_name);
-        env::remove_var(var_name);
+        unsafe { env::remove_var(var_name) };
 
         let secret = result.expect("should resolve key");
         assert_eq!(secret.expose(), "test-key-value");
@@ -99,7 +100,8 @@ mod tests {
     #[test]
     fn resolve_api_key_missing_env_var() {
         let var_name = "GROKRS_TEST_MISSING_VAR_THAT_DEFINITELY_DOES_NOT_EXIST";
-        env::remove_var(var_name);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe { env::remove_var(var_name) };
         let result = resolve_api_key(var_name);
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -113,9 +115,10 @@ mod tests {
     #[test]
     fn resolve_api_key_empty_env_var() {
         let var_name = "GROKRS_TEST_EMPTY_API_KEY";
-        env::set_var(var_name, "");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe { env::set_var(var_name, "") };
         let result = resolve_api_key(var_name);
-        env::remove_var(var_name);
+        unsafe { env::remove_var(var_name) };
 
         assert!(result.is_err());
         match result.unwrap_err() {

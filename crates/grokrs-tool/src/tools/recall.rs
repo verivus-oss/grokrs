@@ -84,8 +84,8 @@ impl ToolSpec for RecallTool {
         input: Self::Input,
         root: &WorkspaceRoot,
     ) -> Result<Self::Output, ToolError> {
-        use grokrs_store::memory::MemoryCategory;
         use grokrs_store::Store;
+        use grokrs_store::memory::MemoryCategory;
 
         let store = Store::open(root.as_path())
             .map_err(|e| ToolError::Other(format!("failed to open store: {e}")))?;

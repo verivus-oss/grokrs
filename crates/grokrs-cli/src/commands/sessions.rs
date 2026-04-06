@@ -5,11 +5,11 @@
 //! `grokrs sessions transcript <id>` — full transcript for a session.
 //! `grokrs sessions clean` — delete old closed/failed sessions with confirmation.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use grokrs_core::AppConfig;
-use grokrs_store::types::SessionRecord;
 use grokrs_store::Store;
+use grokrs_store::types::SessionRecord;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 

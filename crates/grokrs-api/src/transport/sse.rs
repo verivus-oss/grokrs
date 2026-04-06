@@ -197,8 +197,8 @@ pub fn parse_sse_lines(text: &str) -> Vec<Result<String, TransportError>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::stream;
     use futures::StreamExt;
+    use futures::stream;
 
     #[test]
     fn parse_sse_lines_extracts_data() {

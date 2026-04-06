@@ -141,23 +141,38 @@ mod tests {
 
     #[test]
     fn resolve_endpoint_prefers_cli_flag() {
-        std::env::set_var("GROKRS_OTEL_ENDPOINT", "http://env:4317");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_OTEL_ENDPOINT", "http://env:4317");
+        }
         let result = resolve_endpoint(Some("http://cli:4317"));
-        std::env::remove_var("GROKRS_OTEL_ENDPOINT");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_OTEL_ENDPOINT");
+        }
         assert_eq!(result, Some("http://cli:4317".to_string()));
     }
 
     #[test]
     fn resolve_endpoint_falls_back_to_env() {
-        std::env::set_var("GROKRS_OTEL_ENDPOINT", "http://env:4317");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_OTEL_ENDPOINT", "http://env:4317");
+        }
         let result = resolve_endpoint(None);
-        std::env::remove_var("GROKRS_OTEL_ENDPOINT");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_OTEL_ENDPOINT");
+        }
         assert_eq!(result, Some("http://env:4317".to_string()));
     }
 
     #[test]
     fn resolve_endpoint_returns_none_when_unset() {
-        std::env::remove_var("GROKRS_OTEL_ENDPOINT");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_OTEL_ENDPOINT");
+        }
         let result = resolve_endpoint(None);
         assert_eq!(result, None);
     }
@@ -172,7 +187,10 @@ mod tests {
 
     #[test]
     fn init_without_endpoint_returns_guard() {
-        std::env::remove_var("GROKRS_OTEL_ENDPOINT");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_OTEL_ENDPOINT");
+        }
         let _guard = init(None);
         // Should not panic; no exporter is configured.
     }

@@ -65,10 +65,12 @@ fn headless_event_error_serializes_with_exit_code() {
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed["type"], "error");
     assert_eq!(parsed["exit_code"], 2);
-    assert!(parsed["message"]
-        .as_str()
-        .unwrap()
-        .contains("Policy denied"));
+    assert!(
+        parsed["message"]
+            .as_str()
+            .unwrap()
+            .contains("Policy denied")
+    );
 }
 
 #[test]

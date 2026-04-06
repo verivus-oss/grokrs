@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Args;
 
 use grokrs_api::client::GrokClient;
@@ -299,8 +299,8 @@ fn run_repl_with_store<B: ChatBackend>(
     session_id: &str,
     initial_conversation: ConversationHistory,
 ) -> Result<()> {
-    use rustyline::error::ReadlineError;
     use rustyline::DefaultEditor;
+    use rustyline::error::ReadlineError;
 
     let mut editor = DefaultEditor::new()?;
 

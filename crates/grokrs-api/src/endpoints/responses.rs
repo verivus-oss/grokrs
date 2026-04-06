@@ -61,7 +61,8 @@ impl ResponsesClient {
     pub async fn create_stream(
         &self,
         request: &CreateResponseRequest,
-    ) -> Result<impl futures::Stream<Item = Result<String, TransportError>>, TransportError> {
+    ) -> Result<impl futures::Stream<Item = Result<String, TransportError>> + use<>, TransportError>
+    {
         self.http
             .send_sse(Method::POST, RESPONSES_PATH, request)
             .await

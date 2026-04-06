@@ -8,7 +8,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 
 use futures::StreamExt;
@@ -23,8 +23,8 @@ use grokrs_api::types::stream::ResponseStreamEvent;
 use grokrs_api::types::tts::{TtsOutputFormat, TtsRequest, VoiceId};
 use grokrs_core::AppConfig;
 use grokrs_policy::{Decision, Effect, PolicyEngine};
-use grokrs_store::types::TranscriptUsage;
 use grokrs_store::Store;
+use grokrs_store::types::TranscriptUsage;
 
 /// API subcommands for interacting with the xAI Grok API.
 #[derive(Subcommand)]
@@ -314,7 +314,7 @@ async fn run_chat(
         Ok(s) => s,
         Err(e) => {
             // Log error to store (best-effort).
-            if let (Some(ref s), Some(tid)) = (&store, transcript_id) {
+            if let (Some(s), Some(tid)) = (&store, transcript_id) {
                 let _ = s.transcripts().log_error(tid, &e.to_string());
                 let _ = s
                     .sessions()

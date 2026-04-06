@@ -297,9 +297,15 @@ mod tests {
     #[test]
     fn from_config_constructs_ok_with_valid_env_var() {
         let config = test_config();
-        std::env::set_var("GROKRS_TEST_CLIENT_KEY", "test-key-for-facade");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_CLIENT_KEY", "test-key-for-facade");
+        }
         let result = GrokClient::from_config(&config, None);
-        std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        }
         assert!(result.is_ok(), "expected Ok, got: {result:?}");
     }
 
@@ -315,7 +321,10 @@ mod tests {
             timeout_secs: Some(60),
             max_retries: Some(2),
         });
-        std::env::remove_var(unique_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(unique_var);
+        }
         let result = GrokClient::from_config(&config, None);
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -335,12 +344,16 @@ mod tests {
         // Set the default XAI_API_KEY var
         let var_name = "XAI_API_KEY";
         let had_value = std::env::var(var_name).ok();
-        std::env::set_var(var_name, "fallback-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(var_name, "fallback-test-key");
+        }
         let result = GrokClient::from_config(&config, None);
         // Restore original state
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
         match had_value {
-            Some(v) => std::env::set_var(var_name, v),
-            None => std::env::remove_var(var_name),
+            Some(v) => unsafe { std::env::set_var(var_name, v) },
+            None => unsafe { std::env::remove_var(var_name) },
         }
         assert!(
             result.is_ok(),
@@ -354,9 +367,15 @@ mod tests {
         use crate::endpoints::chat::ChatClient;
 
         let config = test_config();
-        std::env::set_var("GROKRS_TEST_CLIENT_KEY", "accessor-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_CLIENT_KEY", "accessor-test-key");
+        }
         let client = GrokClient::from_config(&config, None).unwrap();
-        std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        }
 
         // Verify each accessor compiles and returns the correct type.
         // We cannot call actual API methods without a server, but we can
@@ -378,19 +397,31 @@ mod tests {
         use crate::transport::policy_gate::AllowAllGate;
 
         let config = test_config();
-        std::env::set_var("GROKRS_TEST_CLIENT_KEY", "gate-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_CLIENT_KEY", "gate-test-key");
+        }
         let gate: Option<Arc<dyn PolicyGate>> = Some(Arc::new(AllowAllGate));
         let result = GrokClient::from_config(&config, gate);
-        std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        }
         assert!(result.is_ok());
     }
 
     #[test]
     fn debug_output_does_not_contain_api_key() {
         let config = test_config();
-        std::env::set_var("GROKRS_TEST_CLIENT_KEY", "super-secret-debug-test");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_CLIENT_KEY", "super-secret-debug-test");
+        }
         let client = GrokClient::from_config(&config, None).unwrap();
-        std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        }
 
         let debug = format!("{client:?}");
         assert!(
@@ -412,9 +443,15 @@ mod tests {
             timeout_secs: Some(30),
             max_retries: Some(5),
         });
-        std::env::set_var("GROKRS_TEST_CLIENT_KEY", "custom-config-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_CLIENT_KEY", "custom-config-key");
+        }
         let result = GrokClient::from_config(&config, None);
-        std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        }
         assert!(result.is_ok());
     }
 
@@ -428,9 +465,15 @@ mod tests {
             timeout_secs: None,
             max_retries: None,
         });
-        std::env::set_var("GROKRS_TEST_CLIENT_KEY", "partial-config-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_CLIENT_KEY", "partial-config-key");
+        }
         let result = GrokClient::from_config(&config, None);
-        std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_CLIENT_KEY");
+        }
         assert!(result.is_ok());
     }
 }

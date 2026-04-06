@@ -13,8 +13,8 @@ pub mod history;
 use backend::{BackendError, ChatBackend};
 use commands::SlashCommand;
 use history::{ConversationHistory, ConversationTurn};
-use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
 use std::path::PathBuf;
 
 /// The default REPL prompt.

@@ -4,7 +4,7 @@ use grokrs_cli::telemetry;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use grokrs_cap::{Untrusted, WorkspacePath};
-use grokrs_core::{check_deprecated_model, resolve_profile, AppConfig};
+use grokrs_core::{AppConfig, check_deprecated_model, resolve_profile};
 use grokrs_policy::{Decision, Effect, PolicyEngine};
 use grokrs_session::{Session, SessionState};
 use std::env;
@@ -324,8 +324,9 @@ fn doctor_features(
     }
 
     // Policy status for key effects.
-    let fs_write_decision =
-        engine.evaluate(&Effect::FsWrite(grokrs_cap::WorkspacePath::new("test.txt").unwrap()));
+    let fs_write_decision = engine.evaluate(&Effect::FsWrite(
+        grokrs_cap::WorkspacePath::new("test.txt").unwrap(),
+    ));
     let spawn_decision = engine.evaluate(&Effect::ProcessSpawn {
         program: "cargo".to_owned(),
     });
@@ -421,7 +422,9 @@ fn doctor_features(
     if cfg!(feature = "audio") {
         println!("[ok] voice_agent=enabled (audio feature compiled in)");
     } else {
-        println!("[--] voice_agent=disabled (audio feature not compiled in; rebuild with --features audio)");
+        println!(
+            "[--] voice_agent=disabled (audio feature not compiled in; rebuild with --features audio)"
+        );
     }
 
     // OpenTelemetry / OTLP status.

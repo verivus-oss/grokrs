@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use reqwest::multipart;
 use reqwest::Method;
+use reqwest::multipart;
 
 use crate::transport::client::HttpClient;
 use crate::transport::error::TransportError;

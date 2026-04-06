@@ -81,8 +81,8 @@ impl ToolSpec for RememberTool {
         input: Self::Input,
         root: &WorkspaceRoot,
     ) -> Result<Self::Output, ToolError> {
-        use grokrs_store::memory::MemoryCategory;
         use grokrs_store::Store;
+        use grokrs_store::memory::MemoryCategory;
 
         let category = MemoryCategory::parse(&input.category)
             .map_err(|e| ToolError::Other(format!("invalid category '{}': {e}", input.category)))?;

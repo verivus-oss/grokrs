@@ -167,8 +167,8 @@ mod tests {
 
     #[test]
     fn fn_policy_gate_with_stateful_closure() {
-        use std::sync::atomic::{AtomicU32, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
 
         let counter = Arc::new(AtomicU32::new(0));
         let counter_clone = counter.clone();

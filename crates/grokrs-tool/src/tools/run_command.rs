@@ -374,8 +374,14 @@ mod tests {
         let root = workspace(&dir);
 
         // Set a secret env var that should be stripped.
-        std::env::set_var("TEST_GROKRS_SECRET", "supersecret");
-        std::env::set_var("MY_API_KEY", "should_not_appear");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("TEST_GROKRS_SECRET", "supersecret");
+        }
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("MY_API_KEY", "should_not_appear");
+        }
 
         let result = RunCommandTool::default()
             .execute(
@@ -402,8 +408,14 @@ mod tests {
         );
 
         // Clean up.
-        std::env::remove_var("TEST_GROKRS_SECRET");
-        std::env::remove_var("MY_API_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("TEST_GROKRS_SECRET");
+        }
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("MY_API_KEY");
+        }
     }
 
     #[tokio::test]

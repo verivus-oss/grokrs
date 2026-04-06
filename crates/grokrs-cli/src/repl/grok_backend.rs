@@ -486,10 +486,16 @@ mod tests {
             mcp: None,
         };
 
-        std::env::set_var("GROKRS_TEST_BACKEND_KEY", "test-key-for-backend");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var("GROKRS_TEST_BACKEND_KEY", "test-key-for-backend");
+        }
         let client = GrokClient::from_config(&config, Some(Arc::new(AllowAllGate)))
             .expect("test client should build");
-        std::env::remove_var("GROKRS_TEST_BACKEND_KEY");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var("GROKRS_TEST_BACKEND_KEY");
+        }
         Arc::new(client)
     }
 
@@ -855,7 +861,10 @@ mod tests {
             ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
         };
         let env_var = "GROKRS_TEST_STREAM_BACKEND_KEY";
-        std::env::set_var(env_var, "stream-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(env_var, "stream-test-key");
+        }
         let app_config = AppConfig {
             workspace: WorkspaceConfig {
                 name: "test".into(),
@@ -889,7 +898,10 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        std::env::remove_var(env_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(env_var);
+        }
 
         let output_buf: Vec<u8> = Vec::new();
         let mut backend = GrokChatBackend::with_output(
@@ -934,7 +946,10 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_STATEFUL_KEY";
-        std::env::set_var(env_var, "stateful-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(env_var, "stateful-test-key");
+        }
 
         use grokrs_core::{
             ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
@@ -972,7 +987,10 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        std::env::remove_var(env_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(env_var);
+        }
 
         let output_buf: Vec<u8> = Vec::new();
         let mut backend = GrokChatBackend::with_output(
@@ -1008,7 +1026,10 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_ERR_KEY";
-        std::env::set_var(env_var, "error-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(env_var, "error-test-key");
+        }
 
         use grokrs_core::{
             ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
@@ -1046,7 +1067,10 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        std::env::remove_var(env_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(env_var);
+        }
 
         let output_buf: Vec<u8> = Vec::new();
         let mut backend = GrokChatBackend::with_output(
@@ -1086,7 +1110,10 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_FAIL_EVENT_KEY";
-        std::env::set_var(env_var, "fail-event-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(env_var, "fail-event-test-key");
+        }
 
         use grokrs_core::{
             ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
@@ -1124,7 +1151,10 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        std::env::remove_var(env_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(env_var);
+        }
 
         let output_buf: Vec<u8> = Vec::new();
         let mut backend = GrokChatBackend::with_output(
@@ -1174,7 +1204,10 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_SYS_KEY";
-        std::env::set_var(env_var, "sys-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(env_var, "sys-test-key");
+        }
 
         use grokrs_core::{
             ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
@@ -1212,7 +1245,10 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        std::env::remove_var(env_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(env_var);
+        }
 
         let output_buf: Vec<u8> = Vec::new();
         let mut backend = GrokChatBackend::with_output(
@@ -1362,7 +1398,10 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_SEARCH_CITE_KEY";
-        std::env::set_var(env_var, "search-cite-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(env_var, "search-cite-test-key");
+        }
 
         use grokrs_core::{
             ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
@@ -1400,7 +1439,10 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        std::env::remove_var(env_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(env_var);
+        }
 
         let output_buf: Vec<u8> = Vec::new();
         let mut backend = GrokChatBackend::with_output(
@@ -1448,7 +1490,10 @@ mod tests {
             .await;
 
         let env_var = "GROKRS_TEST_SEARCH_BODY_KEY";
-        std::env::set_var(env_var, "search-body-test-key");
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::set_var(env_var, "search-body-test-key");
+        }
 
         use grokrs_core::{
             ApiConfig, AppConfig, ModelConfig, PolicyConfig, SessionConfig, WorkspaceConfig,
@@ -1486,7 +1531,10 @@ mod tests {
         };
         let grok_client = GrokClient::from_config(&app_config, Some(Arc::new(AllowAllGate)))
             .expect("client should build");
-        std::env::remove_var(env_var);
+        // SAFETY: Test-only env manipulation; test runner serializes these tests.
+        unsafe {
+            std::env::remove_var(env_var);
+        }
 
         let output_buf: Vec<u8> = Vec::new();
         let mut backend = GrokChatBackend::with_output(
