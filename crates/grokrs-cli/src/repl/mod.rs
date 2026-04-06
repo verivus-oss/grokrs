@@ -158,6 +158,11 @@ fn handle_slash_command<B: ChatBackend>(
 /// * `backend` - The chat backend to send messages to.
 /// * `config` - REPL configuration (state directory for history persistence).
 /// * `rt` - A tokio runtime handle for executing async backend calls.
+///
+/// # Errors
+///
+/// Returns an error if the readline editor cannot be initialized or the
+/// backend returns an unrecoverable error during a turn.
 pub fn run_repl<B: ChatBackend>(
     mut backend: B,
     config: &ReplConfig,

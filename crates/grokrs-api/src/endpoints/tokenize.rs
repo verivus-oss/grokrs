@@ -28,6 +28,10 @@ impl<'a> TokenizeClient<'a> {
     /// # Arguments
     /// * `text` - The text to tokenize.
     /// * `model` - The model whose tokenizer should be used (e.g., "grok-4").
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn tokenize(
         &self,
         text: &str,

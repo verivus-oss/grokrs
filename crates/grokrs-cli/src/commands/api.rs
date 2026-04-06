@@ -164,6 +164,11 @@ fn check_network_allowed(config: &AppConfig) -> Result<()> {
 ///
 /// Loads config from the given path (or falls back to a default), constructs
 /// the policy engine and client, then dispatches to the appropriate handler.
+///
+/// # Errors
+///
+/// Returns an error if client construction, API calls, or output
+/// rendering fails.
 pub async fn run(command: &ApiCommand, config: &AppConfig) -> Result<()> {
     // Print deprecation notice for `api chat` early (before client construction)
     // so it appears even if the client fails to build (e.g. missing API key).

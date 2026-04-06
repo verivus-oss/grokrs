@@ -144,6 +144,11 @@ fn fmt_price(price: Option<i64>) -> String {
 }
 
 /// Execute the `grokrs models` command.
+///
+/// # Errors
+///
+/// Returns an error if the network policy check, client construction, or
+/// API call fails.
 pub async fn run(command: &ModelsCommand, config: &AppConfig) -> Result<()> {
     check_network_allowed(config)?;
 

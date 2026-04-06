@@ -136,6 +136,10 @@ fn build_management_client(config: &AppConfig) -> Result<ManagementClient> {
 }
 
 /// Execute a collections subcommand.
+///
+/// # Errors
+///
+/// Returns an error if client construction or the Management API call fails.
 pub async fn run(command: &CollectionsCommand, config: &AppConfig) -> Result<()> {
     check_management_config(config)?;
     let client = build_management_client(config)?;

@@ -120,6 +120,11 @@ pub struct ChatArgs {
 /// 4. Open the store (best-effort) for session/transcript persistence.
 /// 5. Construct the `GrokChatBackend` and launch the REPL with per-turn logging.
 /// 6. On exit, transition session to `Closed` and print usage summary.
+///
+/// # Errors
+///
+/// Returns an error if the network policy check, API client construction,
+/// store open, session resume, or REPL execution fails.
 pub fn run(args: &ChatArgs, config: &AppConfig, rt: &tokio::runtime::Handle) -> Result<()> {
     // --- Network policy check ---
     check_network_policy(config)?;

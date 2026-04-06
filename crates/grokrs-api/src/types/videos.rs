@@ -115,6 +115,10 @@ impl VideoDuration {
     pub const MAX: u32 = 15;
 
     /// Create a new `VideoDuration`, validating that `seconds` is in [1, 15].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VideoError::InvalidDuration`] if `seconds` is outside [1, 15].
     pub fn new(seconds: u32) -> Result<Self, VideoError> {
         if !(Self::MIN..=Self::MAX).contains(&seconds) {
             return Err(VideoError::InvalidDuration {
@@ -158,6 +162,11 @@ impl VideoExtensionDuration {
     pub const MAX: u32 = 10;
 
     /// Create a new `VideoExtensionDuration`, validating that `seconds` is in
+    /// [1, 10].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VideoError::InvalidExtensionDuration`] if `seconds` is outside
     /// [1, 10].
     pub fn new(seconds: u32) -> Result<Self, VideoError> {
         if !(Self::MIN..=Self::MAX).contains(&seconds) {

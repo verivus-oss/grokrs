@@ -128,6 +128,15 @@ impl Store {
     /// - All pending migrations are applied.
     ///
     /// The database file is created with permissions `0600` on Unix.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::InvalidPath`] if the default store path is rejected.
+    /// Returns [`StoreError::CreateDir`] if the parent directory cannot be created.
+    /// Returns [`StoreError::SetPermissions`] if file permissions cannot be set (Unix).
+    /// Returns [`StoreError::Migration`] if the database cannot be opened or a
+    /// migration or pragma fails.
+    /// Returns [`StoreError::Sql`] on underlying SQLite errors.
     pub fn open(workspace_root: &Path) -> Result<Self, StoreError> {
         Self::open_with_path(workspace_root, ".grokrs/state.db")
     }
@@ -137,6 +146,16 @@ impl Store {
     ///
     /// The `store_path` must be workspace-relative (no `..` traversal, not
     /// absolute).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::InvalidPath`] if `store_path` is absolute, empty,
+    /// or contains `..` traversal.
+    /// Returns [`StoreError::CreateDir`] if the parent directory cannot be created.
+    /// Returns [`StoreError::SetPermissions`] if file permissions cannot be set (Unix).
+    /// Returns [`StoreError::Migration`] if the database cannot be opened or a
+    /// migration or pragma fails.
+    /// Returns [`StoreError::Sql`] on underlying SQLite errors.
     pub fn open_with_path(workspace_root: &Path, store_path: &str) -> Result<Self, StoreError> {
         // Validate store_path: reject absolute paths and `..` traversal.
         validate_store_path(store_path)?;
@@ -181,6 +200,10 @@ impl Store {
     }
 
     /// Return the current schema version.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the `user_version` pragma query fails.
     pub fn schema_version(&self) -> Result<u32, StoreError> {
         migrations::current_version(&self.conn)
     }
@@ -229,6 +252,10 @@ impl Store {
     /// Calls `PRAGMA wal_checkpoint(TRUNCATE)` to compact the WAL file before
     /// the connection is dropped. This is a best-effort operation; errors are
     /// returned but the connection will still close on drop.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Migration`] if the WAL checkpoint pragma fails.
     pub fn close(self) -> Result<(), StoreError> {
         self.conn
             .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")

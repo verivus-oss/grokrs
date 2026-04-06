@@ -39,10 +39,21 @@ pub trait ErasedTool: Send + Sync {
     ///
     /// The caller is responsible for evaluating [`classify_json`](ErasedTool::classify_json)
     /// against the policy engine *before* calling this method.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ToolError::InvalidInput`] if `input_json` cannot be deserialized
+    /// into the tool's expected input type.
+    /// Returns [`ToolError::Other`] if tool execution fails (I/O, subprocess, etc.).
     fn execute_json(&self, input_json: &str, root: &WorkspaceRoot) -> Result<String, ToolError>;
 
     /// Classify a JSON input into the set of effects it will produce.
     ///
     /// This is the object-safe counterpart of [`Classify::classify`](crate::Classify::classify).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ToolError::InvalidInput`] if `input_json` cannot be deserialized.
+    /// Returns [`ToolError::Other`] if effect classification fails (e.g., invalid path).
     fn classify_json(&self, input_json: &str) -> Result<Vec<Effect>, ToolError>;
 }

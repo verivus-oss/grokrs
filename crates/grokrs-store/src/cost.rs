@@ -156,6 +156,11 @@ impl<'a> CostRepo<'a> {
     /// Run a cost aggregation query grouped by the specified dimension.
     ///
     /// Returns rows sorted by cost descending (highest cost first).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NegativeTokenCount`] if any aggregated value is negative.
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn aggregate(
         &self,
         group_by: CostGroupBy,
@@ -214,6 +219,11 @@ impl<'a> CostRepo<'a> {
     }
 
     /// Compute an overall summary across all transcripts matching the filter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NegativeTokenCount`] if any aggregated value is negative.
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn summary(&self, filter: &CostFilter) -> Result<CostSummary, StoreError> {
         let (where_clause, bind_values) = build_where_clause(filter);
 
@@ -472,6 +482,10 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
 }
 
 /// Format cost rows as JSON.
+///
+/// # Errors
+///
+/// Returns [`StoreError::Migration`] if JSON serialization fails.
 pub fn format_json(rows: &[CostRow], summary: &CostSummary) -> Result<String, StoreError> {
     let output = serde_json::json!({
         "rows": rows.iter().map(|r| {

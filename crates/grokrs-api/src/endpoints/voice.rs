@@ -205,6 +205,10 @@ impl VoiceAgentClient {
     /// Audio should be in the format specified by `VoiceConfig::input_audio_format`
     /// (default: PCM 16-bit, 24kHz, mono). The data is sent as a WebSocket
     /// binary frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::WebSocket`] if sending the binary frame fails.
     pub async fn send_audio(
         &self,
         sink: &Arc<tokio::sync::Mutex<WsSink>>,
@@ -216,6 +220,10 @@ impl VoiceAgentClient {
     /// Send raw PCM audio bytes to the voice agent.
     ///
     /// Convenience method that takes raw bytes without the `AudioData` wrapper.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::WebSocket`] if sending the binary frame fails.
     pub async fn send_audio_bytes(
         &self,
         sink: &Arc<tokio::sync::Mutex<WsSink>>,
@@ -225,6 +233,11 @@ impl VoiceAgentClient {
     }
 
     /// Send a text message to the voice agent (text-only mode).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Serialization`] if the message cannot be serialized.
+    /// Returns [`TransportError::WebSocket`] if sending the message fails.
     pub async fn send_text(
         &self,
         sink: &Arc<tokio::sync::Mutex<WsSink>>,
@@ -240,6 +253,11 @@ impl VoiceAgentClient {
     }
 
     /// Send a function call result back to the voice agent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Serialization`] if the message cannot be serialized.
+    /// Returns [`TransportError::WebSocket`] if sending the message fails.
     pub async fn send_function_result(
         &self,
         sink: &Arc<tokio::sync::Mutex<WsSink>>,
@@ -257,6 +275,11 @@ impl VoiceAgentClient {
     }
 
     /// Send a control message to the voice agent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Serialization`] if the message cannot be serialized.
+    /// Returns [`TransportError::WebSocket`] if sending the message fails.
     pub async fn send_control(
         &self,
         sink: &Arc<tokio::sync::Mutex<WsSink>>,
@@ -273,6 +296,10 @@ impl VoiceAgentClient {
     ///
     /// Sends a `Control::Close` message to the server, then closes the
     /// WebSocket connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::WebSocket`] if sending the close frame fails.
     pub async fn close(
         &self,
         sink: &Arc<tokio::sync::Mutex<WsSink>>,

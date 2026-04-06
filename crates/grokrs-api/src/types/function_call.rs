@@ -127,6 +127,10 @@ impl FunctionToolDefinition {
     }
 
     /// Validate this tool definition, checking that the name is not empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ToolError::InvalidName`] if the function name is empty.
     pub fn validate(&self) -> Result<(), ToolError> {
         if self.name.is_empty() {
             return Err(ToolError::InvalidName {
@@ -307,6 +311,11 @@ impl<'de> Deserialize<'de> for ToolChoice {
 ///
 /// The xAI API allows a maximum of 128 tools per request. This function
 /// checks the count of any slice and returns an error if it exceeds the limit.
+///
+/// # Errors
+///
+/// Returns [`ToolError::TooManyTools`] if the slice length exceeds
+/// [`MAX_TOOLS_PER_REQUEST`] (128).
 ///
 /// # Examples
 ///

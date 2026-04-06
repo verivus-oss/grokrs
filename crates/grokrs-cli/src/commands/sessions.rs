@@ -72,6 +72,10 @@ pub enum SessionsCommand {
 }
 
 /// Execute a sessions subcommand.
+///
+/// # Errors
+///
+/// Returns an error if the store cannot be opened or the session query fails.
 pub fn run(command: &SessionsCommand, config: &AppConfig, workspace_root: &Path) -> Result<()> {
     match command {
         SessionsCommand::List {

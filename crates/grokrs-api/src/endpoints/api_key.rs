@@ -28,6 +28,11 @@ impl<'a> ApiKeyClient<'a> {
     /// including name, status, ACLs, and blocked/disabled flags.
     ///
     /// This method always makes a fresh request — results are never cached.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails (network, auth,
+    /// deserialization, or non-2xx response).
     pub async fn info(&self) -> Result<ApiKeyInfo, TransportError> {
         self.http.send_no_body(Method::GET, "/v1/api-key").await
     }

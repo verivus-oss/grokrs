@@ -69,6 +69,10 @@ impl BatchesClient {
     ///
     /// Returns the newly created `BatchObject` with its assigned ID and
     /// initial status.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn create(
         &self,
         request: &CreateBatchRequest,
@@ -86,6 +90,10 @@ impl BatchesClient {
     ///
     /// Returns the newly created `BatchObject` with its assigned ID and
     /// initial status.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn create_from_file(
         &self,
         file_id: &str,
@@ -106,6 +114,10 @@ impl BatchesClient {
     ///
     /// The server may return 200 with an empty body, 204 No Content, or a JSON
     /// acknowledgment. We ignore the response body entirely via `send_json_empty`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn add_requests(
         &self,
         batch_id: &str,
@@ -127,6 +139,10 @@ impl BatchesClient {
     /// Get the status of a batch — `GET /v1/batches/{id}`.
     ///
     /// Returns the `BatchObject` with current progress counts and status.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn status(&self, batch_id: &str) -> Result<BatchObject, TransportError> {
         let path = format!("{}/{}", BATCHES_PATH, encode_path_segment(batch_id));
         self.http.send_no_body(Method::GET, &path).await
@@ -137,6 +153,10 @@ impl BatchesClient {
     /// If `pagination_token` is provided, it is appended as a URL-encoded
     /// query parameter to fetch the next page. Check `has_more` and
     /// `pagination_token` on the response to determine whether more pages exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn results(
         &self,
         batch_id: &str,
@@ -156,6 +176,10 @@ impl BatchesClient {
     /// Cancel a batch — `POST /v1/batches/{id}:cancel`.
     ///
     /// Returns the updated `BatchObject` reflecting the cancelled state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn cancel(&self, batch_id: &str) -> Result<BatchObject, TransportError> {
         let path = format!(
             "{}{}:cancel",
@@ -174,6 +198,10 @@ impl BatchesClient {
     /// List all batches — `GET /v1/batches`.
     ///
     /// Returns a `BatchList` containing all batches visible to the caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list(&self) -> Result<BatchList, TransportError> {
         self.http.send_no_body(Method::GET, BATCHES_PATH).await
     }
@@ -188,6 +216,12 @@ impl BatchesClient {
     /// [`BatchError::PaginationLimitExceeded`] error if the page limit is
     /// reached while more results remain. This fail-closed behavior ensures
     /// callers cannot accidentally treat partial data as complete.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BatchError::Transport`] if any underlying API request fails.
+    /// Returns [`BatchError::PaginationLimitExceeded`] if the maximum page
+    /// count is reached while more results remain.
     pub async fn collect_all_results(
         &self,
         batch_id: &str,

@@ -35,6 +35,10 @@ impl ModelsClient {
     /// `GET /v1/models`
     ///
     /// Returns a `ModelList` containing `id`, `created`, `owned_by` for each model.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list_models(&self) -> Result<ModelList, TransportError> {
         self.client
             .send_no_body(reqwest::Method::GET, "/v1/models")
@@ -44,6 +48,10 @@ impl ModelsClient {
     /// Get a single model by ID.
     ///
     /// `GET /v1/models/{model_id}`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn get_model(&self, model_id: &str) -> Result<Model, TransportError> {
         let path = format!("/v1/models/{}", encode_path_segment(model_id));
         self.client.send_no_body(reqwest::Method::GET, &path).await
@@ -55,6 +63,10 @@ impl ModelsClient {
     ///
     /// Returns a `LanguageModelList` containing pricing, modalities, aliases, and
     /// other extended metadata for each language model.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list_language_models(&self) -> Result<LanguageModelList, TransportError> {
         self.client
             .send_no_body(reqwest::Method::GET, "/v1/language-models")
@@ -64,6 +76,10 @@ impl ModelsClient {
     /// Get a single language model by ID.
     ///
     /// `GET /v1/language-models/{model_id}`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn get_language_model(
         &self,
         model_id: &str,
@@ -75,6 +91,10 @@ impl ModelsClient {
     /// List all image generation models.
     ///
     /// `GET /v1/image-generation-models`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list_image_models(&self) -> Result<ImageModelList, TransportError> {
         self.client
             .send_no_body(reqwest::Method::GET, "/v1/image-generation-models")
@@ -84,6 +104,10 @@ impl ModelsClient {
     /// Get a single image generation model by ID.
     ///
     /// `GET /v1/image-generation-models/{model_id}`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn get_image_model(&self, model_id: &str) -> Result<ImageModel, TransportError> {
         let path = format!(
             "/v1/image-generation-models/{}",
@@ -95,6 +119,10 @@ impl ModelsClient {
     /// List all video generation models.
     ///
     /// `GET /v1/video-generation-models`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list_video_models(&self) -> Result<VideoModelList, TransportError> {
         self.client
             .send_no_body(reqwest::Method::GET, "/v1/video-generation-models")
@@ -104,6 +132,10 @@ impl ModelsClient {
     /// Get a single video generation model by ID.
     ///
     /// `GET /v1/video-generation-models/{model_id}`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn get_video_model(&self, model_id: &str) -> Result<VideoModel, TransportError> {
         let path = format!(
             "/v1/video-generation-models/{}",

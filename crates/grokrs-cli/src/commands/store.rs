@@ -82,6 +82,10 @@ pub enum OutputFormat {
 }
 
 /// Execute a store subcommand.
+///
+/// # Errors
+///
+/// Returns an error if the store cannot be opened or the subcommand query fails.
 pub fn run(command: &StoreCommand, config: &AppConfig, workspace_root: &Path) -> Result<()> {
     match command {
         StoreCommand::Status => run_status(config, workspace_root),

@@ -33,6 +33,10 @@ impl CollectionsClient {
     /// Create a new collection.
     ///
     /// `POST /v1/collections`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn create(
         &self,
         request: &CreateCollectionRequest,
@@ -45,6 +49,10 @@ impl CollectionsClient {
     /// List all collections.
     ///
     /// `GET /v1/collections`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list(&self) -> Result<CollectionList, TransportError> {
         self.http.send_no_body(Method::GET, "/v1/collections").await
     }
@@ -52,6 +60,10 @@ impl CollectionsClient {
     /// Get a single collection by ID.
     ///
     /// `GET /v1/collections/{id}`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn get(&self, collection_id: &str) -> Result<Collection, TransportError> {
         let path = format!("/v1/collections/{}", percent_encode(collection_id));
         self.http.send_no_body(Method::GET, &path).await
@@ -63,6 +75,10 @@ impl CollectionsClient {
     ///
     /// Only the fields present in the request are updated. Absent fields are
     /// left unchanged on the server.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn update(
         &self,
         collection_id: &str,
@@ -75,6 +91,10 @@ impl CollectionsClient {
     /// Delete a collection by ID.
     ///
     /// `DELETE /v1/collections/{id}`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn delete(&self, collection_id: &str) -> Result<(), TransportError> {
         let path = format!("/v1/collections/{}", percent_encode(collection_id));
         self.http.send_no_body_empty(Method::DELETE, &path).await

@@ -89,6 +89,12 @@ impl<'a> TranscriptRepo<'a> {
     ///
     /// Fails with a foreign key violation if `session_id` does not reference an
     /// existing session.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::ForeignKeyViolation`] if `session_id` does not
+    /// reference an existing session.
+    /// Returns [`StoreError::Sql`] on other database failures.
     pub fn log_request(
         &self,
         session_id: &str,
@@ -127,6 +133,14 @@ impl<'a> TranscriptRepo<'a> {
     /// tokens, which is not physically reachable).
     ///
     /// Returns an error if no transcript exists with the given `transcript_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::TranscriptNotFound`] if no transcript with
+    /// `transcript_id` exists.
+    /// Returns [`StoreError::NegativeTokenCount`] if a token count exceeds
+    /// `i64::MAX` during conversion.
+    /// Returns [`StoreError::Sql`] on database failures.
     pub fn log_response(
         &self,
         transcript_id: i64,
@@ -200,6 +214,12 @@ impl<'a> TranscriptRepo<'a> {
     /// Record an error for a transcript (failed API request).
     ///
     /// Returns an error if no transcript exists with the given `transcript_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::TranscriptNotFound`] if no transcript with
+    /// `transcript_id` exists.
+    /// Returns [`StoreError::Sql`] on database failures.
     pub fn log_error(&self, transcript_id: i64, error: &str) -> Result<(), StoreError> {
         let affected = self
             .conn
@@ -225,6 +245,10 @@ impl<'a> TranscriptRepo<'a> {
     /// (by autoincrement `id` DESC), which may be `None` if the latest
     /// transcript has no response_id. This prevents callers from
     /// accidentally resuming against a stale older response_id.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn get_last_response_id(&self, session_id: &str) -> Result<Option<String>, StoreError> {
         let mut stmt = self
             .conn
@@ -251,6 +275,11 @@ impl<'a> TranscriptRepo<'a> {
     /// Token counts are stored as `i64` in SQLite and converted to `u64` on read.
     /// Negative values (which should never occur if data was written through this
     /// API) produce a `NegativeTokenCount` error rather than silently wrapping.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NegativeTokenCount`] if a stored token count is negative.
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn list_by_session(&self, session_id: &str) -> Result<Vec<TranscriptRecord>, StoreError> {
         let mut stmt = self
             .conn

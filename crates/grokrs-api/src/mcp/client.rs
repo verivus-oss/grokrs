@@ -104,6 +104,11 @@ impl McpClient {
     /// Create a new MCP client targeting the given server URL.
     ///
     /// The client is not connected until [`connect()`](McpClient::connect) is called.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpClientError::Transport`] if the transport cannot be created
+    /// (e.g., invalid URL).
     pub fn new(server_url: impl Into<String>) -> Result<Self, McpClientError> {
         let config = McpTransportConfig::new(server_url);
         let transport = McpTransport::new(config)?;
@@ -116,6 +121,10 @@ impl McpClient {
     }
 
     /// Create a new MCP client with a custom transport configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpClientError::Transport`] if the transport cannot be created.
     pub fn with_config(config: McpTransportConfig) -> Result<Self, McpClientError> {
         let transport = McpTransport::new(config)?;
         Ok(Self {
@@ -162,6 +171,13 @@ impl McpClient {
     ///
     /// Must be called before `list_tools()` or `call_tool()`. Sends the
     /// `initialize` request followed by `notifications/initialized`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpClientError::Transport`] if the HTTP request fails.
+    /// Returns [`McpClientError::Rpc`] if the server returns an RPC error.
+    /// Returns [`McpClientError::ResultParse`] if the response cannot be
+    /// deserialized as an `InitializeResult`.
     pub async fn connect(&mut self) -> Result<InitializeResult, McpClientError> {
         let init_params = InitializeParams {
             protocol_version: PROTOCOL_VERSION.to_owned(),
@@ -199,6 +215,14 @@ impl McpClient {
     ///
     /// Returns all tools, handling pagination if the server uses cursors.
     /// Requires [`connect()`](McpClient::connect) to have been called first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpClientError::NotConnected`] if `connect()` has not been called.
+    /// Returns [`McpClientError::Transport`] if the HTTP request fails.
+    /// Returns [`McpClientError::Rpc`] if the server returns an RPC error.
+    /// Returns [`McpClientError::ResultParse`] if the response cannot be
+    /// deserialized as a tool list.
     pub async fn list_tools(&self) -> Result<Vec<McpToolDefinition>, McpClientError> {
         if self.state != ConnectionState::Connected {
             return Err(McpClientError::NotConnected);
@@ -235,6 +259,14 @@ impl McpClient {
     /// Invoke a tool on the MCP server.
     ///
     /// Requires [`connect()`](McpClient::connect) to have been called first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpClientError::NotConnected`] if `connect()` has not been called.
+    /// Returns [`McpClientError::Transport`] if the HTTP request fails.
+    /// Returns [`McpClientError::Rpc`] if the server returns an RPC error.
+    /// Returns [`McpClientError::ResultParse`] if the response cannot be
+    /// deserialized as a tool call result.
     pub async fn call_tool(
         &self,
         name: &str,

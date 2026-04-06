@@ -47,6 +47,10 @@ impl<'a> ChatClient<'a> {
     /// Issues `POST /v1/chat/completions` with the given request body.
     /// For streaming responses, set `stream: Some(true)` on the request
     /// and use the SSE transport methods on `HttpClient` directly.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn create(
         &self,
         request: &ChatCompletionRequest,
@@ -64,6 +68,12 @@ impl<'a> ChatClient<'a> {
     ///   `Ok(None)`.
     /// - A **200** response means the completion is finished; the body is a
     ///   plain `ChatCompletion` and the method returns `Ok(Some(completion))`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
+    /// Returns [`TransportError::Deserialization`] if the 200 response body
+    /// cannot be parsed as a `ChatCompletion`.
     pub async fn poll_deferred(
         &self,
         request_id: &str,

@@ -170,6 +170,10 @@ fn parse_voice_config(args: &VoiceArgs, config: &AppConfig) -> Result<VoiceConfi
     })
 }
 
+/// # Errors
+///
+/// Returns an error if the network policy check, API key resolution,
+/// WebSocket connection, or the interactive voice loop fails.
 pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
     let text_only = args.text_only || !audio_feature_available();
     if !audio_feature_available() && !args.text_only {

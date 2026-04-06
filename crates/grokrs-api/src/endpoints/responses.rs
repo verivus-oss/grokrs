@@ -31,6 +31,10 @@ impl ResponsesClient {
     ///
     /// Sends the given request to the xAI Responses API and returns the
     /// completed `ResponseObject`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn create(
         &self,
         request: &CreateResponseRequest,
@@ -41,6 +45,10 @@ impl ResponsesClient {
     }
 
     /// Retrieve an existing response by ID — `GET /v1/responses/{id}`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn retrieve(&self, id: &str) -> Result<ResponseObject, TransportError> {
         let path = format!("{}/{}", RESPONSES_PATH, encode_path_segment(id));
         self.http.send_no_body(Method::GET, &path).await
@@ -49,6 +57,10 @@ impl ResponsesClient {
     /// Delete a stored response by ID — `DELETE /v1/responses/{id}`.
     ///
     /// Returns `Ok(())` on success (the server typically returns 204 No Content).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn delete(&self, id: &str) -> Result<(), TransportError> {
         let path = format!("{}/{}", RESPONSES_PATH, encode_path_segment(id));
         self.http.send_no_body_empty(Method::DELETE, &path).await
@@ -59,6 +71,10 @@ impl ResponsesClient {
     /// Returns a stream of raw SSE data lines. Use
     /// [`crate::streaming::parser::parse_response_stream`] to deserialize
     /// into typed [`crate::types::stream::ResponseStreamEvent`] values.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn create_stream(
         &self,
         request: &CreateResponseRequest,
@@ -74,6 +90,10 @@ impl ResponsesClient {
     /// This is useful when the request body contains fields that are not
     /// representable by `CreateResponseRequest` (e.g., function_call_output
     /// items in the input array for multi-turn function calling).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn create_raw(
         &self,
         request: &serde_json::Value,

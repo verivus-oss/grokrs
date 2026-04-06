@@ -882,6 +882,11 @@ fn build_initial_request(
 /// Returns an [`AgentResult`] with the exit code. In interactive mode the
 /// exit code is always `Success` on `Ok(...)` (errors propagate via `?`).
 /// In headless mode the exit code distinguishes error categories.
+///
+/// # Errors
+///
+/// Returns an error if task resolution, configuration, API client creation,
+/// store operations, or the agent tool loop fails.
 pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
     let task = resolve_task_with_event(args)?;
     let approval_mode = resolve_approval_mode(args, config);

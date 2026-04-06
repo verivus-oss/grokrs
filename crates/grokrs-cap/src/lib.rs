@@ -76,6 +76,9 @@ pub enum PathError {
 }
 
 impl WorkspaceRoot {
+    /// # Errors
+    ///
+    /// Returns [`PathError::RootNotAbsolute`] if the given path is not absolute.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, PathError> {
         let path = path.as_ref();
         if !path.is_absolute() {
@@ -98,6 +101,12 @@ impl WorkspaceRoot {
 }
 
 impl WorkspacePath {
+    /// # Errors
+    ///
+    /// Returns [`PathError::EmptyPath`] if the path is empty.
+    /// Returns [`PathError::AbsolutePath`] if the path is absolute.
+    /// Returns [`PathError::EscapesWorkspace`] if the path contains `..`,
+    /// a root directory, or a prefix component.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, PathError> {
         let path = path.as_ref();
         if path.as_os_str().is_empty() {

@@ -46,6 +46,10 @@ impl TtsClient {
     /// Issues `POST /v1/tts` with the given request body. The response is raw
     /// audio bytes (not JSON), returned as `Vec<u8>`. The caller decides how
     /// to handle the audio (write to file, pipe to stdout, etc.).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn generate(&self, request: &TtsRequest) -> Result<Vec<u8>, TransportError> {
         self.http
             .send_json_raw(Method::POST, TTS_GENERATE_PATH, request)
@@ -55,6 +59,10 @@ impl TtsClient {
     /// List all available TTS voices.
     ///
     /// Issues `GET /v1/tts/voices` and returns the parsed voice list.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list_voices(&self) -> Result<TtsVoiceList, TransportError> {
         self.http.send_no_body(Method::GET, TTS_VOICES_PATH).await
     }
@@ -63,6 +71,10 @@ impl TtsClient {
     ///
     /// Issues `GET /v1/tts/voices/{voice_id}` and returns the parsed voice
     /// descriptor. The `voice_id` is percent-encoded to prevent URL corruption.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn get_voice(&self, voice_id: &str) -> Result<TtsVoice, TransportError> {
         let path = format!("{}{}", TTS_VOICE_PATH_PREFIX, encode_path_segment(voice_id));
         self.http.send_no_body(Method::GET, &path).await

@@ -47,6 +47,11 @@ impl fmt::Display for ApiKeySecret {
 ///
 /// Returns `TransportError::Auth` if the variable is not set or empty.
 /// The key is wrapped in `ApiKeySecret` to prevent accidental logging.
+///
+/// # Errors
+///
+/// Returns [`TransportError::Auth`] if the environment variable is not set
+/// or is set to an empty string.
 pub fn resolve_api_key(env_var_name: &str) -> Result<ApiKeySecret, TransportError> {
     match env::var(env_var_name) {
         Ok(val) if val.is_empty() => Err(TransportError::Auth {

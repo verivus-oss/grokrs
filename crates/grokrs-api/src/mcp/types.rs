@@ -54,6 +54,10 @@ pub struct JsonRpcResponse {
 
 impl JsonRpcResponse {
     /// Returns `Ok(result)` if the response is successful, or `Err(error)` if it contains an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`JsonRpcError`] if the response contains an error field.
     pub fn into_result(self) -> Result<serde_json::Value, JsonRpcError> {
         if let Some(err) = self.error {
             Err(err)

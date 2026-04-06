@@ -14,6 +14,10 @@ pub use error::ToolError;
 /// gate dangerous operations. Path validation also happens here --
 /// invalid paths are rejected at classification time, not at execution.
 pub trait Classify {
+    /// # Errors
+    ///
+    /// Returns [`ToolError::Other`] if effect classification fails (e.g., an
+    /// invalid workspace path is provided).
     fn classify(&self) -> Result<Vec<Effect>, ToolError>;
 }
 

@@ -83,6 +83,10 @@ impl<'a> FilesClient<'a> {
     /// * `filename` - The name of the file being uploaded.
     /// * `purpose` - The intended purpose of the file.
     /// * `bytes` - The total size of the file in bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn initialize_chunked(
         &self,
         filename: &str,
@@ -109,6 +113,11 @@ impl<'a> FilesClient<'a> {
     /// * `upload_id` - The upload session ID from `initialize_chunked`.
     /// * `chunk_data` - The raw bytes for this chunk.
     /// * `chunk_index` - The zero-based index of this chunk.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Serialization`] if the MIME type cannot be set.
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn upload_chunks(
         &self,
         upload_id: &str,
@@ -138,6 +147,10 @@ impl<'a> FilesClient<'a> {
     ///
     /// # Arguments
     /// * `purpose` - If provided, only files with this purpose are returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list(&self, purpose: Option<&str>) -> Result<FileList, TransportError> {
         let path = match purpose {
             Some(p) => format!("/v1/files?purpose={}", urlencoding_minimal(p)),
@@ -152,6 +165,10 @@ impl<'a> FilesClient<'a> {
     ///
     /// # Arguments
     /// * `file_id` - The opaque file identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn get(&self, file_id: &str) -> Result<FileObject, TransportError> {
         let path = format!("/v1/files/{}", encode_path_segment(file_id));
         self.http.send_no_body(Method::GET, &path).await
@@ -164,6 +181,10 @@ impl<'a> FilesClient<'a> {
     /// # Arguments
     /// * `file_id` - The opaque file identifier.
     /// * `filename` - The new filename to assign.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn update(
         &self,
         file_id: &str,
@@ -182,6 +203,10 @@ impl<'a> FilesClient<'a> {
     ///
     /// # Arguments
     /// * `file_id` - The opaque file identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn download(&self, file_id: &str) -> Result<Vec<u8>, TransportError> {
         let body = FileDownloadRequest {
             file_id: file_id.to_string(),

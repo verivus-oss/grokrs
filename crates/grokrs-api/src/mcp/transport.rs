@@ -121,6 +121,11 @@ pub struct McpTransport {
 
 impl McpTransport {
     /// Create a new MCP transport with the given configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpTransportError::InvalidUrl`] if the server URL is malformed.
+    /// Returns [`McpTransportError::Http`] if the HTTP client cannot be built.
     pub fn new(config: McpTransportConfig) -> Result<Self, McpTransportError> {
         // Validate the URL.
         let _ = url::Url::parse(&config.server_url)
@@ -169,6 +174,14 @@ impl McpTransport {
     ///
     /// This is the core transport method. Higher-level methods like
     /// `send_initialize`, `send_tools_list`, etc. are built on top.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpTransportError::Http`] on network failures.
+    /// Returns [`McpTransportError::ServerError`] if the server returns a
+    /// non-2xx status.
+    /// Returns [`McpTransportError::Deserialization`] if the response body
+    /// cannot be parsed as JSON-RPC.
     pub async fn send(
         &self,
         method: &str,

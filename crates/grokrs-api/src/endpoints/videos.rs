@@ -54,6 +54,10 @@ impl VideosClient {
     /// Issues `POST /v1/videos/generations` with the given request body.
     /// Returns a `VideoSubmitResponse` containing the `request_id` for
     /// subsequent polling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn generate(
         &self,
         request: &VideoGenerationRequest,
@@ -68,6 +72,10 @@ impl VideosClient {
     /// Issues `POST /v1/videos/edits` with the given request body.
     /// Returns a `VideoSubmitResponse` containing the `request_id` for
     /// subsequent polling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn edit(
         &self,
         request: &VideoEditRequest,
@@ -82,6 +90,10 @@ impl VideosClient {
     /// Issues `POST /v1/videos/extensions` with the given request body.
     /// Returns a `VideoSubmitResponse` containing the `request_id` for
     /// subsequent polling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn extend(
         &self,
         request: &VideoExtensionRequest,
@@ -95,6 +107,10 @@ impl VideosClient {
     ///
     /// Issues `GET /v1/videos/{request_id}`. The `request_id` is
     /// percent-encoded to prevent URL corruption.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn poll(&self, request_id: &str) -> Result<VideoPollResponse, TransportError> {
         let path = format!(
             "{}{}",
@@ -114,6 +130,12 @@ impl VideosClient {
     ///
     /// This method has a bounded loop: it will never poll more than
     /// `max_polls` times, preventing runaway polling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VideoError::Transport`] if any API request fails.
+    /// Returns [`VideoError::GenerationFailed`] if the server reports failure.
+    /// Returns [`VideoError::PollTimeout`] if `max_polls` is exceeded.
     pub async fn poll_until_done(
         &self,
         request_id: &str,

@@ -245,6 +245,11 @@ pub fn extract_citations_from_output(
 ///
 /// Returns `Ok(())` if the date matches the expected format, or an error
 /// message suitable for display to the user.
+///
+/// # Errors
+///
+/// Returns a `String` describing the validation failure if the date does not
+/// match `YYYY-MM-DD` format or contains out-of-range year/month/day values.
 pub fn validate_date(date: &str) -> Result<(), String> {
     if date.len() != 10 {
         return Err(format!(

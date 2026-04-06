@@ -305,6 +305,11 @@ pub enum ConfigError {
 
 /// Validate that a profile name contains only alphanumeric characters, hyphens,
 /// and underscores. Returns `Ok(())` if valid, or `ConfigError::InvalidProfileName`.
+///
+/// # Errors
+///
+/// Returns [`ConfigError::InvalidProfileName`] if the name is empty or contains
+/// characters other than ASCII alphanumerics, hyphens, and underscores.
 pub fn validate_profile_name(name: &str) -> Result<(), ConfigError> {
     if name.is_empty()
         || !name
@@ -402,6 +407,11 @@ pub fn check_deprecated_model(model_name: &str) {
 }
 
 impl AppConfig {
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::Read`] if the configuration file cannot be read.
+    /// Returns [`ConfigError::Parse`] if the TOML content is invalid or does
+    /// not match the expected schema.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
         let path = path.as_ref();
         let raw = fs::read_to_string(path).map_err(|source| ConfigError::Read {

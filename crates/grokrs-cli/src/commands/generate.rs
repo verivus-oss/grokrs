@@ -214,6 +214,11 @@ fn validate_output_path(
 }
 
 /// Execute the `grokrs generate` command.
+///
+/// # Errors
+///
+/// Returns an error if network policy check, client construction, image/video
+/// generation, or file write operations fail.
 pub async fn run(command: &GenerateCommand, config: &AppConfig) -> Result<()> {
     check_network_allowed(config)?;
 

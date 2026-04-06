@@ -77,6 +77,11 @@ impl HttpClient {
     /// If no gate is provided, a `DenyAllGate` is used as the default
     /// (fail-closed / deny-by-default). Callers that want to allow traffic
     /// must explicitly provide an `AllowAllGate` or a custom gate.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Http`] if the underlying `reqwest::Client`
+    /// cannot be built.
     pub fn new(
         config: HttpClientConfig,
         api_key: ApiKeySecret,
@@ -106,6 +111,12 @@ impl HttpClient {
     ///
     /// Returns `TransportError::Auth` if the environment variable is not set
     /// or empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::Auth`] if the API key environment variable
+    /// is missing or empty.
+    /// Returns [`TransportError::Http`] if the HTTP client cannot be built.
     pub fn from_env(
         config: HttpClientConfig,
         policy_gate: Option<Arc<dyn PolicyGate>>,
@@ -120,6 +131,14 @@ impl HttpClient {
     /// Applies policy gate, authentication, and retry logic automatically.
     /// When the `otel` feature is enabled, emits a tracing span with HTTP
     /// method, path, status code, latency, model name, and token usage.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::PolicyDenied`] if the policy gate denies the request.
+    /// Returns [`TransportError::Serialization`] if the request body cannot be serialized.
+    /// Returns [`TransportError::Http`] on network or connection failures.
+    /// Returns [`TransportError::Api`] if the server returns a non-2xx status.
+    /// Returns [`TransportError::Deserialization`] if the response body cannot be parsed.
     pub async fn send_json<Req, Resp>(
         &self,
         method: Method,
@@ -206,6 +225,13 @@ impl HttpClient {
     ///
     /// When the `otel` feature is enabled, emits a tracing span for the
     /// initial connection (not for each streamed event).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::PolicyDenied`] if the policy gate denies the request.
+    /// Returns [`TransportError::Serialization`] if the request body cannot be serialized.
+    /// Returns [`TransportError::Http`] on network or connection failures.
+    /// Returns [`TransportError::Api`] if the server returns a non-2xx status.
     pub async fn send_sse<Req>(
         &self,
         method: Method,
@@ -278,6 +304,13 @@ impl HttpClient {
     /// or replayed — the form body is consumed on the first send attempt.
     /// Callers that need retry behavior for multipart uploads should
     /// rebuild the form and call this method again.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::PolicyDenied`] if the policy gate denies the request.
+    /// Returns [`TransportError::Http`] on network or connection failures.
+    /// Returns [`TransportError::Api`] if the server returns a non-2xx status.
+    /// Returns [`TransportError::Deserialization`] if the response body cannot be parsed.
     pub async fn send_multipart<Resp>(
         &self,
         path: &str,
@@ -335,6 +368,13 @@ impl HttpClient {
     ///
     /// Applies policy gate, authentication, and retry logic automatically.
     /// Suitable for GET requests that have no request body.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::PolicyDenied`] if the policy gate denies the request.
+    /// Returns [`TransportError::Http`] on network or connection failures.
+    /// Returns [`TransportError::Api`] if the server returns a non-2xx status.
+    /// Returns [`TransportError::Deserialization`] if the response body cannot be parsed.
     pub async fn send_no_body<Resp>(
         &self,
         method: Method,
@@ -411,6 +451,12 @@ impl HttpClient {
     ///
     /// This is useful for endpoints like deferred polling where 202 (still
     /// processing) and 200 (complete) have different response shapes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::PolicyDenied`] if the policy gate denies the request.
+    /// Returns [`TransportError::Http`] on network or connection failures.
+    /// Returns [`TransportError::Api`] if the server returns an unaccepted non-2xx status.
     pub async fn send_no_body_with_status(
         &self,
         method: Method,
@@ -471,6 +517,12 @@ impl HttpClient {
     /// Applies policy gate, authentication, and retry logic automatically.
     /// Returns `Ok(())` on any 2xx status. Suitable for DELETE endpoints that
     /// return 204 No Content.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::PolicyDenied`] if the policy gate denies the request.
+    /// Returns [`TransportError::Http`] on network or connection failures.
+    /// Returns [`TransportError::Api`] if the server returns a non-2xx status.
     pub async fn send_no_body_empty(
         &self,
         method: Method,
@@ -532,6 +584,13 @@ impl HttpClient {
     /// Returns `Ok(())` on any 2xx status. Suitable for endpoints that may
     /// return 200 with an empty body, 204 No Content, or a JSON acknowledgment
     /// that the caller does not need.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::PolicyDenied`] if the policy gate denies the request.
+    /// Returns [`TransportError::Serialization`] if the request body cannot be serialized.
+    /// Returns [`TransportError::Http`] on network or connection failures.
+    /// Returns [`TransportError::Api`] if the server returns a non-2xx status.
     pub async fn send_json_empty<Req>(
         &self,
         method: Method,
@@ -600,6 +659,13 @@ impl HttpClient {
     /// Useful for endpoints that return binary data (e.g., file downloads)
     /// rather than JSON. Applies policy gate, authentication, and retry logic
     /// automatically.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError::PolicyDenied`] if the policy gate denies the request.
+    /// Returns [`TransportError::Serialization`] if the request body cannot be serialized.
+    /// Returns [`TransportError::Http`] on network or connection failures.
+    /// Returns [`TransportError::Api`] if the server returns a non-2xx status.
     pub async fn send_json_raw<Req>(
         &self,
         method: Method,

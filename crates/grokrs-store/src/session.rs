@@ -24,6 +24,11 @@ impl<'a> SessionRepo<'a> {
     ///
     /// `trust_level` should be one of `"Untrusted"`, `"InteractiveTrusted"`,
     /// or `"AdminTrusted"`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::DuplicateSession`] if a session with `id` already exists.
+    /// Returns [`StoreError::Sql`] on other database failures.
     pub fn create(&self, id: &str, trust_level: &str) -> Result<(), StoreError> {
         let now = now_rfc3339();
         self.conn
@@ -46,6 +51,11 @@ impl<'a> SessionRepo<'a> {
     ///
     /// Returns an error if the session does not exist. For `Failed` state,
     /// callers should pass `"Failed: <message>"` as `new_state`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::SessionNotFound`] if no session with `id` exists.
+    /// Returns [`StoreError::Sql`] on database failures.
     pub fn transition(&self, id: &str, new_state: &str) -> Result<(), StoreError> {
         let now = now_rfc3339();
         let affected = self
@@ -62,6 +72,10 @@ impl<'a> SessionRepo<'a> {
     }
 
     /// Retrieve a session by ID, or `None` if it does not exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn get(&self, id: &str) -> Result<Option<SessionRecord>, StoreError> {
         let mut stmt = self
             .conn
@@ -90,6 +104,10 @@ impl<'a> SessionRepo<'a> {
     }
 
     /// Return the total number of sessions (all states).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the count query fails.
     pub fn count_total(&self) -> Result<i64, StoreError> {
         let count: i64 = self
             .conn
@@ -100,6 +118,10 @@ impl<'a> SessionRepo<'a> {
 
     /// Return all sessions ordered by `updated_at` descending, with optional
     /// limit.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn list_all(&self, limit: Option<u32>) -> Result<Vec<SessionRecord>, StoreError> {
         let sql = match limit {
             Some(_) => {
@@ -142,6 +164,10 @@ impl<'a> SessionRepo<'a> {
     }
 
     /// Return sessions matching the given state (exact match).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn list_by_state(&self, state: &str) -> Result<Vec<SessionRecord>, StoreError> {
         let mut stmt = self
             .conn
@@ -174,6 +200,10 @@ impl<'a> SessionRepo<'a> {
     ///
     /// SQL LIKE special characters (`%`, `_`) in the prefix are escaped so
     /// they match literally. Uses the backslash as ESCAPE character.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn find_by_prefix(&self, prefix: &str) -> Result<Vec<SessionRecord>, StoreError> {
         // Escape SQL LIKE special chars in the prefix.
         let escaped = prefix
@@ -218,6 +248,10 @@ impl<'a> SessionRepo<'a> {
     /// regardless of age. Returns the number of deleted session rows.
     /// Associated transcripts, approvals, and evidence are cascade-deleted
     /// by the V2 schema FK constraint.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the delete statement fails.
     pub fn delete_old(&self, before: &str) -> Result<u64, StoreError> {
         let affected = self
             .conn
@@ -230,6 +264,10 @@ impl<'a> SessionRepo<'a> {
     }
 
     /// Return the number of transcript entries for a session.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the count query fails.
     pub fn count_transcripts(&self, session_id: &str) -> Result<i64, StoreError> {
         let count: i64 = self
             .conn
@@ -244,6 +282,10 @@ impl<'a> SessionRepo<'a> {
 
     /// Return all sessions whose state is not `Closed` or `Failed` (including
     /// `Failed: <message>` variants).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn list_active(&self) -> Result<Vec<SessionRecord>, StoreError> {
         let mut stmt = self
             .conn

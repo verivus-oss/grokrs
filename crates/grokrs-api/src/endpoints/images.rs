@@ -37,6 +37,10 @@ impl ImagesClient {
     /// Generate images from a text prompt.
     ///
     /// Issues `POST /v1/images/generations` with the given request body.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn generate(
         &self,
         request: &ImageGenerationRequest,
@@ -49,6 +53,10 @@ impl ImagesClient {
     /// Edit an existing image based on a text prompt.
     ///
     /// Issues `POST /v1/images/edits` with the given request body.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn edit(&self, request: &ImageEditRequest) -> Result<ImageResponse, TransportError> {
         self.http
             .send_json(Method::POST, IMAGE_EDITS_PATH, request)

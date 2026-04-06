@@ -39,6 +39,11 @@ impl MemoryCategory {
     ///
     /// This is a convenience wrapper around the `FromStr` implementation that
     /// returns `StoreError` instead of `MemoryCategoryParseError`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Migration`] if `s` is not one of `"fact"`,
+    /// `"decision"`, or `"preference"` (case-insensitive).
     pub fn parse(s: &str) -> Result<Self, StoreError> {
         s.parse::<Self>()
             .map_err(|e| StoreError::Migration(e.to_string()))
@@ -113,6 +118,10 @@ impl<'a> MemoryRepo<'a> {
     ///
     /// If a memory with the same key exists, its value, category, and
     /// `updated_at` timestamp are updated. Otherwise a new row is inserted.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the upsert query fails.
     pub fn save(&self, key: &str, value: &str, category: MemoryCategory) -> Result<(), StoreError> {
         let now_ts = now();
         let cat = category.as_str();
@@ -135,6 +144,10 @@ impl<'a> MemoryRepo<'a> {
     /// Retrieve a memory by exact key. Increments `access_count` on hit.
     ///
     /// Returns `None` if no memory with the given key exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query or access-count update fails.
     pub fn get(&self, key: &str) -> Result<Option<MemoryRecord>, StoreError> {
         // First, try to read.
         let mut stmt = self
@@ -179,6 +192,10 @@ impl<'a> MemoryRepo<'a> {
     /// List all memories, optionally filtered by category.
     ///
     /// Results are ordered by access_count DESC, updated_at DESC (most relevant first).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn list(&self, category: Option<MemoryCategory>) -> Result<Vec<MemoryRecord>, StoreError> {
         let records = if let Some(cat) = category {
             let mut stmt = self
@@ -248,6 +265,10 @@ impl<'a> MemoryRepo<'a> {
     ///
     /// Matching records have their `access_count` incremented. Results are
     /// ordered by access_count DESC, updated_at DESC.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query or access-count update fails.
     pub fn search(&self, query: &str) -> Result<Vec<MemoryRecord>, StoreError> {
         let pattern = format!("%{query}%");
         let mut stmt = self
@@ -302,6 +323,10 @@ impl<'a> MemoryRepo<'a> {
     ///
     /// Returns `true` if a memory was deleted, `false` if no memory with the
     /// given key existed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the delete statement fails.
     pub fn delete(&self, key: &str) -> Result<bool, StoreError> {
         let affected = self
             .conn
@@ -311,6 +336,10 @@ impl<'a> MemoryRepo<'a> {
     }
 
     /// Return the total number of memories.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the count query fails.
     pub fn count(&self) -> Result<i64, StoreError> {
         let count: i64 = self
             .conn
@@ -324,6 +353,10 @@ impl<'a> MemoryRepo<'a> {
     ///
     /// Eviction order: lowest access_count first, then oldest updated_at.
     /// Returns the number of evicted memories.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the count or delete query fails.
     pub fn evict(&self, max_entries: i64) -> Result<i64, StoreError> {
         let current = self.count()?;
         if current <= max_entries {
@@ -350,6 +383,10 @@ impl<'a> MemoryRepo<'a> {
     /// Retrieve the top-N memories ranked by access_count DESC, updated_at DESC.
     ///
     /// Used for building the agent system prompt with the most relevant memories.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn top_n(&self, n: i64) -> Result<Vec<MemoryRecord>, StoreError> {
         let mut stmt = self
             .conn

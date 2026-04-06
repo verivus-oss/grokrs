@@ -42,6 +42,10 @@ impl DocumentsClient {
     ///
     /// The `file_id` references a file previously uploaded via the inference
     /// Files API. The Management API will chunk and embed the file contents.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn add(
         &self,
         file_id: &str,
@@ -63,6 +67,10 @@ impl DocumentsClient {
     /// status filtering. Pass `filter` as `None` to list all documents
     /// regardless of status. Use `pagination_token` from a previous
     /// `DocumentList` response to fetch the next page.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn list(
         &self,
         filter: Option<&str>,
@@ -95,6 +103,10 @@ impl DocumentsClient {
     /// Get a single document by file ID.
     ///
     /// `GET /v1/collections/{collection_id}/documents/{file_id}`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn get(&self, file_id: &str) -> Result<CollectionDocument, TransportError> {
         let path = format!(
             "/v1/collections/{}/documents/{}",
@@ -110,6 +122,10 @@ impl DocumentsClient {
     ///
     /// This triggers the Management API to reprocess the document using the
     /// collection's current chunk configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn regenerate(&self, file_id: &str) -> Result<CollectionDocument, TransportError> {
         let path = format!(
             "/v1/collections/{}/documents/{}",
@@ -124,6 +140,10 @@ impl DocumentsClient {
     /// Remove a document from this collection.
     ///
     /// `DELETE /v1/collections/{collection_id}/documents/{file_id}`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn remove(&self, file_id: &str) -> Result<(), TransportError> {
         let path = format!(
             "/v1/collections/{}/documents/{}",
@@ -136,6 +156,10 @@ impl DocumentsClient {
     /// Batch-get multiple documents by their file IDs.
     ///
     /// `GET /v1/collections/{collection_id}/documents:batchGet?file_ids=id1,id2,...`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TransportError`] if the API request fails.
     pub async fn batch_get(
         &self,
         file_ids: &[&str],

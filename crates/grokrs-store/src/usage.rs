@@ -33,6 +33,12 @@ impl<'a> UsageRepo<'a> {
     /// If the session has no transcripts, returns a zero-valued `UsageSummary`.
     /// Token counts are validated as non-negative when converting from SQLite's
     /// signed `i64` representation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NegativeTokenCount`] if any aggregated token count
+    /// is negative (indicates data corruption).
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn session_totals(&self, session_id: &str) -> Result<UsageSummary, StoreError> {
         let (cost, input, output, reasoning, count) = self
             .conn
@@ -71,6 +77,12 @@ impl<'a> UsageRepo<'a> {
     /// If the database has no transcripts, returns a zero-valued `UsageSummary`.
     /// Token counts are validated as non-negative when converting from SQLite's
     /// signed `i64` representation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NegativeTokenCount`] if any aggregated token count
+    /// is negative (indicates data corruption).
+    /// Returns [`StoreError::Sql`] if the query fails.
     pub fn all_totals(&self) -> Result<UsageSummary, StoreError> {
         let (cost, input, output, reasoning, count) = self
             .conn

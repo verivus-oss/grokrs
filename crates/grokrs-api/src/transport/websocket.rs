@@ -205,6 +205,12 @@ fn extract_ws_host(url: &str) -> Result<String, TransportError> {
 ///
 /// Extracts the host from the WebSocket URL and evaluates it against the
 /// policy gate. If no gate is provided, `DenyAllGate` is used (fail-closed).
+///
+/// # Errors
+///
+/// Returns [`TransportError::InvalidBaseUrl`] if the host cannot be extracted from the URL.
+/// Returns [`TransportError::PolicyDenied`] if the policy gate denies the connection.
+/// Returns [`TransportError::ApprovalRequired`] if the policy gate returns `Ask`.
 pub fn check_ws_policy_gate(
     url: &str,
     policy_gate: Option<&Arc<dyn PolicyGate>>,
@@ -232,6 +238,13 @@ pub fn check_ws_policy_gate(
 ///
 /// The caller is responsible for sending the initial `SessionConfig` message
 /// after the connection is established.
+///
+/// # Errors
+///
+/// Returns [`TransportError::PolicyDenied`] if the policy gate denies the connection.
+/// Returns [`TransportError::WebSocket`] if the WebSocket handshake fails.
+/// Returns [`TransportError::Auth`] if the API key contains invalid header characters.
+/// Returns [`TransportError::Timeout`] if the connection exceeds the configured timeout.
 pub async fn connect_ws(
     config: &WsClientConfig,
     api_key: &ApiKeySecret,
@@ -279,6 +292,10 @@ pub async fn connect_ws(
 }
 
 /// Send a text message through the WebSocket sink.
+///
+/// # Errors
+///
+/// Returns [`TransportError::WebSocket`] if sending the message fails.
 pub async fn send_text(sink: &Arc<Mutex<WsSink>>, text: &str) -> Result<(), TransportError> {
     let mut guard = sink.lock().await;
     guard
@@ -290,6 +307,10 @@ pub async fn send_text(sink: &Arc<Mutex<WsSink>>, text: &str) -> Result<(), Tran
 }
 
 /// Send a binary message (audio data) through the WebSocket sink.
+///
+/// # Errors
+///
+/// Returns [`TransportError::WebSocket`] if sending the message fails.
 pub async fn send_binary(sink: &Arc<Mutex<WsSink>>, data: Vec<u8>) -> Result<(), TransportError> {
     let mut guard = sink.lock().await;
     guard
@@ -301,6 +322,10 @@ pub async fn send_binary(sink: &Arc<Mutex<WsSink>>, data: Vec<u8>) -> Result<(),
 }
 
 /// Send a ping frame through the WebSocket sink.
+///
+/// # Errors
+///
+/// Returns [`TransportError::WebSocket`] if sending the ping fails.
 pub async fn send_ping(sink: &Arc<Mutex<WsSink>>, payload: Vec<u8>) -> Result<(), TransportError> {
     let mut guard = sink.lock().await;
     guard
@@ -312,6 +337,10 @@ pub async fn send_ping(sink: &Arc<Mutex<WsSink>>, payload: Vec<u8>) -> Result<()
 }
 
 /// Send a close frame through the WebSocket sink.
+///
+/// # Errors
+///
+/// Returns [`TransportError::WebSocket`] if sending the close frame fails.
 pub async fn send_close(sink: &Arc<Mutex<WsSink>>) -> Result<(), TransportError> {
     let mut guard = sink.lock().await;
     guard
