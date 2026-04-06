@@ -33,6 +33,7 @@ pub struct ConversationHistory {
 
 impl ConversationHistory {
     /// Create an empty conversation history.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -50,31 +51,37 @@ impl ConversationHistory {
     }
 
     /// Get the last response ID for stateful chaining.
+    #[must_use]
     pub fn last_response_id(&self) -> Option<&str> {
         self.last_response_id.as_deref()
     }
 
     /// Number of completed turns.
+    #[must_use]
     pub fn turn_count(&self) -> usize {
         self.turns.len()
     }
 
     /// Cumulative input tokens.
+    #[must_use]
     pub fn total_input_tokens(&self) -> u64 {
         self.total_input_tokens
     }
 
     /// Cumulative output tokens.
+    #[must_use]
     pub fn total_output_tokens(&self) -> u64 {
         self.total_output_tokens
     }
 
     /// Cumulative total tokens.
+    #[must_use]
     pub fn total_tokens(&self) -> u64 {
         self.total_input_tokens + self.total_output_tokens
     }
 
     /// Immutable access to all turns.
+    #[must_use]
     pub fn turns(&self) -> &[ConversationTurn] {
         &self.turns
     }

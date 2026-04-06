@@ -14,6 +14,7 @@ pub struct TokenizeClient<'a> {
 
 impl<'a> TokenizeClient<'a> {
     /// Create a new `TokenizeClient` wrapping the given HTTP client.
+    #[must_use]
     pub fn new(http: &'a HttpClient) -> Self {
         Self { http }
     }

@@ -36,6 +36,7 @@ pub struct TtsClient {
 
 impl TtsClient {
     /// Create a new `TtsClient` from a shared `HttpClient`.
+    #[must_use]
     pub fn new(http: Arc<HttpClient>) -> Self {
         Self { http }
     }

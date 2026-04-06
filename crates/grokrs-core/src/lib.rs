@@ -321,6 +321,7 @@ pub fn validate_profile_name(name: &str) -> Result<(), ConfigError> {
 /// `GROKRS_PROFILE` environment variable.
 ///
 /// Precedence: `flag` (--profile) > `GROKRS_PROFILE` env var > `None`.
+#[must_use]
 pub fn resolve_profile(flag: Option<&str>) -> Option<String> {
     if let Some(name) = flag {
         return Some(name.to_owned());
@@ -494,11 +495,13 @@ impl AppConfig {
     ///
     /// Given base `configs/grokrs.example.toml` and profile `dev`, returns
     /// `configs/grokrs.dev.toml`.
+    #[must_use]
     pub fn profile_path(base_path: &Path, profile_name: &str) -> PathBuf {
         let dir = base_path.parent().unwrap_or_else(|| Path::new("."));
         dir.join(format!("grokrs.{profile_name}.toml"))
     }
 
+    #[must_use]
     pub fn summary(&self) -> String {
         let mut s = format!(
             "workspace={} model={} provider={} allow_network={} allow_shell={} allow_workspace_writes={} approval_mode={} transcript_dir={} max_patch_bytes={}",

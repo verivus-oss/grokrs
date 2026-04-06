@@ -41,6 +41,7 @@ pub struct ApiError {
 
 impl ApiError {
     /// Create an `ApiError` from an HTTP status code and a deserialized error response.
+    #[must_use]
     pub fn from_response(status_code: u16, body: ApiErrorBody, request_id: Option<String>) -> Self {
         Self {
             status_code,
@@ -52,6 +53,7 @@ impl ApiError {
     }
 
     /// Create an `ApiError` when the response body could not be parsed.
+    #[must_use]
     pub fn from_status(status_code: u16, fallback_message: String) -> Self {
         Self {
             status_code,

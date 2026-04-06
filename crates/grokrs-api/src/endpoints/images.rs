@@ -29,6 +29,7 @@ pub struct ImagesClient {
 
 impl ImagesClient {
     /// Create a new `ImagesClient` from a shared `HttpClient`.
+    #[must_use]
     pub fn new(http: Arc<HttpClient>) -> Self {
         Self { http }
     }

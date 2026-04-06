@@ -70,6 +70,7 @@ impl Default for RunCommandTool {
 
 impl RunCommandTool {
     /// Create a new `RunCommandTool` with a custom timeout.
+    #[must_use]
     pub fn with_timeout(timeout: Duration) -> Self {
         Self { timeout }
     }

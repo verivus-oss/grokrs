@@ -22,10 +22,12 @@ pub struct PolicyEngine {
 }
 
 impl PolicyEngine {
+    #[must_use]
     pub fn new(config: PolicyConfig) -> Self {
         Self { config }
     }
 
+    #[must_use]
     pub fn evaluate(&self, effect: &Effect) -> Decision {
         match effect {
             Effect::FsRead(_) => Decision::Allow {

@@ -60,6 +60,7 @@ pub enum BuiltinTool {
 
 impl BuiltinTool {
     /// Return the wire-format type name for this built-in tool.
+    #[must_use]
     pub fn type_name(&self) -> &'static str {
         match self {
             BuiltinTool::WebSearch => "web_search",
@@ -74,6 +75,7 @@ impl BuiltinTool {
     }
 
     /// Convert to a `serde_json::Value` suitable for use in the `tools` array.
+    #[must_use]
     pub fn to_value(&self) -> serde_json::Value {
         serde_json::to_value(self).expect("BuiltinTool serialization is infallible")
     }
@@ -135,6 +137,7 @@ pub struct SearchParameters {
 impl SearchParameters {
     /// Convert to a `serde_json::Value` suitable for use in
     /// `CreateResponseRequest::search_parameters`.
+    #[must_use]
     pub fn to_value(&self) -> serde_json::Value {
         serde_json::to_value(self).expect("SearchParameters serialization is infallible")
     }

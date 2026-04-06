@@ -86,10 +86,12 @@ impl WorkspaceRoot {
         })
     }
 
+    #[must_use]
     pub fn join(&self, path: &WorkspacePath) -> PathBuf {
         self.root.join(&path.relative)
     }
 
+    #[must_use]
     pub fn as_path(&self) -> &Path {
         &self.root
     }
@@ -117,6 +119,7 @@ impl WorkspacePath {
         })
     }
 
+    #[must_use]
     pub fn as_path(&self) -> &Path {
         &self.relative
     }

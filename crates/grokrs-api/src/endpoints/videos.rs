@@ -44,6 +44,7 @@ pub struct VideosClient {
 
 impl VideosClient {
     /// Create a new `VideosClient` from a shared `HttpClient`.
+    #[must_use]
     pub fn new(http: Arc<HttpClient>) -> Self {
         Self { http }
     }

@@ -72,6 +72,7 @@ impl McpToolAdapter {
     }
 
     /// Return the original (unprefixed) MCP tool name.
+    #[must_use]
     pub fn mcp_name(&self) -> &str {
         &self.definition.name
     }

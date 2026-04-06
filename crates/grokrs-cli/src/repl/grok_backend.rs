@@ -100,6 +100,7 @@ pub struct GrokChatBackend {
 
 impl GrokChatBackend {
     /// Create a new backend from a shared client and configuration.
+    #[must_use]
     pub fn new(client: Arc<GrokClient>, config: GrokBackendConfig) -> Self {
         Self {
             client,

@@ -71,6 +71,7 @@ pub fn parse(input: &str) -> Option<SlashCommand> {
 }
 
 /// Format the `/help` output listing all available slash commands.
+#[must_use]
 pub fn help_text() -> &'static str {
     "\
 Available commands:

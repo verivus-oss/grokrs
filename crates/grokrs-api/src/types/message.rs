@@ -39,6 +39,7 @@ impl Message {
     }
 
     /// Create an assistant message with tool calls and no text content.
+    #[must_use]
     pub fn with_tool_calls(tool_calls: Vec<ToolCall>) -> Self {
         Self {
             role: Role::Assistant,

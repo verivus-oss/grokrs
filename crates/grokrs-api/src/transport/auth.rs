@@ -23,6 +23,7 @@ impl ApiKeySecret {
     ///
     /// Callers must ensure this value is never logged or included in
     /// error messages.
+    #[must_use]
     pub fn expose(&self) -> &str {
         &self.inner
     }

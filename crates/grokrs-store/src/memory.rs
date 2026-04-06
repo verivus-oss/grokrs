@@ -26,6 +26,7 @@ pub enum MemoryCategory {
 
 impl MemoryCategory {
     /// Return the string representation.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Fact => "fact",

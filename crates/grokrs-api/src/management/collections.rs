@@ -25,6 +25,7 @@ pub struct CollectionsClient {
 
 impl CollectionsClient {
     /// Create a new `CollectionsClient` wrapping the given `HttpClient`.
+    #[must_use]
     pub fn new(http: Arc<HttpClient>) -> Self {
         Self { http }
     }
@@ -80,6 +81,7 @@ impl CollectionsClient {
     }
 
     /// Access the Documents API client for a specific collection.
+    #[must_use]
     pub fn documents(&self, collection_id: &str) -> DocumentsClient {
         DocumentsClient::new(Arc::clone(&self.http), collection_id.to_owned())
     }

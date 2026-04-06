@@ -200,6 +200,7 @@ pub struct ToolCallResult {
 
 impl ToolCallResult {
     /// Concatenate all text content blocks into a single string.
+    #[must_use]
     pub fn text(&self) -> String {
         let mut result = String::new();
         for item in &self.content {

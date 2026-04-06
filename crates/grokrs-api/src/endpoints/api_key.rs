@@ -17,6 +17,7 @@ pub struct ApiKeyClient<'a> {
 
 impl<'a> ApiKeyClient<'a> {
     /// Create a new `ApiKeyClient` wrapping the given HTTP client.
+    #[must_use]
     pub fn new(http: &'a HttpClient) -> Self {
         Self { http }
     }

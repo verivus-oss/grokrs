@@ -172,18 +172,21 @@ impl TtsRequest {
     }
 
     /// Set the output audio format.
+    #[must_use]
     pub fn with_output_format(mut self, format: TtsOutputFormat) -> Self {
         self.output_format = Some(format);
         self
     }
 
     /// Set the sample rate in Hz.
+    #[must_use]
     pub fn with_sample_rate(mut self, rate: u32) -> Self {
         self.sample_rate = Some(rate);
         self
     }
 
     /// Set the bit rate in bits per second.
+    #[must_use]
     pub fn with_bit_rate(mut self, rate: u32) -> Self {
         self.bit_rate = Some(rate);
         self

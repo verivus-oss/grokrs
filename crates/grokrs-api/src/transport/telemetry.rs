@@ -52,6 +52,7 @@ impl RequestMeta {
     /// The `body_bytes` parameter is used to extract the model name when
     /// available. This is best-effort: if the body is not JSON or does not
     /// contain a `model` field, the model attribute is omitted.
+    #[must_use]
     pub fn new(method: &str, path: &str, body_bytes: Option<&[u8]>) -> Self {
         let model = body_bytes.and_then(|bytes| {
             serde_json::from_slice::<serde_json::Value>(bytes)
@@ -108,6 +109,7 @@ pub fn begin_http_span(meta: &RequestMeta) -> Span {
 
 /// No-op version when otel is disabled.
 #[cfg(not(feature = "otel"))]
+#[must_use]
 pub fn begin_http_span(_meta: &RequestMeta) -> Option<()> {
     None
 }
@@ -142,6 +144,7 @@ pub fn record_response(_span: &Option<()>, _meta: &RequestMeta, _response: &Resp
 /// Looks for the standard `usage.input_tokens` and `usage.output_tokens` fields
 /// in the JSON response body. Returns `(None, None)` if not present or if the
 /// response is not valid JSON.
+#[must_use]
 pub fn extract_usage_from_bytes(bytes: &[u8]) -> (Option<u64>, Option<u64>) {
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
         return (None, None);

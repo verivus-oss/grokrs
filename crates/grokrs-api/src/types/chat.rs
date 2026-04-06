@@ -352,120 +352,140 @@ impl ChatCompletionBuilder {
     }
 
     /// Set the model ID.
+    #[must_use]
     pub fn model(mut self, model: impl Into<String>) -> Self {
         self.model = model.into();
         self
     }
 
     /// Replace the message history.
+    #[must_use]
     pub fn messages(mut self, messages: Vec<Message>) -> Self {
         self.messages = messages;
         self
     }
 
     /// Set the tool definitions available for function calling.
+    #[must_use]
     pub fn tools(mut self, tools: Vec<ToolDefinition>) -> Self {
         self.tools = Some(tools);
         self
     }
 
     /// Set the tool choice strategy.
+    #[must_use]
     pub fn tool_choice(mut self, tool_choice: serde_json::Value) -> Self {
         self.tool_choice = Some(tool_choice);
         self
     }
 
     /// Enable or disable streaming.
+    #[must_use]
     pub fn stream(mut self, stream: bool) -> Self {
         self.stream = Some(stream);
         self
     }
 
     /// Set the sampling temperature.
+    #[must_use]
     pub fn temperature(mut self, temperature: f64) -> Self {
         self.temperature = Some(temperature);
         self
     }
 
     /// Set the nucleus sampling threshold.
+    #[must_use]
     pub fn top_p(mut self, top_p: f64) -> Self {
         self.top_p = Some(top_p);
         self
     }
 
     /// Set the maximum number of completion tokens.
+    #[must_use]
     pub fn max_completion_tokens(mut self, max: u64) -> Self {
         self.max_completion_tokens = Some(max);
         self
     }
 
     /// Set the number of completions to generate.
+    #[must_use]
     pub fn n(mut self, n: u32) -> Self {
         self.n = Some(n);
         self
     }
 
     /// Set the stop sequences.
+    #[must_use]
     pub fn stop(mut self, stop: Vec<String>) -> Self {
         self.stop = Some(stop);
         self
     }
 
     /// Set the deterministic sampling seed.
+    #[must_use]
     pub fn seed(mut self, seed: i64) -> Self {
         self.seed = Some(seed);
         self
     }
 
     /// Set the frequency penalty.
+    #[must_use]
     pub fn frequency_penalty(mut self, penalty: f64) -> Self {
         self.frequency_penalty = Some(penalty);
         self
     }
 
     /// Set the presence penalty.
+    #[must_use]
     pub fn presence_penalty(mut self, penalty: f64) -> Self {
         self.presence_penalty = Some(penalty);
         self
     }
 
     /// Set the response format constraint.
+    #[must_use]
     pub fn response_format(mut self, format: ResponseFormat) -> Self {
         self.response_format = Some(format);
         self
     }
 
     /// Set the reasoning effort hint.
+    #[must_use]
     pub fn reasoning_effort(mut self, effort: impl Into<String>) -> Self {
         self.reasoning_effort = Some(effort.into());
         self
     }
 
     /// Set the search parameters for live-search augmented generation.
+    #[must_use]
     pub fn search_parameters(mut self, params: serde_json::Value) -> Self {
         self.search_parameters = Some(params);
         self
     }
 
     /// Enable or disable deferred (asynchronous) processing.
+    #[must_use]
     pub fn deferred(mut self, deferred: bool) -> Self {
         self.deferred = Some(deferred);
         self
     }
 
     /// Set the stream options.
+    #[must_use]
     pub fn stream_options(mut self, options: StreamOptions) -> Self {
         self.stream_options = Some(options);
         self
     }
 
     /// Set whether the model should execute multiple tool calls in parallel.
+    #[must_use]
     pub fn parallel_tool_calls(mut self, parallel: bool) -> Self {
         self.parallel_tool_calls = Some(parallel);
         self
     }
 
     /// Consume the builder and produce a `ChatCompletionRequest`.
+    #[must_use]
     pub fn build(self) -> ChatCompletionRequest {
         ChatCompletionRequest {
             model: self.model,

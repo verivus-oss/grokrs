@@ -26,6 +26,7 @@ pub struct FilesClient<'a> {
 
 impl<'a> FilesClient<'a> {
     /// Create a new `FilesClient` wrapping the given HTTP client.
+    #[must_use]
     pub fn new(http: &'a HttpClient) -> Self {
         Self { http }
     }

@@ -69,12 +69,14 @@ pub enum AgentExitCode {
 
 impl AgentExitCode {
     /// Convert to the numeric code suitable for `std::process::exit`.
+    #[must_use]
     pub fn code(self) -> i32 {
         self as i32
     }
 }
 
 /// Map a [`ToolLoopError`] to the appropriate [`AgentExitCode`].
+#[must_use]
 pub fn exit_code_for_tool_loop_error(err: &ToolLoopError) -> AgentExitCode {
     match err {
         ToolLoopError::MaxIterationsExceeded { .. } => AgentExitCode::AgentError,
@@ -94,6 +96,7 @@ pub fn exit_code_for_tool_loop_error(err: &ToolLoopError) -> AgentExitCode {
 /// Map a generic `anyhow::Error` (from pre-loop failures) to an exit code.
 ///
 /// Public alias used by `main.rs` to map errors that escape `run()`.
+#[must_use]
 pub fn exit_code_for_anyhow_public(err: &anyhow::Error) -> AgentExitCode {
     exit_code_for_anyhow(err)
 }

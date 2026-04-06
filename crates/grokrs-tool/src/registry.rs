@@ -24,6 +24,7 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     /// Create an empty registry.
+    #[must_use]
     pub fn new() -> Self {
         Self { tools: Vec::new() }
     }
@@ -34,6 +35,7 @@ impl ToolRegistry {
     }
 
     /// Return all tools whose `min_trust_rank` is <= the given `trust_rank`.
+    #[must_use]
     pub fn available_tools(&self, trust_rank: u8) -> Vec<&dyn ErasedTool> {
         self.tools
             .iter()
@@ -43,6 +45,7 @@ impl ToolRegistry {
     }
 
     /// Look up a tool by its machine-readable name.
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&dyn ErasedTool> {
         self.tools
             .iter()
@@ -62,6 +65,7 @@ impl ToolRegistry {
     ///   "parameters": { ... }
     /// }
     /// ```
+    #[must_use]
     pub fn tool_definitions(&self, trust_rank: u8) -> Vec<serde_json::Value> {
         self.available_tools(trust_rank)
             .iter()
@@ -77,11 +81,13 @@ impl ToolRegistry {
     }
 
     /// Return the total number of registered tools (regardless of trust rank).
+    #[must_use]
     pub fn len(&self) -> usize {
         self.tools.len()
     }
 
     /// Return `true` if the registry contains no tools.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.tools.is_empty()
     }
@@ -106,6 +112,7 @@ impl Default for ToolRegistry {
 /// | `git_add`        | 1             | InteractiveTrusted+       |
 /// | `run_command`    | 2             | AdminTrusted only         |
 /// | `git_commit`     | 2             | AdminTrusted only         |
+#[must_use]
 pub fn default_registry() -> ToolRegistry {
     use crate::tools::{
         ForgetTool, GitAddTool, GitCommitTool, GitDiffTool, GitStatusTool, ListDirectoryTool,

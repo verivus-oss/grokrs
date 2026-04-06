@@ -68,6 +68,7 @@ impl VoiceAgentClient {
     /// Create a new `VoiceAgentClient` with the given configuration.
     ///
     /// The client is not connected until `connect()` is called.
+    #[must_use]
     pub fn new(
         ws_config: WsClientConfig,
         api_key: ApiKeySecret,
@@ -283,6 +284,7 @@ impl VoiceAgentClient {
     }
 
     /// Return the WebSocket connection configuration.
+    #[must_use]
     pub fn ws_config(&self) -> &WsClientConfig {
         &self.ws_config
     }

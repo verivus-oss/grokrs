@@ -96,6 +96,7 @@ impl McpTransportConfig {
     }
 
     /// Set the request timeout.
+    #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self

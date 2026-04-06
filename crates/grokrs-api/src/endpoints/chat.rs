@@ -37,6 +37,7 @@ pub struct ChatClient<'a> {
 #[allow(deprecated)]
 impl<'a> ChatClient<'a> {
     /// Create a new `ChatClient` backed by the given `HttpClient`.
+    #[must_use]
     pub fn new(http: &'a HttpClient) -> Self {
         Self { http }
     }

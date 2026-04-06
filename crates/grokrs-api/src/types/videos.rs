@@ -127,6 +127,7 @@ impl VideoDuration {
     }
 
     /// Return the duration in seconds.
+    #[must_use]
     pub fn seconds(&self) -> u32 {
         self.0
     }
@@ -170,6 +171,7 @@ impl VideoExtensionDuration {
     }
 
     /// Return the duration in seconds.
+    #[must_use]
     pub fn seconds(&self) -> u32 {
         self.0
     }

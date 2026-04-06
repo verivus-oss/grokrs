@@ -122,6 +122,7 @@ pub fn init(endpoint: Option<&str>) -> TelemetryGuard {
 
 /// No-op initialization when `otel` feature is disabled.
 #[cfg(not(feature = "otel"))]
+#[must_use]
 pub fn init(_endpoint: Option<&str>) -> TelemetryGuard {
     TelemetryGuard {}
 }

@@ -68,6 +68,7 @@ impl ContentBlock {
     /// * `data` - Base64-encoded image data.
     /// * `media_type` - MIME type, e.g. `"image/png"`.
     /// * `detail` - Optional detail level (e.g. `"auto"`, `"low"`, `"high"`).
+    #[must_use]
     pub fn input_image_base64(data: &str, media_type: &str, detail: Option<String>) -> Self {
         ContentBlock::InputImage {
             image_url: format!("data:{media_type};base64,{data}"),

@@ -28,6 +28,7 @@ pub struct DocumentsClient {
 
 impl DocumentsClient {
     /// Create a new `DocumentsClient` for the given collection.
+    #[must_use]
     pub fn new(http: Arc<HttpClient>, collection_id: String) -> Self {
         Self {
             http,

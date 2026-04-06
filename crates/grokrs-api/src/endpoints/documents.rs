@@ -27,6 +27,7 @@ pub struct DocumentsClient {
 
 impl DocumentsClient {
     /// Create a new `DocumentsClient` from a shared `HttpClient`.
+    #[must_use]
     pub fn new(http: Arc<HttpClient>) -> Self {
         Self { http }
     }

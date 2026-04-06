@@ -61,6 +61,7 @@ impl<T: TrustLevel> Session<T> {
         }
     }
 
+    #[must_use]
     pub fn state(&self) -> &SessionState {
         &self.state
     }
@@ -84,16 +85,19 @@ impl<T: TrustLevel> Session<T> {
         }
     }
 
+    #[must_use]
     pub fn id(&self) -> &str {
         &self.id
     }
 
     /// Return the total number of state transitions.
+    #[must_use]
     pub fn state_transitions(&self) -> u32 {
         self.state_transitions
     }
 
     /// Return the total number of turns (transitions to RunningTurn).
+    #[must_use]
     pub fn total_turns(&self) -> u32 {
         self.total_turns
     }

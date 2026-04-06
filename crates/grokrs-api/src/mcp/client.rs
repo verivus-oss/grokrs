@@ -127,6 +127,7 @@ impl McpClient {
     }
 
     /// Set a human-readable label for this MCP server.
+    #[must_use]
     pub fn with_label(mut self, label: impl Into<String>) -> Self {
         self.label = Some(label.into());
         self

@@ -45,6 +45,7 @@ impl PolicyGatedExecutor {
     /// * `root` - The workspace root for tool execution.
     /// * `approval_mode` - How to resolve `Ask` decisions ("allow", "deny", "interactive").
     /// * `trust_rank` - Trust rank of the current session (0=Untrusted, 1=InteractiveTrusted, 2=AdminTrusted).
+    #[must_use]
     pub fn new(
         registry: ToolRegistry,
         engine: PolicyEngine,
@@ -62,11 +63,13 @@ impl PolicyGatedExecutor {
     }
 
     /// Return a reference to the tool registry (for generating tool definitions).
+    #[must_use]
     pub fn registry(&self) -> &ToolRegistry {
         &self.registry
     }
 
     /// Return the trust rank.
+    #[must_use]
     pub fn trust_rank(&self) -> u8 {
         self.trust_rank
     }

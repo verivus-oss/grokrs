@@ -82,6 +82,7 @@ impl ManagementClient {
     }
 
     /// Access the Collections API client.
+    #[must_use]
     pub fn collections(&self) -> CollectionsClient {
         CollectionsClient::new(Arc::clone(&self.http))
     }

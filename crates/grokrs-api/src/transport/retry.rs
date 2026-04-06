@@ -33,6 +33,7 @@ impl Default for RetryConfig {
 ///
 /// Uses exponential backoff with deterministic jitter derived from system time
 /// to prevent thundering herd effects.
+#[must_use]
 pub fn should_retry(status: u16, attempt: u32, config: &RetryConfig) -> Option<Duration> {
     // Only retry on specific status codes
     if status != 429 && status != 503 {

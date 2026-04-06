@@ -32,6 +32,7 @@ pub struct ReplConfig {
 
 impl ReplConfig {
     /// Resolve the history file path: `<state_dir>/.grokrs/chat_history.txt`.
+    #[must_use]
     pub fn history_path(&self) -> PathBuf {
         self.state_dir.join(".grokrs").join(HISTORY_FILENAME)
     }

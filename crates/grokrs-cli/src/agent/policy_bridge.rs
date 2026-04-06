@@ -36,6 +36,7 @@ pub enum ResolvedDecision {
 ///   - `"allow"` → `Allow`
 ///   - `"deny"` → `Deny`
 ///   - anything else → `Deny` (with "approval required" message)
+#[must_use]
 pub fn resolve_decision(decision: Decision, approval_mode: &str) -> ResolvedDecision {
     match decision {
         Decision::Allow { .. } => ResolvedDecision::Allow,

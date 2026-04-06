@@ -35,6 +35,7 @@ pub struct CostRow {
 
 impl CostRow {
     /// Format cost_ticks as a USD string with 6 decimal places.
+    #[must_use]
     pub fn cost_usd(&self) -> String {
         format_usd(self.cost_ticks)
     }
@@ -55,6 +56,7 @@ pub enum CostGroupBy {
 
 impl CostGroupBy {
     /// Human-readable header label for the group column.
+    #[must_use]
     pub fn header(&self) -> &'static str {
         match self {
             Self::Model => "model",
@@ -95,11 +97,13 @@ pub struct CostSummary {
 
 impl CostSummary {
     /// Total cost as a USD string with 6 decimal places.
+    #[must_use]
     pub fn total_cost_usd(&self) -> String {
         format_usd(self.total_cost_ticks)
     }
 
     /// Average cost per session in USD ticks. Returns 0 if session_count is 0.
+    #[must_use]
     pub fn avg_cost_per_session_ticks(&self) -> i64 {
         if self.session_count == 0 {
             0
@@ -109,6 +113,7 @@ impl CostSummary {
     }
 
     /// Average cost per session as a USD string with 6 decimal places.
+    #[must_use]
     pub fn avg_cost_per_session_usd(&self) -> String {
         format_usd(self.avg_cost_per_session_ticks())
     }
@@ -117,6 +122,7 @@ impl CostSummary {
 /// Format cost ticks as USD with 6 decimal places.
 ///
 /// 1_000_000 ticks = $1.00 USD.
+#[must_use]
 pub fn format_usd(ticks: i64) -> String {
     let dollars = ticks as f64 / 1_000_000.0;
     format!("${dollars:.6}")
@@ -326,6 +332,7 @@ fn normalise_date_filter(value: &str, is_upper: bool) -> String {
 ///
 /// Returns a multi-line string with fixed-width columns. The header row uses
 /// the group_by dimension label. Rows are already sorted by the query.
+#[must_use]
 pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSummary) -> String {
     if rows.is_empty() {
         return "No usage data found.".to_owned();
@@ -480,6 +487,7 @@ pub fn format_json(rows: &[CostRow], summary: &CostSummary) -> Result<String, St
 }
 
 /// Format cost rows as CSV.
+#[must_use]
 pub fn format_csv(group_by: CostGroupBy, rows: &[CostRow]) -> String {
     let mut out = String::new();
 

@@ -24,6 +24,7 @@ pub struct TokenUsage {
 
 impl TokenUsage {
     /// Total tokens consumed in this turn.
+    #[must_use]
     pub fn total(&self) -> u64 {
         self.input_tokens + self.output_tokens
     }

@@ -479,12 +479,14 @@ impl CreateResponseBuilder {
     }
 
     /// Set the model name.
+    #[must_use]
     pub fn model(mut self, model: impl Into<String>) -> Self {
         self.model = model.into();
         self
     }
 
     /// Set the input to a plain text string.
+    #[must_use]
     pub fn input_text(mut self, text: impl Into<String>) -> Self {
         self.input = ResponseInput::Text(text.into());
         self
@@ -493,6 +495,7 @@ impl CreateResponseBuilder {
     /// Set the input to structured messages.
     ///
     /// Wraps each `InputMessage` in [`InputItem::Message`].
+    #[must_use]
     pub fn input_messages(mut self, messages: Vec<InputMessage>) -> Self {
         self.input = ResponseInput::Items(messages.into_iter().map(InputItem::Message).collect());
         self
@@ -502,24 +505,28 @@ impl CreateResponseBuilder {
     ///
     /// Use this when the input contains a mix of messages and other item
     /// types (e.g. reasoning replay items).
+    #[must_use]
     pub fn input_items(mut self, items: Vec<InputItem>) -> Self {
         self.input = ResponseInput::Items(items);
         self
     }
 
     /// Set the system instructions.
+    #[must_use]
     pub fn instructions(mut self, instructions: impl Into<String>) -> Self {
         self.instructions = Some(instructions.into());
         self
     }
 
     /// Set the tool definitions.
+    #[must_use]
     pub fn tools(mut self, tools: Vec<serde_json::Value>) -> Self {
         self.tools = Some(tools);
         self
     }
 
     /// Set the tool choice strategy.
+    #[must_use]
     pub fn tool_choice(mut self, tool_choice: serde_json::Value) -> Self {
         self.tool_choice = Some(tool_choice);
         self
@@ -531,6 +538,7 @@ impl CreateResponseBuilder {
     ///
     /// Panics if `id` is empty. The xAI API requires a non-empty opaque
     /// string for stateful conversation chaining.
+    #[must_use]
     pub fn previous_response_id(mut self, id: impl Into<String>) -> Self {
         let id = id.into();
         assert!(!id.is_empty(), "previous_response_id must not be empty");
@@ -541,90 +549,105 @@ impl CreateResponseBuilder {
     /// Set whether xAI should store the response server-side.
     ///
     /// Defaults to `false` in the builder. Pass `true` to opt in.
+    #[must_use]
     pub fn store(mut self, store: bool) -> Self {
         self.store = Some(store);
         self
     }
 
     /// Set whether to stream the response via SSE.
+    #[must_use]
     pub fn stream(mut self, stream: bool) -> Self {
         self.stream = Some(stream);
         self
     }
 
     /// Set the sampling temperature.
+    #[must_use]
     pub fn temperature(mut self, temperature: f64) -> Self {
         self.temperature = Some(temperature);
         self
     }
 
     /// Set the nucleus sampling probability.
+    #[must_use]
     pub fn top_p(mut self, top_p: f64) -> Self {
         self.top_p = Some(top_p);
         self
     }
 
     /// Set the maximum number of output tokens.
+    #[must_use]
     pub fn max_output_tokens(mut self, max_output_tokens: u64) -> Self {
         self.max_output_tokens = Some(max_output_tokens);
         self
     }
 
     /// Set the maximum number of agentic turns.
+    #[must_use]
     pub fn max_turns(mut self, max_turns: u64) -> Self {
         self.max_turns = Some(max_turns);
         self
     }
 
     /// Set the reasoning configuration.
+    #[must_use]
     pub fn reasoning(mut self, reasoning: ReasoningConfig) -> Self {
         self.reasoning = Some(reasoning);
         self
     }
 
     /// Set the text output format configuration.
+    #[must_use]
     pub fn text(mut self, text: TextConfig) -> Self {
         self.text = Some(text);
         self
     }
 
     /// Set the search parameters.
+    #[must_use]
     pub fn search_parameters(mut self, search_parameters: serde_json::Value) -> Self {
         self.search_parameters = Some(search_parameters);
         self
     }
 
     /// Set arbitrary metadata.
+    #[must_use]
     pub fn metadata(mut self, metadata: serde_json::Value) -> Self {
         self.metadata = Some(metadata);
         self
     }
 
     /// Set whether the model should execute multiple tool calls in parallel.
+    #[must_use]
     pub fn parallel_tool_calls(mut self, parallel: bool) -> Self {
         self.parallel_tool_calls = Some(parallel);
         self
     }
 
     /// Set the output types to include in the response.
+    #[must_use]
     pub fn include(mut self, include: Vec<String>) -> Self {
         self.include = Some(include);
         self
     }
 
     /// Set context management directives.
+    #[must_use]
     pub fn context_management(mut self, context_management: Vec<serde_json::Value>) -> Self {
         self.context_management = Some(context_management);
         self
     }
 
     /// Set the prompt cache key.
+    #[must_use]
     pub fn prompt_cache_key(mut self, key: impl Into<String>) -> Self {
         self.prompt_cache_key = Some(key.into());
         self
     }
 
     /// Consume the builder and produce the request.
+    #[must_use]
     pub fn build(self) -> CreateResponseRequest {
         CreateResponseRequest {
             model: self.model,

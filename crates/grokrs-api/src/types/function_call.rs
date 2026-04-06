@@ -137,16 +137,19 @@ impl FunctionToolDefinition {
     }
 
     /// Return the function name.
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Return the function description.
+    #[must_use]
     pub fn description(&self) -> &str {
         &self.description
     }
 
     /// Return a reference to the parameters schema.
+    #[must_use]
     pub fn parameters(&self) -> &serde_json::Value {
         &self.parameters
     }
@@ -154,6 +157,7 @@ impl FunctionToolDefinition {
     /// Convert to a `ResponsesToolDefinition` (flat wire format for the Responses API).
     ///
     /// Wire format: `{"type":"function","name":"...","description":"...","parameters":{...}}`
+    #[must_use]
     pub fn to_responses_definition(&self) -> ResponsesToolDefinition {
         ResponsesToolDefinition {
             r#type: "function".into(),
@@ -166,6 +170,7 @@ impl FunctionToolDefinition {
     /// Convert to a `ToolDefinition` (nested wire format for the Chat Completions API).
     ///
     /// Wire format: `{"type":"function","function":{"name":"...","description":"...","parameters":{...}}}`
+    #[must_use]
     pub fn to_chat_definition(&self) -> ToolDefinition {
         ToolDefinition {
             r#type: "function".into(),
@@ -182,6 +187,7 @@ impl FunctionToolDefinition {
     ///
     /// This is a convenience for building `CreateResponseRequest::tools` which
     /// accepts `Vec<serde_json::Value>`.
+    #[must_use]
     pub fn to_responses_value(&self) -> serde_json::Value {
         serde_json::to_value(self.to_responses_definition())
             .expect("ResponsesToolDefinition serialization is infallible")
@@ -189,6 +195,7 @@ impl FunctionToolDefinition {
 
     /// Serialize this definition to a `serde_json::Value` in the Chat
     /// Completions API nested format.
+    #[must_use]
     pub fn to_chat_value(&self) -> serde_json::Value {
         serde_json::to_value(self.to_chat_definition())
             .expect("ToolDefinition serialization is infallible")
@@ -225,6 +232,7 @@ pub enum ToolChoice {
 impl ToolChoice {
     /// Convert this `ToolChoice` to a `serde_json::Value` suitable for use
     /// in `CreateResponseRequest::tool_choice` or `ChatCompletionRequest::tool_choice`.
+    #[must_use]
     pub fn to_value(&self) -> serde_json::Value {
         match self {
             ToolChoice::Auto => serde_json::Value::String("auto".into()),

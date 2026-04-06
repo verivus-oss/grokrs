@@ -118,63 +118,75 @@ impl GrokClient {
     ///
     /// Returns `self` for chaining. Session association is optional — the
     /// client works without one for simple scripts.
+    #[must_use]
     pub fn with_session(mut self, session_id: impl Into<String>) -> Self {
         self.session_id = Some(session_id.into());
         self
     }
 
     /// Return the associated session ID, if any.
+    #[must_use]
     pub fn session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
     }
 
     /// Access the Responses API client (`POST /v1/responses`, etc.).
+    #[must_use]
     pub fn responses(&self) -> ResponsesClient {
         ResponsesClient::new(Arc::clone(&self.http))
     }
 
     /// Access the Chat Completions API client (legacy).
     #[allow(deprecated)]
+    #[must_use]
     pub fn chat(&self) -> ChatClient<'_> {
         ChatClient::new(&self.http)
     }
 
     /// Access the Models API client.
+    #[must_use]
     pub fn models(&self) -> ModelsClient {
         ModelsClient::new(Arc::clone(&self.http))
     }
 
     /// Access the Images API client.
+    #[must_use]
     pub fn images(&self) -> ImagesClient {
         ImagesClient::new(Arc::clone(&self.http))
     }
 
     /// Access the Videos API client.
+    #[must_use]
     pub fn videos(&self) -> VideosClient {
         VideosClient::new(Arc::clone(&self.http))
     }
 
     /// Access the Text-to-Speech API client.
+    #[must_use]
     pub fn tts(&self) -> TtsClient {
         TtsClient::new(Arc::clone(&self.http))
     }
 
     /// Access the Files API client.
+    #[must_use]
     pub fn files(&self) -> FilesClient<'_> {
         FilesClient::new(&self.http)
     }
 
     /// Access the Batches API client.
+    #[must_use]
     pub fn batches(&self) -> BatchesClient {
         BatchesClient::new(Arc::clone(&self.http))
     }
 
     /// Access the Tokenize API client.
+    #[must_use]
     pub fn tokenize(&self) -> TokenizeClient<'_> {
         TokenizeClient::new(&self.http)
     }
 
     /// Access the API Key info client.
+    #[must_use]
     pub fn api_key(&self) -> ApiKeyClient<'_> {
         ApiKeyClient::new(&self.http)
     }
@@ -183,6 +195,7 @@ impl GrokClient {
     ///
     /// Document search uses the standard inference API key — it does not
     /// depend on the Collections Management API or management key.
+    #[must_use]
     pub fn documents(&self) -> DocumentsClient {
         DocumentsClient::new(Arc::clone(&self.http))
     }
@@ -196,6 +209,7 @@ impl GrokClient {
     /// An optional `WsClientConfig` can be provided to customize WebSocket
     /// behavior (heartbeat interval, reconnect policy, etc.). If `None`,
     /// defaults are used with the base URL derived from the HTTP base URL.
+    #[must_use]
     pub fn voice_agent(&self, ws_config: Option<WsClientConfig>) -> VoiceAgentClient {
         let config = ws_config.unwrap_or_else(|| {
             let ws_base = if self.base_url.starts_with("https://") {

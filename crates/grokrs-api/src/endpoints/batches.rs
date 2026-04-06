@@ -60,6 +60,7 @@ pub struct BatchesClient {
 
 impl BatchesClient {
     /// Create a new `BatchesClient` from a shared `HttpClient`.
+    #[must_use]
     pub fn new(http: Arc<HttpClient>) -> Self {
         Self { http }
     }
@@ -234,6 +235,7 @@ impl BatchesClient {
     /// Return the HTTP path used for create and list operations.
     ///
     /// Useful for testing and diagnostics.
+    #[must_use]
     pub fn base_path() -> &'static str {
         BATCHES_PATH
     }
@@ -241,6 +243,7 @@ impl BatchesClient {
     /// Return the HTTP path for a specific batch resource.
     ///
     /// Useful for testing and diagnostics.
+    #[must_use]
     pub fn resource_path(batch_id: &str) -> String {
         format!("{}/{}", BATCHES_PATH, encode_path_segment(batch_id))
     }
@@ -248,6 +251,7 @@ impl BatchesClient {
     /// Return the HTTP path for adding requests to a batch.
     ///
     /// Useful for testing and diagnostics.
+    #[must_use]
     pub fn requests_path(batch_id: &str) -> String {
         format!(
             "{}/{}/requests",
@@ -259,6 +263,7 @@ impl BatchesClient {
     /// Return the HTTP path for retrieving batch results.
     ///
     /// Useful for testing and diagnostics.
+    #[must_use]
     pub fn results_path(batch_id: &str) -> String {
         format!("{}/{}/results", BATCHES_PATH, encode_path_segment(batch_id))
     }
@@ -266,6 +271,7 @@ impl BatchesClient {
     /// Return the HTTP path for cancelling a batch.
     ///
     /// Useful for testing and diagnostics.
+    #[must_use]
     pub fn cancel_path(batch_id: &str) -> String {
         format!("{}/{}:cancel", BATCHES_PATH, encode_path_segment(batch_id))
     }

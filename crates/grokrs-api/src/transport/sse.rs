@@ -174,6 +174,7 @@ fn extract_data_line(
 ///
 /// Takes a complete SSE text payload and returns all `data:` lines as strings,
 /// stopping at `data: [DONE]`.
+#[must_use]
 pub fn parse_sse_lines(text: &str) -> Vec<Result<String, TransportError>> {
     let mut buffer = text.to_string();
     // Ensure buffer ends with newline for proper parsing

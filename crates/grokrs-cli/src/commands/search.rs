@@ -35,6 +35,7 @@ pub struct SearchConfig {
 
 impl SearchConfig {
     /// Returns `true` if no search tools are enabled.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         !self.web_search && !self.x_search
     }
@@ -42,6 +43,7 @@ impl SearchConfig {
     /// Build the list of `BuiltinTool` values to include in the request tools array.
     ///
     /// Returns an empty vec if no search tools are enabled.
+    #[must_use]
     pub fn builtin_tools(&self) -> Vec<BuiltinTool> {
         let mut tools = Vec::new();
         if self.web_search {
@@ -55,12 +57,14 @@ impl SearchConfig {
 
     /// Build `serde_json::Value` representations of the search tools,
     /// suitable for appending to the request's `tools` array.
+    #[must_use]
     pub fn tool_values(&self) -> Vec<serde_json::Value> {
         self.builtin_tools().iter().map(|t| t.to_value()).collect()
     }
 
     /// Build `SearchParameters` from this config, or `None` if no parameters
     /// are needed (no date range, no max results, no citations).
+    #[must_use]
     pub fn search_parameters(&self) -> Option<SearchParameters> {
         if self.is_empty() {
             return None;
@@ -104,6 +108,7 @@ pub struct Citation {
 /// The Responses API may include citations in the response output items
 /// as part of `web_search_call` or `x_search_call` results, or in a
 /// top-level `citations` array. This function searches both locations.
+#[must_use]
 pub fn extract_citations(response: &serde_json::Value) -> Vec<Citation> {
     let mut citations = Vec::new();
 
@@ -165,6 +170,7 @@ pub fn extract_citations(response: &serde_json::Value) -> Vec<Citation> {
 ///   [1] Example Article — https://example.com/article
 ///   [2] https://other.com/page
 /// ```
+#[must_use]
 pub fn format_citations(citations: &[Citation]) -> String {
     if citations.is_empty() {
         return String::new();
@@ -188,6 +194,7 @@ pub fn format_citations(citations: &[Citation]) -> String {
 ///
 /// Used by the agent command to extract citations from the final response
 /// after the tool loop completes.
+#[must_use]
 pub fn extract_citations_from_output(
     output: &[grokrs_api::types::responses::OutputItem],
 ) -> Vec<Citation> {

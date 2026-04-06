@@ -25,6 +25,7 @@ pub struct ModelsClient {
 
 impl ModelsClient {
     /// Create a new `ModelsClient` wrapping the given HTTP client.
+    #[must_use]
     pub fn new(client: Arc<HttpClient>) -> Self {
         Self { client }
     }

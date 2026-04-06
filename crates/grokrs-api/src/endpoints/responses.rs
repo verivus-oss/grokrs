@@ -22,6 +22,7 @@ pub struct ResponsesClient {
 
 impl ResponsesClient {
     /// Create a new `ResponsesClient` from a shared `HttpClient`.
+    #[must_use]
     pub fn new(http: Arc<HttpClient>) -> Self {
         Self { http }
     }
@@ -85,6 +86,7 @@ impl ResponsesClient {
     /// Return the HTTP path used for the create endpoint.
     ///
     /// Useful for testing and diagnostics.
+    #[must_use]
     pub fn create_path() -> &'static str {
         RESPONSES_PATH
     }
@@ -92,6 +94,7 @@ impl ResponsesClient {
     /// Return the HTTP path used for retrieve/delete operations on a specific response.
     ///
     /// Useful for testing and diagnostics.
+    #[must_use]
     pub fn resource_path(id: &str) -> String {
         format!("{}/{}", RESPONSES_PATH, encode_path_segment(id))
     }

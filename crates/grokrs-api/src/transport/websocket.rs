@@ -144,6 +144,7 @@ pub fn parse_ws_message(msg: Message) -> Option<WsFrame> {
 /// Compute the reconnection delay for a given attempt using exponential backoff.
 ///
 /// Uses the same deterministic jitter approach as the HTTP retry module.
+#[must_use]
 pub fn reconnect_delay(attempt: u32, config: &WsClientConfig) -> Duration {
     let exp_delay_ms = config
         .reconnect_base_delay_ms
