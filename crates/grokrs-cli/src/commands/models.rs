@@ -424,7 +424,7 @@ async fn run_info(client: &GrokClient, model_id: &str, json_output: bool) -> Res
             let colored = price
                 .map(|p| price_color(p, &display, use_color))
                 .unwrap_or(display);
-            println!("  {:<20} {}", label, colored);
+            println!("  {label:<20} {colored}");
         }
 
         return Ok(());

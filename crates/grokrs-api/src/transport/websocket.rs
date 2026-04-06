@@ -425,8 +425,7 @@ mod tests {
         let delay = reconnect_delay(20, &config);
         assert!(
             delay.as_millis() <= 5000,
-            "delay should be clamped to max, got {:?}",
-            delay
+            "delay should be clamped to max, got {delay:?}",
         );
     }
 

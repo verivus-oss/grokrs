@@ -6,6 +6,8 @@
 //! logic for building search tool arrays, constructing `SearchParameters`,
 //! and formatting citations returned in API responses.
 
+use std::fmt::Write as _;
+
 use grokrs_api::types::builtin_tools::{BuiltinTool, SearchMode, SearchParameters};
 
 // ---------------------------------------------------------------------------
@@ -183,10 +185,10 @@ pub fn format_citations(citations: &[Citation]) -> String {
     for (i, cite) in citations.iter().enumerate() {
         match &cite.title {
             Some(title) => {
-                out.push_str(&format!("  [{}] {} — {}\n", i + 1, title, cite.url));
+                write!(out, "  [{}] {title} — {}\n", i + 1, cite.url).unwrap();
             }
             None => {
-                out.push_str(&format!("  [{}] {}\n", i + 1, cite.url));
+                write!(out, "  [{}] {}\n", i + 1, cite.url).unwrap();
             }
         }
     }

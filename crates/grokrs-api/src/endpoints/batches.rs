@@ -146,12 +146,9 @@ impl BatchesClient {
         let path = match pagination_token {
             Some(token) => {
                 let encoded_token = encode_query_value(token);
-                format!(
-                    "{}/{}/results?pagination_token={}",
-                    BATCHES_PATH, encoded_id, encoded_token
-                )
+                format!("{BATCHES_PATH}/{encoded_id}/results?pagination_token={encoded_token}")
             }
-            None => format!("{}/{}/results", BATCHES_PATH, encoded_id),
+            None => format!("{BATCHES_PATH}/{encoded_id}/results"),
         };
         self.http.send_no_body(Method::GET, &path).await
     }

@@ -5,6 +5,8 @@
 //! `grokrs sessions transcript <id>` — full transcript for a session.
 //! `grokrs sessions clean` — delete old closed/failed sessions with confirmation.
 
+use std::fmt::Write as _;
+
 use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use grokrs_core::AppConfig;
@@ -134,12 +136,14 @@ fn resolve_session_id(store: &Store, id_or_prefix: &str) -> Result<SessionRecord
             let mut msg =
                 format!("Ambiguous session ID prefix '{id_or_prefix}' matches {n} sessions:\n");
             for s in &matches {
-                msg.push_str(&format!(
+                write!(
+                    msg,
                     "  {}  state={}  updated={}\n",
                     &s.id[..s.id.len().min(12)],
                     s.state,
                     s.updated_at,
-                ));
+                )
+                .unwrap();
             }
             msg.push_str("\nPlease provide a longer prefix to uniquely identify the session.");
             bail!("{msg}");
@@ -471,10 +475,7 @@ fn epoch_to_rfc3339(secs: u64) -> String {
 
     let (year, month, day) = days_to_ymd(days);
 
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        year, month, day, hours, minutes, seconds
-    )
+    format!("{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z")
 }
 
 /// Convert days since UNIX epoch (1970-01-01) to (year, month, day).

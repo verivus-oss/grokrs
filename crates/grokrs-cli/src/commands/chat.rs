@@ -9,6 +9,7 @@
 //! This is the primary user-facing interactive command -- distinct from
 //! `grokrs api chat` which is a one-shot prompt/response.
 
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
@@ -477,12 +478,14 @@ fn resolve_resume_session(
                 let mut msg =
                     format!("Ambiguous session ID prefix '{prefix}' matches {n} sessions:\n");
                 for s in &matches {
-                    msg.push_str(&format!(
+                    write!(
+                        msg,
                         "  {}  state={}  updated={}\n",
                         &s.id[..s.id.len().min(12)],
                         s.state,
                         s.updated_at,
-                    ));
+                    )
+                    .unwrap();
                 }
                 msg.push_str("\nPlease provide a longer prefix to uniquely identify the session.");
                 bail!("{msg}");

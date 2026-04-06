@@ -295,10 +295,7 @@ pub(crate) fn now_rfc3339() -> String {
     // Convert days since epoch to year/month/day.
     let (year, month, day) = days_to_ymd(days);
 
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        year, month, day, hours, minutes, seconds
-    )
+    format!("{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z")
 }
 
 /// Convert days since UNIX epoch (1970-01-01) to (year, month, day).

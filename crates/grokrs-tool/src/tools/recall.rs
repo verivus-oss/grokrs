@@ -3,6 +3,8 @@
 //! Searches memories by substring match on key or value, or retrieves by exact
 //! key. Returns matching memories ranked by access count and recency.
 
+use std::fmt::Write as _;
+
 use grokrs_cap::WorkspaceRoot;
 use grokrs_policy::Effect;
 use serde_json::json;
@@ -93,13 +95,14 @@ impl ToolSpec for RecallTool {
         let mem = store.memories();
         let records = if input.query.is_empty() {
             // List all, optionally filtered by category.
-            let cat_filter = if let Some(ref cat_str) = input.category {
-                Some(MemoryCategory::parse(cat_str).map_err(|e| {
-                    ToolError::Other(format!("invalid category '{}': {e}", cat_str))
-                })?)
-            } else {
-                None
-            };
+            let cat_filter =
+                if let Some(ref cat_str) = input.category {
+                    Some(MemoryCategory::parse(cat_str).map_err(|e| {
+                        ToolError::Other(format!("invalid category '{cat_str}': {e}"))
+                    })?)
+                } else {
+                    None
+                };
             mem.list(cat_filter)
                 .map_err(|e| ToolError::Other(format!("failed to list memories: {e}")))?
         } else {
@@ -121,14 +124,16 @@ impl ToolSpec for RecallTool {
             if limited.len() == 1 { "y" } else { "ies" }
         );
         for record in &limited {
-            output.push_str(&format!(
+            write!(
+                output,
                 "\n- [{}] {}: {} (accessed {} time{})",
                 record.category,
                 record.key,
                 record.value,
                 record.access_count,
                 if record.access_count == 1 { "" } else { "s" },
-            ));
+            )
+            .unwrap();
         }
 
         Ok(output)

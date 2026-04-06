@@ -86,8 +86,7 @@ impl ToolSpec for GitAddTool {
             let abs_path = root.join(&wp);
             if !abs_path.exists() {
                 return Err(ToolError::Other(format!(
-                    "cannot stage '{}': file does not exist",
-                    p
+                    "cannot stage '{p}': file does not exist",
                 )));
             }
 
@@ -106,14 +105,14 @@ impl ToolSpec for GitAddTool {
             })?;
             if !canonical.starts_with(&canonical_root) {
                 return Err(ToolError::PermissionDenied {
-                    operation: format!("stage {}", p),
+                    operation: format!("stage {p}"),
                     reason: "resolved path escapes workspace root (symlink traversal)".into(),
                 });
             }
 
             index
                 .add_path(std::path::Path::new(wp.as_path()))
-                .map_err(|e| ToolError::Other(format!("failed to stage '{}': {}", p, e)))?;
+                .map_err(|e| ToolError::Other(format!("failed to stage '{p}': {e}")))?;
             staged.push(p.clone());
         }
 

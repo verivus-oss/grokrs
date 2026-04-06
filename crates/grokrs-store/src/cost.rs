@@ -10,6 +10,7 @@
 
 use rusqlite::{Connection, params_from_iter};
 use serde::Serialize;
+use std::fmt::Write as _;
 
 use crate::StoreError;
 
@@ -387,7 +388,8 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
     let mut out = String::new();
 
     // Header line.
-    out.push_str(&format!(
+    write!(
+        out,
         "{:<gw$}  {:>rw$}  {:>iw$}  {:>ow$}  {:>zw$}  {:>cw$}\n",
         header.to_uppercase(),
         "REQUESTS",
@@ -401,7 +403,8 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
         ow = output_width,
         zw = reasoning_width,
         cw = cost_width,
-    ));
+    )
+    .unwrap();
 
     // Separator line.
     let total_width = group_width
@@ -420,7 +423,8 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
 
     // Data rows.
     for row in rows {
-        out.push_str(&format!(
+        write!(
+            out,
             "{:<gw$}  {:>rw$}  {:>iw$}  {:>ow$}  {:>zw$}  {:>cw$}\n",
             row.group,
             format_u64(row.requests),
@@ -434,7 +438,8 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
             ow = output_width,
             zw = reasoning_width,
             cw = cost_width,
-        ));
+        )
+        .unwrap();
     }
 
     // Summary separator + summary line.
@@ -444,14 +449,16 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
     let total_tokens =
         summary.total_input_tokens + summary.total_output_tokens + summary.total_reasoning_tokens;
 
-    out.push_str(&format!(
+    write!(
+        out,
         "Total: {} requests, {} tokens, {} | {} sessions, avg {}/session",
         format_u64(summary.total_requests),
         format_u64(total_tokens),
         summary.total_cost_usd(),
         format_u64(summary.session_count),
         summary.avg_cost_per_session_usd(),
-    ));
+    )
+    .unwrap();
 
     out
 }
@@ -492,25 +499,28 @@ pub fn format_csv(group_by: CostGroupBy, rows: &[CostRow]) -> String {
     let mut out = String::new();
 
     // Header.
-    out.push_str(&format!(
+    write!(
+        out,
         "{},requests,input_tokens,output_tokens,reasoning_tokens,cost_ticks,cost_usd\n",
         group_by.header()
-    ));
+    )
+    .unwrap();
 
     // Data rows.
     for row in rows {
         // CSV-escape the group value if it contains commas or quotes.
         let group = csv_escape(&row.group);
-        out.push_str(&format!(
-            "{},{},{},{},{},{},{}\n",
-            group,
+        write!(
+            out,
+            "{group},{},{},{},{},{},{}\n",
             row.requests,
             row.input_tokens,
             row.output_tokens,
             row.reasoning_tokens,
             row.cost_ticks,
             row.cost_usd(),
-        ));
+        )
+        .unwrap();
     }
 
     out

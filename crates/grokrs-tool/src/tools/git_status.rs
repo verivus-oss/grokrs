@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use grokrs_cap::{WorkspacePath, WorkspaceRoot};
 use grokrs_policy::Effect;
 use serde_json::json;
@@ -73,7 +75,7 @@ impl ToolSpec for GitStatusTool {
             let path = entry.path().unwrap_or("<non-utf8 path>");
             let status = entry.status();
             let label = status_label(status);
-            output.push_str(&format!("{label}\t{path}\n"));
+            write!(output, "{label}\t{path}\n").unwrap();
         }
 
         Ok(output)

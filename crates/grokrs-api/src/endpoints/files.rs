@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::path::Path;
 
 use reqwest::Method;
@@ -204,7 +205,7 @@ fn urlencoding_minimal(input: &str) -> String {
                 encoded.push(byte as char);
             }
             _ => {
-                encoded.push_str(&format!("%{byte:02X}"));
+                write!(encoded, "%{byte:02X}").unwrap();
             }
         }
     }

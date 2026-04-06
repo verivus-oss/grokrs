@@ -329,7 +329,7 @@ mod tests {
             "run_command",
             r#"{"command": "echo", "args": ["hello"]}"#,
         );
-        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+        assert!(result.is_ok(), "expected Ok, got: {result:?}");
     }
 
     // -----------------------------------------------------------------------

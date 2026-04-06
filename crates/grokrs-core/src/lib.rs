@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -520,9 +521,9 @@ impl AppConfig {
             let base_url = api.base_url.as_deref().unwrap_or("https://api.x.ai");
             let timeout = api.timeout_secs.unwrap_or(120);
             let retries = api.max_retries.unwrap_or(3);
-            s.push_str(&format!(
+            write!(s,
                 " api_key_env={key_env} base_url={base_url} timeout_secs={timeout} max_retries={retries}"
-            ));
+            ).unwrap();
         }
         if let Some(ref mgmt) = self.management_api {
             let key_env = mgmt
@@ -535,25 +536,27 @@ impl AppConfig {
                 .unwrap_or("https://management-api.x.ai");
             let timeout = mgmt.timeout_secs.unwrap_or(120);
             let retries = mgmt.max_retries.unwrap_or(3);
-            s.push_str(&format!(
+            write!(s,
                 " management_key_env={key_env} management_base_url={base_url} management_timeout_secs={timeout} management_max_retries={retries}"
-            ));
+            ).unwrap();
         }
         if let Some(ref store) = self.store {
-            s.push_str(&format!(" store_path={}", store.path));
+            write!(s, " store_path={}", store.path).unwrap();
         }
         if let Some(ref agent) = self.agent {
-            s.push_str(&format!(
+            write!(
+                s,
                 " agent_max_iterations={} agent_default_trust={} agent_enable_search={}",
                 agent.max_iterations, agent.default_trust, agent.enable_search
-            ));
+            )
+            .unwrap();
         }
         if let Some(ref chat) = self.chat {
             let model = chat.default_model.as_deref().unwrap_or("(inherit)");
-            s.push_str(&format!(
-                " chat_default_model={} chat_stateful={} chat_history_file={} chat_max_conversation_tokens={}",
-                model, chat.stateful, chat.history_file, chat.max_conversation_tokens
-            ));
+            write!(s,
+                " chat_default_model={model} chat_stateful={} chat_history_file={} chat_max_conversation_tokens={}",
+                chat.stateful, chat.history_file, chat.max_conversation_tokens
+            ).unwrap();
             if let Some(ref sys) = chat.system_prompt {
                 // UTF-8 safe truncation: find the nearest char boundary at or before 50 bytes.
                 let end = if sys.len() > 50 {
@@ -565,17 +568,18 @@ impl AppConfig {
                 } else {
                     sys.len()
                 };
-                s.push_str(&format!(" chat_system_prompt={}...", &sys[..end]));
+                write!(s, " chat_system_prompt={}...", &sys[..end]).unwrap();
             }
         }
         if let Some(ref mcp) = self.mcp {
             let server_count = mcp.servers.len();
             let server_names: Vec<&str> = mcp.servers.keys().map(String::as_str).collect();
-            s.push_str(&format!(
-                " mcp_servers={} mcp_server_names=[{}]",
-                server_count,
+            write!(
+                s,
+                " mcp_servers={server_count} mcp_server_names=[{}]",
                 server_names.join(",")
-            ));
+            )
+            .unwrap();
         }
         s
     }
@@ -1223,7 +1227,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let base_path = dir.path().join("grokrs.example.toml");
         let mut base_file = std::fs::File::create(&base_path).unwrap();
-        write!(base_file, "{}", BASE_CONFIG).unwrap();
+        write!(base_file, "{BASE_CONFIG}").unwrap();
 
         let config = AppConfig::load_with_profile(&base_path, None)
             .expect("load_with_profile(None) should load base config");

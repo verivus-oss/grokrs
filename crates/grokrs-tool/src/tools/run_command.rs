@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::time::Duration;
 
 use grokrs_cap::WorkspaceRoot;
@@ -178,7 +179,7 @@ impl ToolSpec for RunCommandTool {
             let mut child = cmd.spawn().map_err(|e| {
                 ToolError::Io(std::io::Error::new(
                     e.kind(),
-                    format!("spawning '{}': {}", program, e),
+                    format!("spawning '{program}': {e}"),
                 ))
             })?;
 
@@ -224,7 +225,7 @@ impl ToolSpec for RunCommandTool {
                     Err(e) => {
                         return Err(ToolError::Io(std::io::Error::new(
                             e.kind(),
-                            format!("waiting for '{}': {}", program, e),
+                            format!("waiting for '{program}': {e}"),
                         )));
                     }
                 }
@@ -244,7 +245,7 @@ impl ToolSpec for RunCommandTool {
                 }
                 output.push_str(&stderr_buf);
             }
-            output.push_str(&format!("\n[exit code: {exit_code}]"));
+            write!(output, "\n[exit code: {exit_code}]").unwrap();
             Ok(output)
         });
 

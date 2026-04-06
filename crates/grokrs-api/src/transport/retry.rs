@@ -169,8 +169,7 @@ mod tests {
         let delay = should_retry(429, 20, &config).unwrap();
         assert!(
             delay.as_millis() <= 5000,
-            "delay should be clamped to max_delay_ms, got {:?}",
-            delay
+            "delay should be clamped to max_delay_ms, got {delay:?}",
         );
     }
 

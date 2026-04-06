@@ -21,6 +21,7 @@
 //! - Task description can be piped via stdin when `--headless` is active.
 
 use std::env;
+use std::fmt::Write as _;
 use std::io::{self, Read as _};
 use std::sync::Arc;
 
@@ -352,7 +353,7 @@ fn build_system_prompt(
             if count == 1 { "y" } else { "ies" }
         );
         for m in &memories {
-            section.push_str(&format!("\n- [{}] {}: {}", m.category, m.key, m.value,));
+            write!(section, "\n- [{}] {}: {}", m.category, m.key, m.value).unwrap();
         }
         section.push_str(
             "\n\nYou can use the `remember`, `recall`, and `forget` tools to manage memories.",
@@ -1160,7 +1161,7 @@ mod tests {
     #[test]
     fn summarize_long_command_is_truncated() {
         let long_cmd = "a".repeat(100);
-        let args = format!(r#"{{"command": "{}"}}"#, long_cmd);
+        let args = format!(r#"{{"command": "{long_cmd}"}}"#);
         let summary = summarize_tool_call("run_command", &args);
         assert!(
             summary.len() <= 83,
@@ -1518,7 +1519,7 @@ mod tests {
     fn summarize_multibyte_command_truncates_safely() {
         // 100 emoji characters = 400 bytes.
         let long_emoji_cmd = "🦀".repeat(100);
-        let args = format!(r#"{{"command": "{}"}}"#, long_emoji_cmd);
+        let args = format!(r#"{{"command": "{long_emoji_cmd}"}}"#);
         let summary = summarize_tool_call("run_command", &args);
         // Should not panic and should end with "..."
         assert!(summary.ends_with("..."));
