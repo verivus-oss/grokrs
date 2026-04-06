@@ -512,16 +512,16 @@ fn doctor_features(
         }
 
         // Also check chat.default_model override if set.
-        if let Some(ref chat) = config.chat {
-            if let Some(ref chat_model) = chat.default_model {
-                let chat_deprecated = DEPRECATED_PATTERNS
-                    .iter()
-                    .any(|pat| chat_model.contains(pat));
-                if chat_deprecated {
-                    println!(
-                        "[warn] model_freshness=WARN chat.default_model={chat_model} appears deprecated; update [chat].default_model"
-                    );
-                }
+        if let Some(ref chat) = config.chat
+            && let Some(ref chat_model) = chat.default_model
+        {
+            let chat_deprecated = DEPRECATED_PATTERNS
+                .iter()
+                .any(|pat| chat_model.contains(pat));
+            if chat_deprecated {
+                println!(
+                    "[warn] model_freshness=WARN chat.default_model={chat_model} appears deprecated; update [chat].default_model"
+                );
             }
         }
     }

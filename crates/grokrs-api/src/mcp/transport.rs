@@ -189,10 +189,10 @@ impl McpTransport {
         // Include session ID if we have one.
         {
             let guard = self.session_id.read().expect("session_id lock poisoned");
-            if let Some(ref sid) = *guard {
-                if let Ok(val) = HeaderValue::from_str(sid) {
-                    http_req = http_req.header("Mcp-Session-Id", val);
-                }
+            if let Some(ref sid) = *guard
+                && let Ok(val) = HeaderValue::from_str(sid)
+            {
+                http_req = http_req.header("Mcp-Session-Id", val);
             }
         }
 
@@ -205,10 +205,10 @@ impl McpTransport {
         })?;
 
         // Capture session ID from response headers if present.
-        if let Some(sid_header) = response.headers().get("mcp-session-id") {
-            if let Ok(sid) = sid_header.to_str() {
-                self.set_session_id(sid.to_owned());
-            }
+        if let Some(sid_header) = response.headers().get("mcp-session-id")
+            && let Ok(sid) = sid_header.to_str()
+        {
+            self.set_session_id(sid.to_owned());
         }
 
         let status = response.status().as_u16();

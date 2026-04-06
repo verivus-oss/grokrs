@@ -263,20 +263,20 @@ fn run_show(config: &AppConfig, workspace_root: &Path, id: &str) -> Result<()> {
     println!("  transcripts: {transcript_count}");
 
     // Show usage summary if there are transcripts.
-    if transcript_count > 0 {
-        if let Ok(summary) = store.usage().session_totals(&session.id) {
-            println!();
-            println!("Usage summary:");
-            println!("  requests:         {}", summary.request_count);
-            println!("  input_tokens:     {}", summary.total_input_tokens);
-            println!("  output_tokens:    {}", summary.total_output_tokens);
-            println!("  reasoning_tokens: {}", summary.total_reasoning_tokens);
-            println!(
-                "  total_cost:       ${:.6} ({} ticks)",
-                ticks_to_usd(summary.total_cost_ticks),
-                summary.total_cost_ticks
-            );
-        }
+    if transcript_count > 0
+        && let Ok(summary) = store.usage().session_totals(&session.id)
+    {
+        println!();
+        println!("Usage summary:");
+        println!("  requests:         {}", summary.request_count);
+        println!("  input_tokens:     {}", summary.total_input_tokens);
+        println!("  output_tokens:    {}", summary.total_output_tokens);
+        println!("  reasoning_tokens: {}", summary.total_reasoning_tokens);
+        println!(
+            "  total_cost:       ${:.6} ({} ticks)",
+            ticks_to_usd(summary.total_cost_ticks),
+            summary.total_cost_ticks
+        );
     }
 
     store.close().ok();

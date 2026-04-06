@@ -409,17 +409,17 @@ async fn run_chat(
         }
 
         // Print usage summary to stderr.
-        if let Ok(summary) = s.usage().session_totals(&session_id) {
-            if summary.request_count > 0 {
-                eprintln!(
-                    "[session {}] requests={} input_tokens={} output_tokens={} reasoning_tokens={}",
-                    &session_id[..8],
-                    summary.request_count,
-                    summary.total_input_tokens,
-                    summary.total_output_tokens,
-                    summary.total_reasoning_tokens,
-                );
-            }
+        if let Ok(summary) = s.usage().session_totals(&session_id)
+            && summary.request_count > 0
+        {
+            eprintln!(
+                "[session {}] requests={} input_tokens={} output_tokens={} reasoning_tokens={}",
+                &session_id[..8],
+                summary.request_count,
+                summary.total_input_tokens,
+                summary.total_output_tokens,
+                summary.total_reasoning_tokens,
+            );
         }
     }
 

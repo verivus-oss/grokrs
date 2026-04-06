@@ -255,17 +255,17 @@ pub fn run(args: &ChatArgs, config: &AppConfig, rt: &tokio::runtime::Handle) -> 
         }
 
         // Print usage summary from store.
-        if let Ok(summary) = s.usage().session_totals(&session_id) {
-            if summary.request_count > 0 {
-                eprintln!(
-                    "[session {}] requests={} input_tokens={} output_tokens={} reasoning_tokens={}",
-                    &session_id[..session_id.len().min(8)],
-                    summary.request_count,
-                    summary.total_input_tokens,
-                    summary.total_output_tokens,
-                    summary.total_reasoning_tokens,
-                );
-            }
+        if let Ok(summary) = s.usage().session_totals(&session_id)
+            && summary.request_count > 0
+        {
+            eprintln!(
+                "[session {}] requests={} input_tokens={} output_tokens={} reasoning_tokens={}",
+                &session_id[..session_id.len().min(8)],
+                summary.request_count,
+                summary.total_input_tokens,
+                summary.total_output_tokens,
+                summary.total_reasoning_tokens,
+            );
         }
 
         // Print cache key in use, if any.
@@ -311,13 +311,13 @@ fn run_repl_with_store<B: ChatBackend>(
     }
 
     // Load existing readline history (best-effort).
-    if history_path.exists() {
-        if let Err(e) = editor.load_history(&history_path) {
-            eprintln!(
-                "warning: could not load history from {}: {e}",
-                history_path.display()
-            );
-        }
+    if history_path.exists()
+        && let Err(e) = editor.load_history(&history_path)
+    {
+        eprintln!(
+            "warning: could not load history from {}: {e}",
+            history_path.display()
+        );
     }
 
     let mut conversation = initial_conversation;
@@ -371,33 +371,33 @@ fn run_repl_with_store<B: ChatBackend>(
                 ));
 
                 // Log response after receiving (best-effort).
-                if let Some(tid) = transcript_id {
-                    if let Some(s) = store {
-                        let new_turn_added = conversation.turn_count() > turn_count_pre;
-                        if new_turn_added {
-                            if let Some(last_turn) = conversation.turns().last() {
-                                let usage = grokrs_store::types::TranscriptUsage {
-                                    cost_in_usd_ticks: None,
-                                    input_tokens: Some(last_turn.usage.input_tokens),
-                                    output_tokens: Some(last_turn.usage.output_tokens),
-                                    reasoning_tokens: None,
-                                };
-                                let resp_body = if last_turn.assistant_response.is_empty() {
-                                    None
-                                } else {
-                                    Some(last_turn.assistant_response.as_str())
-                                };
-                                let resp_id = conversation.last_response_id();
-                                let _ = s
-                                    .transcripts()
-                                    .log_response(tid, 200, resp_body, &usage, resp_id);
-                            }
-                        } else {
-                            // No turn recorded -- error occurred.
-                            let _ = s.transcripts().log_error(tid, "no response recorded");
+                if let Some(tid) = transcript_id
+                    && let Some(s) = store
+                {
+                    let new_turn_added = conversation.turn_count() > turn_count_pre;
+                    if new_turn_added {
+                        if let Some(last_turn) = conversation.turns().last() {
+                            let usage = grokrs_store::types::TranscriptUsage {
+                                cost_in_usd_ticks: None,
+                                input_tokens: Some(last_turn.usage.input_tokens),
+                                output_tokens: Some(last_turn.usage.output_tokens),
+                                reasoning_tokens: None,
+                            };
+                            let resp_body = if last_turn.assistant_response.is_empty() {
+                                None
+                            } else {
+                                Some(last_turn.assistant_response.as_str())
+                            };
+                            let resp_id = conversation.last_response_id();
+                            let _ = s
+                                .transcripts()
+                                .log_response(tid, 200, resp_body, &usage, resp_id);
                         }
-                        let _ = s.sessions().transition(session_id, "Ready");
+                    } else {
+                        // No turn recorded -- error occurred.
+                        let _ = s.transcripts().log_error(tid, "no response recorded");
                     }
+                    let _ = s.sessions().transition(session_id, "Ready");
                 }
 
                 if outcome == repl::LineOutcome::Exit {

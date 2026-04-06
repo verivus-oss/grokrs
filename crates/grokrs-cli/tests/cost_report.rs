@@ -22,6 +22,7 @@ fn open_store() -> (tempfile::TempDir, Store) {
 }
 
 /// Seed a transcript with given parameters.
+#[allow(clippy::too_many_arguments)]
 fn seed_transcript(
     store: &Store,
     session_id: &str,

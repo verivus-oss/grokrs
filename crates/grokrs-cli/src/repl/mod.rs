@@ -171,13 +171,13 @@ pub fn run_repl<B: ChatBackend>(
     }
 
     // Load existing history (best-effort -- corruption is non-fatal).
-    if history_path.exists() {
-        if let Err(e) = editor.load_history(&history_path) {
-            eprintln!(
-                "warning: could not load history from {}: {e}",
-                history_path.display()
-            );
-        }
+    if history_path.exists()
+        && let Err(e) = editor.load_history(&history_path)
+    {
+        eprintln!(
+            "warning: could not load history from {}: {e}",
+            history_path.display()
+        );
     }
 
     let mut conversation = ConversationHistory::new();

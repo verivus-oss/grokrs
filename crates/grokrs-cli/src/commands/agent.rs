@@ -377,10 +377,10 @@ struct LoggingExecutor {
 impl LoggingExecutor {
     /// Emit a [`HeadlessEvent`] as a JSON line to stdout.
     fn emit_event(&self, event: &HeadlessEvent) {
-        if self.output_format == OutputFormat::Json {
-            if let Ok(json) = serde_json::to_string(event) {
-                println!("{json}");
-            }
+        if self.output_format == OutputFormat::Json
+            && let Ok(json) = serde_json::to_string(event)
+        {
+            println!("{json}");
         }
     }
 }
@@ -532,10 +532,10 @@ pub struct AgentResult {
 
 /// Emit a headless JSON event to stdout.
 fn emit_event(output_format: OutputFormat, event: &HeadlessEvent) {
-    if output_format == OutputFormat::Json {
-        if let Ok(json) = serde_json::to_string(event) {
-            println!("{json}");
-        }
+    if output_format == OutputFormat::Json
+        && let Ok(json) = serde_json::to_string(event)
+    {
+        println!("{json}");
     }
 }
 
@@ -748,11 +748,11 @@ pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
     let request = builder.build();
     let session_id = uuid::Uuid::new_v4().to_string();
 
-    if let Some(ref s) = store {
-        if s.sessions().create(&session_id, "Untrusted").is_ok() {
-            let _ = s.sessions().transition(&session_id, "Ready");
-            let _ = s.sessions().transition(&session_id, "RunningTurn");
-        }
+    if let Some(ref s) = store
+        && s.sessions().create(&session_id, "Untrusted").is_ok()
+    {
+        let _ = s.sessions().transition(&session_id, "Ready");
+        let _ = s.sessions().transition(&session_id, "RunningTurn");
     }
 
     // Run the tool loop, optionally wrapped in a timeout.
@@ -1520,7 +1520,7 @@ mod tests {
         // Should not panic and should end with "..."
         assert!(summary.ends_with("..."));
         // Should be valid UTF-8 (no panic on Display).
-        let _ = format!("{summary}");
+        let _ = summary.to_string();
     }
 
     // =====================================================================

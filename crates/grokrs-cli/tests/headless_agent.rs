@@ -124,7 +124,7 @@ fn exit_code_timeout_is_four() {
 #[test]
 fn ndjson_stream_of_events_is_parseable() {
     // Simulate a full headless session output.
-    let events = vec![
+    let events = [
         HeadlessEvent::ToolCall {
             name: "read_file".to_owned(),
             arguments: r#"{"path":"Cargo.toml"}"#.to_owned(),
@@ -220,7 +220,7 @@ fn error_events_carry_correct_exit_codes() {
     ];
 
     for (exit_code, expected_code, message) in test_cases {
-        assert_eq!(exit_code.code(), expected_code as i32);
+        assert_eq!(exit_code.code(), expected_code);
 
         let event = HeadlessEvent::Error {
             message: message.to_owned(),
