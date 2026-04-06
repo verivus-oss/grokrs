@@ -1,0 +1,740 @@
+[meta]
+title = "Clippy pedantic remediation: 797 warnings across 8 crates"
+created = "2026-04-06"
+revised = "2026-04-06"
+total_units = 12
+tier1_units = ["P01", "P02", "P03"]
+tier2_units = ["P04", "P05", "P06", "P07"]
+tier3_units = ["P08", "P09", "P10", "P11", "P12"]
+
+# ---------------------------------------------------------------------------
+# CONTEXT
+# ---------------------------------------------------------------------------
+# `cargo clippy --workspace --all-targets -- -W clippy::pedantic` reports 797
+# warnings (excluding 45 expected deprecation warnings from the legacy chat.rs
+# module).
+#
+# Per-crate distribution:
+#   grokrs-api   444  (56%)
+#   grokrs-cli   233  (29%)
+#   grokrs-store 113  (14%)
+#   grokrs-tool   46  (6%)
+#   grokrs-core   21  (3%)
+#   grokrs-session 6  (<1%)
+#   grokrs-cap     5  (<1%)
+#   grokrs-policy  2  (<1%)
+#
+# Warning categories (top 15):
+#   144  must_use on methods
+#    138  missing_errors_doc
+#    108  doc_markdown (missing backticks)
+#     61  unreadable_literal (long literals without _)
+#     54  items_after_statements
+#     47  must_use on -> Self methods
+#     32  redundant_closure
+#     21  format string appended to String (format_push_string)
+#     20  wildcard_enum_match_arm
+#     18  uninlined_format_args
+#     18  must_use on functions
+#     15  missing_panics_doc
+#     14  map_unwrap_or
+#     11  return_self_not_must_use (unnecessary_wraps subcategory)
+#      6  needless_raw_string_hashes
+#
+# STRATEGY
+# ---------------------------------------------------------------------------
+# Each unit targets a single lint category or a closely related cluster.
+# This ensures subagents have clear, focused scope and don't create
+# cross-cutting conflicts. Units are ordered by dependency:
+#
+# Layer 0: Code semantics (must_use, closures, casts, match arms, format)
+#          These change signatures and expressions — must land first.
+# Layer 1: Code structure (items_after_statements, long functions, bools)
+#          These move code around — must land after semantic changes.
+# Layer 2: Documentation (errors_doc, panics_doc, doc_markdown, URLs)
+#          These are additive comments only — no code changes, safe to land last.
+#
+# APPROACH PHILOSOPHY (from research):
+# - Rust std-dev-guide: #[must_use] when "failing to consider the output is
+#   almost certainly a bug". Apply to: pure getters, builders returning Self,
+#   Result-returning methods. Do NOT apply to: fire-and-forget patterns,
+#   methods with useful side effects, Debug/Display impls.
+# - redundant_closure: replace |x| foo(x) with foo when foo is a function
+#   item (not a closure variable). Preserves clarity.
+# - format_push_string: replace s.push_str(&format!(...)) with
+#   write!(s, ...).unwrap() or use std::fmt::Write. Avoids intermediate
+#   String allocation.
+# - wildcard_enum_match_arm: enumerate all variants explicitly so new
+#   variants cause compile errors. Use _ only for #[non_exhaustive] enums.
+# - items_after_statements: move inner fn/struct/impl declarations to
+#   before the first statement in the block, or extract to module scope.
+# - Casts: use TryFrom/TryInto for fallible conversions, From for infallible
+#   widening, .cast_signed()/.cast_unsigned() for same-width sign changes
+#   (Rust 1.87+). Only #[allow] when the domain guarantees safety (e.g.,
+#   token counts that never exceed i64::MAX).
+# - doc_markdown: wrap identifiers, types, and code fragments in backticks.
+#   Wrap bare URLs in angle brackets or proper markdown links.
+# ---------------------------------------------------------------------------
+
+# ===========================================================================
+# LAYER 0 -- Code semantics: changes to signatures, expressions, types
+# ===========================================================================
+
+[units.P01]
+name = "Add #[must_use] attributes across all crates"
+summary = """
+Add #[must_use] to methods, functions, and -> Self builders per the \
+Rust std-dev-guide policy: apply when "failing to explicitly consider \
+the output is almost certainly a bug". This covers: (1) Pure accessor \
+methods returning owned values (e.g., fn name() -> &str, fn id() -> \
+String). (2) Builder methods returning Self (e.g., fn with_model(self, \
+m: &str) -> Self). (3) Functions returning Result where ignoring the \
+error is always wrong. (4) Functions returning bool/Option where \
+ignoring means lost information. DO NOT apply to: methods with useful \
+side effects (e.g., println-like, state mutation), fire-and-forget \
+patterns (e.g., spawn), Display/Debug trait impls. Total: ~209 warnings \
+(144 methods + 47 -> Self + 18 functions)."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 220
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-api/src/types/chat.rs",
+  "crates/grokrs-api/src/types/batches.rs",
+  "crates/grokrs-api/src/types/model.rs",
+  "crates/grokrs-api/src/types/function_call.rs",
+  "crates/grokrs-api/src/types/common.rs",
+  "crates/grokrs-api/src/types/voice.rs",
+  "crates/grokrs-api/src/types/images.rs",
+  "crates/grokrs-api/src/types/usage.rs",
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/endpoints/batches.rs",
+  "crates/grokrs-api/src/endpoints/chat.rs",
+  "crates/grokrs-api/src/mcp/types.rs",
+  "crates/grokrs-api/src/mcp/transport.rs",
+  "crates/grokrs-api/src/mcp/client.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-api/src/transport/websocket.rs",
+  "crates/grokrs-api/src/transport/error.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-cli/src/repl/backend.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/transcript.rs",
+  "crates/grokrs-store/src/memory.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-tool/src/registry.rs",
+  "crates/grokrs-tool/src/lib.rs",
+  "crates/grokrs-core/src/lib.rs",
+  "crates/grokrs-cap/src/lib.rs",
+  "crates/grokrs-session/src/lib.rs",
+  "crates/grokrs-policy/src/lib.rs",
+]
+acceptance = [
+  "All clippy::return_self_not_must_use warnings resolved",
+  "All clippy::must_use_candidate warnings resolved for methods and functions",
+  "No #[must_use] applied to methods with side effects (e.g., println, state mutation)",
+  "No #[must_use] applied to trait method implementations (Display, Debug, ToolSpec, etc.)",
+  "Builder methods returning Self annotated with #[must_use]",
+  "Result-returning public functions annotated with #[must_use]",
+  "Zero test regressions",
+]
+produces = ["ART:must-use"]
+consumes = []
+critical_decisions = [
+  "Follow std-dev-guide: only apply when ignoring output is almost certainly a bug.",
+  "Builders returning Self always get #[must_use] — discarding a builder mid-chain is always wrong.",
+  "Trait method impls (fn name(&self) in ToolSpec) do NOT get #[must_use] — the trait defines the contract.",
+  "Test helper functions do NOT get #[must_use] — test assertions handle correctness.",
+]
+rationale = "209/797 warnings. Largest single category. Mechanically safe — #[must_use] is additive and never changes runtime behavior."
+
+[units.P02]
+name = "Replace redundant closures and simplify Option/Result combinators"
+summary = """
+Fix 52 warnings across two related categories: (1) redundant_closure \
+(32): replace |x| foo(x) with foo, |x| Foo::new(x) with Foo::new, \
+etc. Only when the replacement is a direct function/constructor — \
+not when the closure captures variables. (2) map_unwrap_or (14) + \
+map_or/map_or_else (6): replace .map(f).unwrap_or(default) with \
+.map_or(default, f) or .map_or_else(default_fn, f). The combined \
+form is more idiomatic and avoids an unnecessary intermediate Option."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 60
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-api/src/types/chat.rs",
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/endpoints/responses.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+  "crates/grokrs-api/src/mcp/client.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/sessions.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/transcript.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-core/src/lib.rs",
+]
+acceptance = [
+  "Zero clippy::redundant_closure warnings remain",
+  "Zero clippy::map_unwrap_or warnings remain",
+  "Zero clippy::map_or / clippy::option_map_or_none / clippy::result_map_or_into_option warnings remain",
+  "No closure replacements where the closure captures external variables",
+  "Zero test regressions",
+]
+produces = ["ART:closures-combinators"]
+consumes = []
+critical_decisions = [
+  "Only replace closures with function items, not closure variables — |x| some_var(x) keeps the closure.",
+  "map_or preferred over map().unwrap_or() for readability and single-evaluation guarantee.",
+  "map_or_else when the default is expensive to compute (closure, not a constant).",
+]
+rationale = "52 warnings. Mechanical refactors that improve idiomatic Rust usage. No behavioral change."
+
+[units.P03]
+name = "Fix format string inefficiencies and uninlined format args"
+summary = """
+Fix 39 warnings: (1) format_push_string (21): replace \
+s.push_str(&format!(...)) with write!(s, ...).unwrap() using \
+std::fmt::Write. This eliminates an intermediate String allocation. \
+(2) uninlined_format_args (18): replace format!(\"{}\", x) with \
+format!(\"{x}\") using the Rust 2021+ inline format syntax. Both \
+are mechanical transformations that improve performance (push_str) \
+and readability (inline args)."""
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 50
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/sessions.rs",
+  "crates/grokrs-cli/src/commands/search.rs",
+  "crates/grokrs-cli/src/commands/store.rs",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-core/src/lib.rs",
+]
+acceptance = [
+  "Zero clippy::format_push_string warnings remain",
+  "Zero clippy::uninlined_format_args warnings remain",
+  "All push_str(&format!(...)) replaced with write!(s, ...).unwrap() using std::fmt::Write",
+  "All format!(\"{}\", var) replaced with format!(\"{var}\")",
+  "use std::fmt::Write; import added where write! macro is used on Strings",
+  "Zero test regressions",
+]
+produces = ["ART:format-strings"]
+consumes = []
+critical_decisions = [
+  "write!(s, ...).unwrap() is safe because writing to a String never fails (fmt::Write for String is infallible).",
+  "Inline format args only when the expression is a simple variable — format!(\"{}\", foo.bar()) stays expanded for readability.",
+]
+rationale = "39 warnings. The format_push_string fix has a real performance benefit (avoids allocation). Inline args improve readability."
+
+# ===========================================================================
+# LAYER 0 continued -- More semantic changes
+# ===========================================================================
+
+[units.P04]
+name = "Fix wildcard match arms and match/if-let simplifications"
+summary = """
+Fix 26 warnings: (1) wildcard_enum_match_arm (20): enumerate all \
+variants explicitly instead of using _ catch-all. This ensures new \
+enum variants added in the future cause compile errors rather than \
+silently falling through. Exception: keep _ for #[non_exhaustive] \
+external enums. (2) match → if-let simplification (3): replace \
+match with a single non-wildcard arm with if let. (3) match → if \
+equality check (1): replace match on a single value with an if. \
+(4) identical match arms (2): merge arms that have identical bodies."""
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 80
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-api/src/types/chat.rs",
+  "crates/grokrs-api/src/streaming/events.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+  "crates/grokrs-api/src/transport/error.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/voice.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-store/src/cost.rs",
+]
+acceptance = [
+  "Zero clippy::wildcard_enum_match_arm warnings remain",
+  "Zero clippy::single_match warnings remain",
+  "Zero clippy::single_match_else warnings remain",
+  "Zero clippy::match_same_arms warnings remain",
+  "All internal enum matches enumerate variants explicitly",
+  "External #[non_exhaustive] enum matches retain _ arm",
+  "Zero test regressions",
+]
+produces = ["ART:match-arms"]
+consumes = []
+critical_decisions = [
+  "Enumerate all variants so future additions are compile errors — this is a safety improvement, not just style.",
+  "For #[non_exhaustive] external enums (e.g., from reqwest, rusqlite), keep _ with a comment explaining why.",
+  "Merged identical match arms use | syntax: A | B => ...",
+]
+rationale = "26 warnings. The wildcard_enum_match_arm fix is a genuine safety improvement — it catches missed enum variants at compile time."
+
+[units.P05]
+name = "Fix numeric casts with safe conversions"
+summary = """
+Fix 23 warnings across cast categories: (1) cast_possible_wrap (5): \
+u64 as i64 — use i64::try_from(x).unwrap_or(i64::MAX) or \
+.cast_signed() where safe. (2) cast_sign_loss (4): i64 as u64 — \
+use u64::try_from(x).unwrap_or(0) or validate non-negative first. \
+(3) cast_lossless (5): u32 as u64, i32 as i64 — use u64::from(x) \
+or i64::from(x). (4) cast_possible_truncation (4): u64 as u32, \
+u64 as usize, u64 as u16, f64 as usize — use try_into() with \
+fallback or document safety with #[allow] + comment. (5) \
+cast_precision_loss (3): i64 as f64 — use #[allow] with a \
+justification comment (precision loss is inherent to f64 display). \
+(6) assorted (2): i32 as u8 truncation + sign loss."""
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 50
+files_create = []
+files_modify = [
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/transcript.rs",
+  "crates/grokrs-store/src/memory.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/sessions.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-api/src/transport/websocket.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+]
+acceptance = [
+  "Zero clippy::cast_lossless warnings — all widening casts use From::from()",
+  "Zero clippy::cast_possible_wrap warnings — wrapping casts use try_from or documented #[allow]",
+  "Zero clippy::cast_sign_loss warnings — sign-changing casts use try_from or validated inputs",
+  "Zero clippy::cast_possible_truncation warnings — truncating casts use try_into or documented #[allow]",
+  "Zero clippy::cast_precision_loss warnings — precision-losing casts have #[allow] with justification",
+  "Every #[allow(clippy::cast_*)] has a // SAFETY or // RATIONALE comment",
+  "Zero test regressions",
+]
+produces = ["ART:safe-casts"]
+consumes = []
+critical_decisions = [
+  "Widening casts (u32→u64, i32→i64): always use From::from(). No exceptions.",
+  "Wrapping casts (u64→i64): use i64::try_from() where overflow is possible; #[allow] with comment where domain guarantees safety (e.g., token counts).",
+  "Truncating casts (u64→u32): use u32::try_from().unwrap_or(u32::MAX) for graceful degradation.",
+  "Precision loss (i64→f64): #[allow] with comment — this is inherent to floating-point display/computation.",
+  "Never use .cast_signed()/.cast_unsigned() — requires Rust 1.87+ nightly, not stable yet.",
+]
+rationale = "23 warnings. Cast safety is a real correctness concern. Using From/TryFrom makes intent explicit and catches overflow bugs."
+
+[units.P06]
+name = "Fix miscellaneous code quality warnings"
+summary = """
+Fix ~30 scattered warnings: (1) unreadable_literal (61): add _ \
+separators to long numeric literals (e.g., 1000000 → 1_000_000). \
+(2) needless_raw_string_hashes (6): remove unnecessary # from raw \
+strings. (3) needless_pass_by_value (5): change fn(s: String) to \
+fn(s: &str) where the string is only borrowed. (4) manual_debug (5): \
+add missing fields to manual Debug impls. (5) let_else (2): rewrite \
+if-let-else to let...else. (6) redundant_continue (2): remove \
+continue at end of loop body. (7) single_char_pattern (1): replace \
+\"x\" with 'x' in str methods. (8) bool params/struct fields (3): \
+group bools where appropriate. (9) option_as_ref (2): use \
+Option<&T> instead of &Option<T>. (10) misc (4): clone_on_ref, \
+unnecessary_wraps, explicit_iter, semicolon, needless_bool."""
+layer = 0
+tier = 2
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 100
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-api/src/types/chat.rs",
+  "crates/grokrs-api/src/types/voice.rs",
+  "crates/grokrs-api/src/types/model.rs",
+  "crates/grokrs-api/src/types/images.rs",
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/mcp/transport.rs",
+  "crates/grokrs-api/src/transport/websocket.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/search.rs",
+  "crates/grokrs-cli/src/commands/generate.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/memory.rs",
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-core/src/lib.rs",
+  "crates/grokrs-cap/src/lib.rs",
+]
+acceptance = [
+  "Zero clippy::unreadable_literal warnings — all numeric literals >=10_000 have _ separators",
+  "Zero clippy::needless_raw_string_hashes warnings",
+  "Zero clippy::needless_pass_by_value warnings",
+  "Zero clippy::missing_fields_in_debug warnings",
+  "Zero clippy::manual_let_else warnings",
+  "Zero clippy::redundant_continue warnings",
+  "Zero clippy::single_char_pattern warnings",
+  "All bool struct field groupings documented if #[allow] is used",
+  "Zero test regressions",
+]
+produces = ["ART:misc-quality"]
+consumes = []
+critical_decisions = [
+  "unreadable_literal: use idiomatic grouping (1_000_000, 0xFF_FF, 100_000).",
+  "needless_pass_by_value: only change public API signatures if no downstream callers exist (we have no downstream callers — alpha).",
+  "struct bools (more_than_3_bools): #[allow] with comment when the bools are independent flags, not a state machine.",
+  "manual Debug: add #[allow(clippy::missing_fields_in_debug)] with comment when fields are intentionally redacted (e.g., API keys).",
+]
+rationale = "~100 warnings. Mixed bag of mechanical fixes. unreadable_literal alone is 61 warnings."
+
+# ===========================================================================
+# LAYER 1 -- Code structure: moving items, splitting functions
+# ===========================================================================
+
+[units.P07]
+name = "Fix items_after_statements: hoist inner items to block/module scope"
+summary = """
+Fix 54 warnings for items_after_statements. In Rust, items (fn, \
+struct, impl, const) defined inside a function body are visible from \
+the start of the enclosing block, not from their textual position. \
+Placing them after executable statements is confusing because it \
+suggests they depend on prior state. Fix by: (1) Moving inner \
+helper functions to before the first statement in the block. (2) \
+For complex helpers, extracting to module scope as pub(crate) or \
+private functions. (3) For const items, moving to the top of the \
+function or to module scope."""
+layer = 1
+tier = 2
+status = "pending"
+depends_on = ["P01", "P02", "P03"]
+blocks = ["P12"]
+estimated_loc = 80
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-api/src/types/chat.rs",
+  "crates/grokrs-api/src/types/batches.rs",
+  "crates/grokrs-api/src/endpoints/batches.rs",
+  "crates/grokrs-api/src/endpoints/chat.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/sessions.rs",
+  "crates/grokrs-cli/src/commands/search.rs",
+  "crates/grokrs-cli/src/commands/generate.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/transcript.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-core/src/lib.rs",
+]
+acceptance = [
+  "Zero clippy::items_after_statements warnings remain",
+  "No inner function hoisted above a statement it logically depends on (e.g., captures a local)",
+  "Helper functions extracted to module scope where they exceed 10 lines",
+  "Const items moved to module scope or top of function",
+  "Zero test regressions",
+]
+produces = ["ART:items-hoisted"]
+consumes = ["ART:must-use", "ART:closures-combinators", "ART:format-strings"]
+critical_decisions = [
+  "Items that capture locals via closure must stay inside the function — move them above the first statement, not outside.",
+  "Items used only in tests (#[cfg(test)]) stay in the test module, just hoisted to before the first statement.",
+  "Prefer module-scope extraction for helpers >10 lines to reduce function body size.",
+]
+rationale = "54 warnings. Moving items is a structural change that can conflict with semantic changes in P01-P03, hence layer 1."
+
+[units.P08]
+name = "Refactor long functions: extract helpers for functions >100 lines"
+summary = """
+Fix 13 warnings for too_many_lines. Functions exceeding clippy's \
+100-line threshold: 282, 234, 197, 179, 146, 145, 134, 126, 121, \
+120, 114, 113, 112 lines. Strategy: extract logical sections into \
+private helper functions with descriptive names. Each extraction \
+should represent a coherent responsibility. Target: every function \
+under 120 lines (allow some flexibility above 100 for cohesive \
+blocks). For functions barely over (112-120 lines), tightening \
+existing code (removing blank lines, combining declarations) may \
+suffice."""
+layer = 1
+tier = 3
+status = "pending"
+depends_on = ["P07"]
+blocks = ["P12"]
+estimated_loc = 200
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/search.rs",
+  "crates/grokrs-cli/src/commands/sessions.rs",
+  "crates/grokrs-cli/src/commands/voice.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+]
+acceptance = [
+  "Zero clippy::too_many_lines warnings remain (or each has documented #[allow] with justification)",
+  "Extracted helper functions have descriptive names that explain WHAT, not HOW",
+  "Each extracted function has a single clear responsibility",
+  "No function exceeds 150 lines (hard ceiling)",
+  "Extracted functions are private (not pub) unless needed by other modules",
+  "Zero test regressions",
+]
+produces = ["ART:short-functions"]
+consumes = ["ART:items-hoisted"]
+critical_decisions = [
+  "Extract by logical section, not arbitrary line count. A 130-line function that's one coherent state machine is better than 3 confusing 45-line helpers.",
+  "Naming: build_X, parse_X, emit_X, validate_X — verb + noun describing the responsibility.",
+  "Functions at 100-120 lines: try tightening first (remove blank lines, combine let chains). Only extract if the function has clear logical sections.",
+  "#[allow(clippy::too_many_lines)] with comment for functions that are genuinely one cohesive block (e.g., test setup, serialization logic).",
+]
+rationale = "13 warnings. Function length is the most subjective lint. Prioritize clarity over hitting the 100-line target."
+
+# ===========================================================================
+# LAYER 2 -- Documentation: additive comments only, no code changes
+# ===========================================================================
+
+[units.P09]
+name = "Add # Errors documentation sections to public Result-returning functions"
+summary = """
+Fix 138 warnings for missing_errors_doc. Every public function that \
+returns Result<T, E> should document what errors it can return and \
+under what conditions. Format: add a `# Errors` section to the doc \
+comment listing each error variant and when it occurs. Example: \
+/// # Errors \
+/// Returns `ConfigError::Read` if the file cannot be read. \
+/// Returns `ConfigError::Parse` if the TOML is invalid."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["P01"]
+blocks = ["P12"]
+estimated_loc = 300
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/endpoints/responses.rs",
+  "crates/grokrs-api/src/endpoints/chat.rs",
+  "crates/grokrs-api/src/endpoints/batches.rs",
+  "crates/grokrs-api/src/endpoints/images.rs",
+  "crates/grokrs-api/src/endpoints/models.rs",
+  "crates/grokrs-api/src/endpoints/voice.rs",
+  "crates/grokrs-api/src/mcp/client.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+  "crates/grokrs-api/src/transport/websocket.rs",
+  "crates/grokrs-api/src/tool_loop.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/transcript.rs",
+  "crates/grokrs-store/src/memory.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-core/src/lib.rs",
+  "crates/grokrs-cap/src/lib.rs",
+]
+acceptance = [
+  "Zero clippy::missing_errors_doc warnings remain",
+  "Every # Errors section lists specific error types and conditions",
+  "Error descriptions match the actual error variants returned by the function",
+  "No generic 'Returns an error if something goes wrong' — be specific",
+  "Zero test regressions",
+]
+produces = ["ART:errors-doc"]
+consumes = ["ART:must-use"]
+critical_decisions = [
+  "List each error variant explicitly: 'Returns `TransportError::Http` if the server returns a non-2xx status.'",
+  "For functions that propagate errors via ?, list the error types that can come through.",
+  "For functions returning anyhow::Result, describe the error conditions even though the type is erased.",
+  "Private functions (not pub) do not need # Errors sections.",
+]
+rationale = "138 warnings — second largest category. Good documentation is a feature, not decoration. Errors docs help users handle failures correctly."
+
+[units.P10]
+name = "Add # Panics documentation and fix doc_markdown backticks"
+summary = """
+Fix 125 warnings: (1) missing_panics_doc (15): add # Panics \
+section to functions that can panic (unwrap, expect, assert, \
+array indexing). List the condition that triggers the panic. (2) \
+doc_markdown (108): wrap code identifiers in backticks in doc \
+comments. Identifiers like WorkspacePath, grok-4, api.x.ai, \
+FsRead, etc. should be `backticked`. (3) bare URLs (5): wrap \
+bare URLs in angle brackets <URL> or make proper markdown links. \
+(4) intra-doc quotes (2): use backticks instead of quotes for \
+code references in docs."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = []
+blocks = ["P12"]
+estimated_loc = 200
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/types/responses.rs",
+  "crates/grokrs-api/src/types/chat.rs",
+  "crates/grokrs-api/src/types/voice.rs",
+  "crates/grokrs-api/src/types/model.rs",
+  "crates/grokrs-api/src/types/batches.rs",
+  "crates/grokrs-api/src/types/function_call.rs",
+  "crates/grokrs-api/src/types/common.rs",
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/transport/websocket.rs",
+  "crates/grokrs-api/src/mcp/types.rs",
+  "crates/grokrs-cli/src/commands/agent.rs",
+  "crates/grokrs-cli/src/commands/chat.rs",
+  "crates/grokrs-cli/src/commands/search.rs",
+  "crates/grokrs-cli/src/repl/grok_backend.rs",
+  "crates/grokrs-store/src/session.rs",
+  "crates/grokrs-store/src/transcript.rs",
+  "crates/grokrs-store/src/memory.rs",
+  "crates/grokrs-store/src/cost.rs",
+  "crates/grokrs-store/src/lib.rs",
+  "crates/grokrs-core/src/lib.rs",
+  "crates/grokrs-cap/src/lib.rs",
+  "crates/grokrs-session/src/lib.rs",
+  "crates/grokrs-tool/src/lib.rs",
+  "crates/grokrs-tool/src/registry.rs",
+  "crates/grokrs-tool/src/tools/git_status.rs",
+  "crates/grokrs-tool/src/tools/git_diff.rs",
+  "crates/grokrs-tool/src/tools/git_add.rs",
+  "crates/grokrs-tool/src/tools/git_commit.rs",
+  "crates/grokrs-policy/src/lib.rs",
+]
+acceptance = [
+  "Zero clippy::missing_panics_doc warnings remain",
+  "Zero clippy::doc_markdown warnings remain",
+  "Zero clippy::doc_link_with_quotes warnings remain",
+  "Every # Panics section describes the specific condition that triggers the panic",
+  "All identifiers in doc comments wrapped in backticks (types, functions, field names, CLI flags)",
+  "All bare URLs wrapped in angle brackets or markdown links",
+  "Zero test regressions",
+]
+produces = ["ART:panics-doc-markdown"]
+consumes = []
+critical_decisions = [
+  "For unwrap() on values guaranteed to be Some/Ok by construction, add # Panics with the invariant explanation.",
+  "For expect() messages, the # Panics section should expand on the message with more context.",
+  "doc_markdown: backtick anything that's code — type names, function names, field names, CLI flags, file paths.",
+  "URLs: prefer angle brackets <https://api.x.ai> for inline URLs, markdown links [text](url) for descriptive ones.",
+]
+rationale = "125 warnings. Documentation quality directly impacts usability. Backtick consistency is especially important for rustdoc rendering."
+
+[units.P11]
+name = "Fix return_self_not_must_use and remaining str lifetime warnings"
+summary = """
+Fix 11 warnings for returning a str unnecessarily tied to the \
+lifetime of arguments. These are cases where a function returns \
+&'a str but the returned value is actually a string literal or \
+comes from self, not from the input parameter's lifetime. Fix by: \
+(1) Returning &'static str when the value is a literal. (2) \
+Removing unnecessary lifetime parameter when the str comes from \
+&self. Also fix any straggler return_self_not_must_use warnings \
+that P01 didn't catch."""
+layer = 2
+tier = 3
+status = "pending"
+depends_on = ["P01"]
+blocks = ["P12"]
+estimated_loc = 30
+files_create = []
+files_modify = [
+  "crates/grokrs-tool/src/tools/read_file.rs",
+  "crates/grokrs-tool/src/tools/write_file.rs",
+  "crates/grokrs-tool/src/tools/list_directory.rs",
+  "crates/grokrs-tool/src/tools/run_command.rs",
+  "crates/grokrs-tool/src/tools/git_status.rs",
+  "crates/grokrs-tool/src/tools/git_diff.rs",
+  "crates/grokrs-tool/src/tools/git_add.rs",
+  "crates/grokrs-tool/src/tools/git_commit.rs",
+  "crates/grokrs-tool/src/tools/remember.rs",
+  "crates/grokrs-tool/src/tools/recall.rs",
+  "crates/grokrs-tool/src/tools/forget.rs",
+]
+acceptance = [
+  "Zero clippy::unnecessary_wraps warnings remain",
+  "Zero clippy::ref_option warnings (Option<&T> vs &Option<T>) remain",
+  "String literals returned as &'static str, not &'a str",
+  "Zero test regressions",
+]
+produces = ["ART:str-lifetimes"]
+consumes = ["ART:must-use"]
+critical_decisions = [
+  "ToolSpec trait methods that return &str: if the trait defines fn name(&self) -> &str and the impl returns a literal, the return type is constrained by the trait. Use &'static str only if the trait permits it.",
+  "If the trait constrains the lifetime, #[allow] with a comment explaining the trait constraint.",
+]
+rationale = "11 warnings. Small unit but touches the ToolSpec trait pattern across all tool files."
+
+# ===========================================================================
+# LAYER 3 -- Final validation
+# ===========================================================================
+
+[units.P12]
+name = "Final validation: zero pedantic warnings, full test suite"
+summary = """
+Run the complete validation suite to confirm all pedantic warnings \
+are resolved. Steps: (1) cargo clippy --workspace --all-targets -- \
+-W clippy::pedantic — zero non-deprecated warnings. (2) cargo test \
+--workspace — all tests pass. (3) cargo build --release — clean \
+build. (4) cargo fmt --all --check — no formatting drift. Fix any \
+cross-unit conflicts or regressions discovered during validation."""
+layer = 3
+tier = 3
+status = "pending"
+depends_on = ["P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11"]
+blocks = []
+estimated_loc = 20
+files_create = []
+files_modify = []
+acceptance = [
+  "cargo clippy --workspace --all-targets -- -W clippy::pedantic reports zero warnings (excluding deprecated chat.rs)",
+  "cargo test --workspace passes with all tests green",
+  "cargo build --release completes successfully",
+  "cargo fmt --all --check reports no formatting issues",
+  "No #[allow(clippy::*)] without an accompanying justification comment",
+]
+produces = ["ART:pedantic-clean"]
+consumes = ["ART:must-use", "ART:closures-combinators", "ART:format-strings", "ART:match-arms", "ART:safe-casts", "ART:misc-quality", "ART:items-hoisted", "ART:short-functions", "ART:errors-doc", "ART:panics-doc-markdown", "ART:str-lifetimes"]
+critical_decisions = [
+  "The deprecated chat.rs module warnings (45 total) are excluded from the zero-warning target — that module is intentionally deprecated.",
+  "Any new #[allow] added during P01-P11 must have a justification comment.",
+]
+rationale = "Final gate. Ensures all units integrate cleanly and no regressions from the 797-warning remediation."
