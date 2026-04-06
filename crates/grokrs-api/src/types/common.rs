@@ -310,7 +310,7 @@ mod tests {
                     }
                 );
             }
-            _ => panic!("expected Blocks variant"),
+            MessageContent::Text(_) => panic!("expected Blocks variant"),
         }
     }
 }

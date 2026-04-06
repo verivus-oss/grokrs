@@ -162,7 +162,7 @@ async fn encrypted_content_round_trip_preserves_blob() {
         } => {
             assert_eq!(encrypted_content, blob);
         }
-        _ => panic!("expected Reasoning input item"),
+        InputItem::Message(_) => panic!("expected Reasoning input item"),
     }
 }
 
@@ -302,7 +302,7 @@ async fn large_encrypted_blob_survives_round_trip() {
         InputItem::Reasoning {
             encrypted_content, ..
         } => assert_eq!(encrypted_content, large_blob),
-        _ => panic!("expected Reasoning"),
+        InputItem::Message(_) => panic!("expected Reasoning"),
     }
 }
 

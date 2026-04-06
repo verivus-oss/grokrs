@@ -53,6 +53,9 @@ pub struct HttpClient {
     policy_gate: Option<Arc<dyn PolicyGate>>,
 }
 
+// Intentionally omits `client` (reqwest handle, not Debug-printable in a
+// meaningful way) from the Debug output.
+#[allow(clippy::missing_fields_in_debug)]
 impl std::fmt::Debug for HttpClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HttpClient")
@@ -66,7 +69,7 @@ impl std::fmt::Debug for HttpClient {
                     "None"
                 },
             )
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

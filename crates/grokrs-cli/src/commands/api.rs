@@ -341,12 +341,12 @@ async fn consume_response_stream(
 
 /// Log stream results to store and finalize session state.
 fn finalize_chat_store(
-    store: &Option<Store>,
+    store: Option<&Store>,
     session_id: &str,
     transcript_id: Option<i64>,
     stream: &StreamResult,
 ) {
-    let Some(ref s) = *store else { return };
+    let Some(s) = store else { return };
 
     if let Some(tid) = transcript_id {
         if let Some(ref err) = stream.stream_error {
@@ -450,7 +450,7 @@ async fn run_chat(
         println!();
     }
 
-    finalize_chat_store(&store, &session_id, transcript_id, &stream_result);
+    finalize_chat_store(store.as_ref(), &session_id, transcript_id, &stream_result);
 
     if let Some(s) = store {
         let _ = s.close();

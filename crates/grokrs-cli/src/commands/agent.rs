@@ -170,6 +170,9 @@ Examples:
   grokrs agent --headless --output json 'task'         JSON event stream
 
 See also: grokrs chat")]
+// These bools are independent CLI flags parsed by clap; a state machine is
+// not appropriate for user-facing option combinatorics.
+#[allow(clippy::struct_excessive_bools)]
 pub struct AgentArgs {
     /// Task description for the agent.
     /// In --headless mode, if omitted, reads from stdin.
@@ -330,11 +333,11 @@ fn open_store_best_effort(config: &AppConfig) -> Option<Store> {
 /// Returns `None` if there is no user system prompt and no memories.
 fn build_system_prompt(
     user_system: Option<&str>,
-    store: &Option<Store>,
+    store: Option<&Store>,
     memory_limit: i64,
 ) -> Option<String> {
     // Retrieve top memories from the store (best-effort).
-    let memories_section = store.as_ref().and_then(|s| {
+    let memories_section = store.and_then(|s| {
         // Evict over-limit memories before reading.
         let mem = s.memories();
         let _ = mem.evict(memory_limit);
@@ -602,6 +605,9 @@ async fn build_tool_registry(
 }
 
 /// Print agent diagnostic banner to stderr.
+// Each parameter is a distinct diagnostic value displayed in the banner;
+// bundling into a struct would add ceremony without reducing complexity.
+#[allow(clippy::too_many_arguments)]
 fn emit_agent_banner(
     args: &AgentArgs,
     trust_str: &str,
@@ -939,7 +945,7 @@ pub async fn run(args: &AgentArgs, config: &AppConfig) -> Result<AgentResult> {
 
     let store = open_store_best_effort(config);
     let memory_limit = agent_config.map_or(50, |c| c.memory_limit);
-    let system_prompt = build_system_prompt(args.system.as_deref(), &store, memory_limit);
+    let system_prompt = build_system_prompt(args.system.as_deref(), store.as_ref(), memory_limit);
     let request = build_initial_request(
         model,
         task,

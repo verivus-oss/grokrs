@@ -386,7 +386,7 @@ mod tests {
         let received = VoiceReceived::Audio(data.clone());
         match received {
             VoiceReceived::Audio(bytes) => assert_eq!(bytes, data),
-            other => panic!("expected Audio, got: {other:?}"),
+            other @ VoiceReceived::Event(_) => panic!("expected Audio, got: {other:?}"),
         }
     }
 

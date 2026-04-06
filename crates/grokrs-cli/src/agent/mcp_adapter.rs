@@ -176,6 +176,9 @@ impl ErasedTool for McpToolAdapter {
     }
 }
 
+// Intentionally omits `client` (async RwLock-wrapped MCP connection handle)
+// from the Debug output.
+#[allow(clippy::missing_fields_in_debug)]
 impl std::fmt::Debug for McpToolAdapter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("McpToolAdapter")
@@ -183,7 +186,7 @@ impl std::fmt::Debug for McpToolAdapter {
             .field("mcp_name", &self.definition.name)
             .field("server_host", &self.server_host)
             .field("min_rank", &self.min_rank)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

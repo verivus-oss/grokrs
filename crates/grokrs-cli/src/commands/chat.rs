@@ -46,6 +46,9 @@ Examples:
   grokrs chat --cache-key my-system-prompt        Enable prompt caching for the system prompt
 
 See also: grokrs agent, grokrs api chat")]
+// These bools are independent CLI flags parsed by clap; a state machine is
+// not appropriate for user-facing option combinatorics.
+#[allow(clippy::struct_excessive_bools)]
 pub struct ChatArgs {
     /// Override the default model (e.g., `grok-4`, `grok-4-mini`).
     #[arg(long)]
@@ -175,7 +178,8 @@ pub fn run(args: &ChatArgs, config: &AppConfig, rt: &tokio::runtime::Handle) -> 
 
     if let Some(ref prefix) = args.resume {
         // Resume an existing session.
-        let (resolved_id, history, prev_response_id) = resolve_resume_session(&store, prefix)?;
+        let (resolved_id, history, prev_response_id) =
+            resolve_resume_session(store.as_ref(), prefix)?;
         session_id = resolved_id;
         initial_conversation = history;
 
@@ -248,7 +252,12 @@ pub fn run(args: &ChatArgs, config: &AppConfig, rt: &tokio::runtime::Handle) -> 
     );
 
     // --- Cleanup ---
-    finalize_chat_session(&store, &session_id, &result, args.cache_key.as_deref());
+    finalize_chat_session(
+        store.as_ref(),
+        &session_id,
+        &result,
+        args.cache_key.as_deref(),
+    );
 
     if let Some(s) = store {
         let _ = s.close();
@@ -259,12 +268,12 @@ pub fn run(args: &ChatArgs, config: &AppConfig, rt: &tokio::runtime::Handle) -> 
 
 /// Finalize a chat session: transition to terminal state and print usage summary.
 fn finalize_chat_session(
-    store: &Option<Store>,
+    store: Option<&Store>,
     session_id: &str,
     result: &Result<()>,
     cache_key: Option<&str>,
 ) {
-    let Some(ref s) = *store else { return };
+    let Some(s) = store else { return };
 
     match result {
         Ok(()) => {
@@ -472,10 +481,10 @@ fn log_turn_response(
 /// Resolve a session for --resume, supporting prefix match.
 /// Returns (`session_id`, `reconstructed_conversation`, `last_response_id`).
 fn resolve_resume_session(
-    store: &Option<Store>,
+    store: Option<&Store>,
     prefix: &str,
 ) -> Result<(String, ConversationHistory, Option<String>)> {
-    let store = store.as_ref().context(
+    let store = store.context(
         "--resume requires a store database. \
          Ensure [store] is configured or a .grokrs/state.db exists.",
     )?;
@@ -783,7 +792,7 @@ mod tests {
 
     #[test]
     fn resolve_resume_no_store_returns_error() {
-        let result = resolve_resume_session(&None, "abc");
+        let result = resolve_resume_session(None, "abc");
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("requires a store"), "got: {err}");
@@ -793,7 +802,7 @@ mod tests {
     fn resolve_resume_nonexistent_session() {
         let tmp = tempfile::tempdir().unwrap();
         let store = Store::open(tmp.path()).unwrap();
-        let result = resolve_resume_session(&Some(store), "nonexistent");
+        let result = resolve_resume_session(Some(&store), "nonexistent");
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("No session found"), "got: {err}");
@@ -809,7 +818,7 @@ mod tests {
             .unwrap();
 
         let (id, history, _) =
-            resolve_resume_session(&Some(store), "resume-test-session-1").unwrap();
+            resolve_resume_session(Some(&store), "resume-test-session-1").unwrap();
         assert_eq!(id, "resume-test-session-1");
         assert_eq!(history.turn_count(), 0);
     }
@@ -823,7 +832,7 @@ mod tests {
             .create("resume-unique-session-abc", "Untrusted")
             .unwrap();
 
-        let (id, _, _) = resolve_resume_session(&Some(store), "resume-unique").unwrap();
+        let (id, _, _) = resolve_resume_session(Some(&store), "resume-unique").unwrap();
         assert_eq!(id, "resume-unique-session-abc");
     }
 
@@ -840,7 +849,7 @@ mod tests {
             .create("resume-ambig-002", "Untrusted")
             .unwrap();
 
-        let result = resolve_resume_session(&Some(store), "resume-ambig");
+        let result = resolve_resume_session(Some(&store), "resume-ambig");
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("Ambiguous"), "got: {err}");
@@ -877,7 +886,7 @@ mod tests {
             .unwrap();
 
         let (id, history, last_resp_id) =
-            resolve_resume_session(&Some(store), "resume-tx-test").unwrap();
+            resolve_resume_session(Some(&store), "resume-tx-test").unwrap();
         assert_eq!(id, "resume-tx-test");
         assert_eq!(history.turn_count(), 1);
         assert_eq!(history.total_input_tokens(), 10);
@@ -943,7 +952,7 @@ mod tests {
             .unwrap();
 
         let (_, history, last_resp_id) =
-            resolve_resume_session(&Some(store), "resume-multi").unwrap();
+            resolve_resume_session(Some(&store), "resume-multi").unwrap();
         assert_eq!(history.turn_count(), 2);
         assert_eq!(history.total_input_tokens(), 20); // 5 + 15
         assert_eq!(history.total_output_tokens(), 35); // 10 + 25
@@ -954,6 +963,8 @@ mod tests {
     // resolve_search_config tests
     // -----------------------------------------------------------------------
 
+    // Test helper that mirrors independent CLI flags; bool params are intentional.
+    #[allow(clippy::fn_params_excessive_bools)]
     fn search_args(
         search: bool,
         x_search: bool,

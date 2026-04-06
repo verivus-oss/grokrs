@@ -245,13 +245,16 @@ impl McpTransport {
     }
 }
 
+// Intentionally omits `client` (reqwest handle) and `session_id` (internal
+// mutable state) from the Debug output.
+#[allow(clippy::missing_fields_in_debug)]
 impl std::fmt::Debug for McpTransport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("McpTransport")
             .field("server_url", &self.config.server_url)
             .field("timeout", &self.config.timeout)
             .field("next_id", &self.next_id.load(Ordering::Relaxed))
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

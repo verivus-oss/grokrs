@@ -389,6 +389,9 @@ impl TableColumnWidths {
     }
 
     /// Write a single data row into `out`.
+    // The arguments directly correspond to fixed table columns; a config struct
+    // would add indirection without improving clarity.
+    #[allow(clippy::too_many_arguments)]
     fn write_row(
         &self,
         out: &mut String,

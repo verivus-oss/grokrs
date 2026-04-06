@@ -114,7 +114,7 @@ mod tests {
             ResolvedDecision::Deny { reason } => {
                 assert!(reason.contains("network access requires explicit approval flow"));
             }
-            other => panic!("expected Deny, got {other:?}"),
+            other @ ResolvedDecision::Allow => panic!("expected Deny, got {other:?}"),
         }
     }
 
@@ -130,7 +130,7 @@ mod tests {
                 assert!(reason.contains("interactive"));
                 assert!(reason.contains("shell spawn"));
             }
-            other => panic!("expected Deny, got {other:?}"),
+            other @ ResolvedDecision::Allow => panic!("expected Deny, got {other:?}"),
         }
     }
 

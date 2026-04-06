@@ -455,7 +455,7 @@ mod tests {
             ToolError::InvalidName { reason } => {
                 assert!(reason.contains("empty"));
             }
-            other => panic!("expected InvalidName, got: {other}"),
+            other @ ToolError::TooManyTools { .. } => panic!("expected InvalidName, got: {other}"),
         }
     }
 
@@ -573,7 +573,7 @@ mod tests {
                 assert_eq!(count, MAX_TOOLS_PER_REQUEST + 1);
                 assert_eq!(max, MAX_TOOLS_PER_REQUEST);
             }
-            other => panic!("expected TooManyTools, got: {other}"),
+            other @ ToolError::InvalidName { .. } => panic!("expected TooManyTools, got: {other}"),
         }
     }
 

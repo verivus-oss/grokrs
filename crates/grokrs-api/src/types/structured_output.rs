@@ -184,7 +184,7 @@ mod tests {
                 assert_eq!(strict, Some(true));
                 assert_eq!(schema["type"], "object");
             }
-            other => panic!("expected JsonSchema, got: {other:?}"),
+            other @ TextFormat::Text => panic!("expected JsonSchema, got: {other:?}"),
         }
     }
 
@@ -196,7 +196,7 @@ mod tests {
             TextFormat::JsonSchema { strict, .. } => {
                 assert_eq!(strict, Some(false));
             }
-            other => panic!("expected JsonSchema, got: {other:?}"),
+            other @ TextFormat::Text => panic!("expected JsonSchema, got: {other:?}"),
         }
     }
 
@@ -263,7 +263,7 @@ mod tests {
             TextFormat::JsonSchema { schema: s, .. } => {
                 assert_eq!(s, schema);
             }
-            other => panic!("expected JsonSchema, got: {other:?}"),
+            other @ TextFormat::Text => panic!("expected JsonSchema, got: {other:?}"),
         }
     }
 

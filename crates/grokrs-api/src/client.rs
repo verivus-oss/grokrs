@@ -228,11 +228,14 @@ impl GrokClient {
     }
 }
 
+// Intentionally omits `session_id`, `base_url`, `api_key` (secret), and
+// `policy_gate` (not Debug-printable) from the Debug output.
+#[allow(clippy::missing_fields_in_debug)]
 impl std::fmt::Debug for GrokClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GrokClient")
             .field("http", &self.http)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

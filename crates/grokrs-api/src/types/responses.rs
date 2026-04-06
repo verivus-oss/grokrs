@@ -768,10 +768,12 @@ mod tests {
                 assert_eq!(items.len(), 1);
                 match &items[0] {
                     InputItem::Message(msg) => assert_eq!(msg.role, Role::User),
-                    other => panic!("expected Message, got: {other:?}"),
+                    other @ InputItem::Reasoning { .. } => {
+                        panic!("expected Message, got: {other:?}")
+                    }
                 }
             }
-            _ => panic!("expected Items variant"),
+            ResponseInput::Text(_) => panic!("expected Items variant"),
         }
     }
 
@@ -1378,7 +1380,7 @@ mod tests {
                 assert_eq!(name, "weather_data");
                 assert_eq!(strict, Some(true));
             }
-            other => panic!("expected JsonSchema, got: {other:?}"),
+            other @ TextFormat::Text => panic!("expected JsonSchema, got: {other:?}"),
         }
     }
 
@@ -1480,7 +1482,7 @@ mod tests {
 
         match &req.input {
             ResponseInput::Items(m) => assert_eq!(m.len(), 2),
-            _ => panic!("expected Messages variant"),
+            ResponseInput::Text(_) => panic!("expected Messages variant"),
         }
     }
 
@@ -1843,16 +1845,18 @@ mod tests {
                     } => {
                         assert_eq!(encrypted_content, "ENC:aGVsbG8gd29ybGQ=");
                     }
-                    other => panic!("expected Reasoning, got: {other:?}"),
+                    other @ InputItem::Message(_) => panic!("expected Reasoning, got: {other:?}"),
                 }
                 match &items[1] {
                     InputItem::Message(msg) => {
                         assert_eq!(msg.role, Role::User);
                     }
-                    other => panic!("expected Message, got: {other:?}"),
+                    other @ InputItem::Reasoning { .. } => {
+                        panic!("expected Message, got: {other:?}")
+                    }
                 }
             }
-            _ => panic!("expected Items variant"),
+            ResponseInput::Text(_) => panic!("expected Items variant"),
         }
     }
 
@@ -1923,7 +1927,7 @@ mod tests {
                 assert!(matches!(&items[0], InputItem::Reasoning { .. }));
                 assert!(matches!(&items[1], InputItem::Message(_)));
             }
-            _ => panic!("expected Items variant"),
+            ResponseInput::Text(_) => panic!("expected Items variant"),
         }
     }
 

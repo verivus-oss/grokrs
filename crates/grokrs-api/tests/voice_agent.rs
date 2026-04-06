@@ -328,7 +328,7 @@ async fn voice_received_audio_construction() {
             assert_eq!(data.len(), 1920);
             assert_eq!(*data, pcm);
         }
-        other => panic!("expected Audio, got: {other:?}"),
+        other @ VoiceReceived::Event(_) => panic!("expected Audio, got: {other:?}"),
     }
 }
 

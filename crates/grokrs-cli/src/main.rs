@@ -430,7 +430,7 @@ fn doctor_r2_features(
     match config.mcp.as_ref() {
         None => println!("[--] mcp=not configured (add [mcp] section to enable)"),
         Some(mcp) if mcp.servers.is_empty() => {
-            println!("[--] mcp=configured but no servers defined")
+            println!("[--] mcp=configured but no servers defined");
         }
         Some(mcp) => {
             println!("[ok] mcp={} server(s) configured", mcp.servers.len());

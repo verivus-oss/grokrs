@@ -392,6 +392,10 @@ impl ChatBackend for GrokChatBackend {
     }
 }
 
+// Intentionally omits `client` (shared API handle), `encrypted_reasoning`
+// (opaque blobs), `cache_key` (may be sensitive), and `output` (writer
+// handle, not Debug-printable) from the Debug output.
+#[allow(clippy::missing_fields_in_debug)]
 impl std::fmt::Debug for GrokChatBackend {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GrokChatBackend")
@@ -409,7 +413,7 @@ impl std::fmt::Debug for GrokChatBackend {
                     .as_deref()
                     .map(|s| if s.len() > 50 { &s[..50] } else { s }),
             )
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

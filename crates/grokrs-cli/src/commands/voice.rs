@@ -88,6 +88,7 @@ pub struct VoiceArgs {
 /// 5. Create session record in store.
 /// 6. Connect to voice agent and enter interactive loop.
 /// 7. On exit, close session and print summary.
+///
 /// Build the WebSocket config from application config.
 fn build_ws_config(config: &AppConfig) -> WsClientConfig {
     let api_config = config.api.as_ref();
@@ -351,8 +352,7 @@ async fn handle_voice_event(
                 return true;
             }
         }
-        VoiceEvent::Pong => {}
-        VoiceEvent::AudioChunk { .. } => {}
+        VoiceEvent::Pong | VoiceEvent::AudioChunk { .. } => {}
         VoiceEvent::Usage {
             input_tokens,
             output_tokens,

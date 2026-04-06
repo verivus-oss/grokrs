@@ -13,6 +13,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 
+/// A media model row: `(id, owned_by, input_modalities, output_modalities, price)`.
+type MediaModelRow = (String, String, Vec<String>, Vec<String>, Option<i64>);
+
 use grokrs_api::client::GrokClient;
 use grokrs_api::transport::policy_bridge::FnPolicyGate;
 use grokrs_api::transport::policy_gate::{PolicyDecision, PolicyGate};
@@ -230,12 +233,7 @@ fn print_language_models(models: &[grokrs_api::types::model::LanguageModel], use
 }
 
 /// List media models (image or video) with a single price column.
-fn print_media_models(
-    models: &[(String, String, Vec<String>, Vec<String>, Option<i64>)],
-    price_header: &str,
-    kind: &str,
-    use_color: bool,
-) {
+fn print_media_models(models: &[MediaModelRow], price_header: &str, kind: &str, use_color: bool) {
     println!(
         "{:<30} {:<15} {:<25} {:<15}",
         bold("MODEL ID", use_color),
@@ -344,6 +342,9 @@ async fn run_list(client: &GrokClient, model_type: &str, json_output: bool) -> R
 }
 
 /// Print common model metadata fields (ID, `owned_by`, created, modalities, etc.).
+// Each parameter maps to a distinct model metadata field; a wrapper struct
+// would duplicate the existing model types without adding value.
+#[allow(clippy::too_many_arguments)]
 fn print_model_common(
     title: &str,
     id: &str,
