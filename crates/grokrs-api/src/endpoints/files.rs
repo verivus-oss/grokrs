@@ -205,7 +205,7 @@ fn urlencoding_minimal(input: &str) -> String {
                 encoded.push(byte as char);
             }
             _ => {
-                write!(encoded, "%{byte:02X}").unwrap();
+                write!(encoded, "%{byte:02X}").expect("String write is infallible");
             }
         }
     }

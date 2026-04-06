@@ -107,7 +107,8 @@ impl ToolSpec for GitCommitTool {
 
         // Resolve signature: try repo config, fall back to default.
         let sig = repo.signature().unwrap_or_else(|_| {
-            git2::Signature::now("grokrs-agent", "grokrs-agent@noreply").unwrap()
+            git2::Signature::now("grokrs-agent", "grokrs-agent@noreply")
+                .expect("static signature name/email are valid")
         });
 
         // Get parent commit(s), if any.

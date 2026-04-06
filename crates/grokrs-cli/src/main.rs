@@ -325,7 +325,7 @@ fn doctor_features(
 
     // Policy status for key effects.
     let fs_write_decision = engine.evaluate(&Effect::FsWrite(
-        grokrs_cap::WorkspacePath::new("test.txt").unwrap(),
+        grokrs_cap::WorkspacePath::new("test.txt").expect("static path is valid"),
     ));
     let spawn_decision = engine.evaluate(&Effect::ProcessSpawn {
         program: "cargo".to_owned(),

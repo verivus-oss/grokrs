@@ -471,7 +471,10 @@ fn resolve_resume_session(
 
         match matches.len() {
             0 => bail!("No session found matching '{prefix}'."),
-            1 => matches.into_iter().next().unwrap(),
+            1 => matches
+                .into_iter()
+                .next()
+                .expect("length is 1 so first element exists"),
             n => {
                 let mut msg =
                     format!("Ambiguous session ID prefix '{prefix}' matches {n} sessions:\n");
@@ -483,7 +486,7 @@ fn resolve_resume_session(
                         s.state,
                         s.updated_at,
                     )
-                    .unwrap();
+                    .expect("String write is infallible");
                 }
                 msg.push_str("\nPlease provide a longer prefix to uniquely identify the session.");
                 bail!("{msg}");

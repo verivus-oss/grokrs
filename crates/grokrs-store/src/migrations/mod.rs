@@ -91,7 +91,10 @@ pub(crate) fn run_pending(conn: &mut Connection) -> Result<(), StoreError> {
     }
 
     // Update user_version to the highest applied migration.
-    let latest = pending.last().unwrap().version;
+    let latest = pending
+        .last()
+        .expect("pending is non-empty (checked above)")
+        .version;
     tx.pragma_update(None, "user_version", latest)
         .map_err(|e| StoreError::Migration(format!("failed to update user_version: {e}")))?;
 

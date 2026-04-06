@@ -185,10 +185,10 @@ pub fn format_citations(citations: &[Citation]) -> String {
     for (i, cite) in citations.iter().enumerate() {
         match &cite.title {
             Some(title) => {
-                write!(out, "  [{}] {title} — {}\n", i + 1, cite.url).unwrap();
+                write!(out, "  [{}] {title} — {}\n", i + 1, cite.url).expect("String write is infallible");
             }
             None => {
-                write!(out, "  [{}] {}\n", i + 1, cite.url).unwrap();
+                write!(out, "  [{}] {}\n", i + 1, cite.url).expect("String write is infallible");
             }
         }
     }
@@ -270,8 +270,12 @@ pub fn validate_date(date: &str) -> Result<(), String> {
         }
     }
     // Basic range checks.
-    let month: u32 = parts[1].parse().unwrap();
-    let day: u32 = parts[2].parse().unwrap();
+    let month: u32 = parts[1]
+        .parse()
+        .expect("already validated as numeric above");
+    let day: u32 = parts[2]
+        .parse()
+        .expect("already validated as numeric above");
     if !(1..=12).contains(&month) {
         return Err(format!("invalid month in date: '{date}'"));
     }

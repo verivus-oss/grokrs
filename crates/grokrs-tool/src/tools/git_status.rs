@@ -75,7 +75,7 @@ impl ToolSpec for GitStatusTool {
             let path = entry.path().unwrap_or("<non-utf8 path>");
             let status = entry.status();
             let label = status_label(status);
-            write!(output, "{label}\t{path}\n").unwrap();
+            write!(output, "{label}\t{path}\n").expect("String write is infallible");
         }
 
         Ok(output)

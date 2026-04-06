@@ -131,7 +131,10 @@ fn resolve_session_id(store: &Store, id_or_prefix: &str) -> Result<SessionRecord
 
     match matches.len() {
         0 => bail!("No session found matching '{id_or_prefix}'."),
-        1 => Ok(matches.into_iter().next().unwrap()),
+        1 => Ok(matches
+            .into_iter()
+            .next()
+            .expect("length is 1 so first element exists")),
         n => {
             let mut msg =
                 format!("Ambiguous session ID prefix '{id_or_prefix}' matches {n} sessions:\n");
@@ -143,7 +146,7 @@ fn resolve_session_id(store: &Store, id_or_prefix: &str) -> Result<SessionRecord
                     s.state,
                     s.updated_at,
                 )
-                .unwrap();
+                .expect("String write is infallible");
             }
             msg.push_str("\nPlease provide a longer prefix to uniquely identify the session.");
             bail!("{msg}");

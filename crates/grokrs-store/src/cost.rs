@@ -413,7 +413,7 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
         zw = reasoning_width,
         cw = cost_width,
     )
-    .unwrap();
+    .expect("String write is infallible");
 
     // Separator line.
     let total_width = group_width
@@ -448,7 +448,7 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
             zw = reasoning_width,
             cw = cost_width,
         )
-        .unwrap();
+        .expect("String write is infallible");
     }
 
     // Summary separator + summary line.
@@ -467,7 +467,7 @@ pub fn format_table(group_by: CostGroupBy, rows: &[CostRow], summary: &CostSumma
         format_u64(summary.session_count),
         summary.avg_cost_per_session_usd(),
     )
-    .unwrap();
+    .expect("String write is infallible");
 
     out
 }
@@ -513,7 +513,7 @@ pub fn format_csv(group_by: CostGroupBy, rows: &[CostRow]) -> String {
         "{},requests,input_tokens,output_tokens,reasoning_tokens,cost_ticks,cost_usd\n",
         group_by.header()
     )
-    .unwrap();
+    .expect("String write is infallible");
 
     // Data rows.
     for row in rows {
@@ -529,7 +529,7 @@ pub fn format_csv(group_by: CostGroupBy, rows: &[CostRow]) -> String {
             row.cost_ticks,
             row.cost_usd(),
         )
-        .unwrap();
+        .expect("String write is infallible");
     }
 
     out

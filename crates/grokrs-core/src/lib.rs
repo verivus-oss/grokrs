@@ -523,7 +523,7 @@ impl AppConfig {
             let retries = api.max_retries.unwrap_or(3);
             write!(s,
                 " api_key_env={key_env} base_url={base_url} timeout_secs={timeout} max_retries={retries}"
-            ).unwrap();
+            ).expect("String write is infallible");
         }
         if let Some(ref mgmt) = self.management_api {
             let key_env = mgmt
@@ -538,10 +538,10 @@ impl AppConfig {
             let retries = mgmt.max_retries.unwrap_or(3);
             write!(s,
                 " management_key_env={key_env} management_base_url={base_url} management_timeout_secs={timeout} management_max_retries={retries}"
-            ).unwrap();
+            ).expect("String write is infallible");
         }
         if let Some(ref store) = self.store {
-            write!(s, " store_path={}", store.path).unwrap();
+            write!(s, " store_path={}", store.path).expect("String write is infallible");
         }
         if let Some(ref agent) = self.agent {
             write!(
@@ -549,14 +549,14 @@ impl AppConfig {
                 " agent_max_iterations={} agent_default_trust={} agent_enable_search={}",
                 agent.max_iterations, agent.default_trust, agent.enable_search
             )
-            .unwrap();
+            .expect("String write is infallible");
         }
         if let Some(ref chat) = self.chat {
             let model = chat.default_model.as_deref().unwrap_or("(inherit)");
             write!(s,
                 " chat_default_model={model} chat_stateful={} chat_history_file={} chat_max_conversation_tokens={}",
                 chat.stateful, chat.history_file, chat.max_conversation_tokens
-            ).unwrap();
+            ).expect("String write is infallible");
             if let Some(ref sys) = chat.system_prompt {
                 // UTF-8 safe truncation: find the nearest char boundary at or before 50 bytes.
                 let end = if sys.len() > 50 {
@@ -568,7 +568,7 @@ impl AppConfig {
                 } else {
                     sys.len()
                 };
-                write!(s, " chat_system_prompt={}...", &sys[..end]).unwrap();
+                write!(s, " chat_system_prompt={}...", &sys[..end]).expect("String write is infallible");
             }
         }
         if let Some(ref mcp) = self.mcp {
@@ -579,7 +579,7 @@ impl AppConfig {
                 " mcp_servers={server_count} mcp_server_names=[{}]",
                 server_names.join(",")
             )
-            .unwrap();
+            .expect("String write is infallible");
         }
         s
     }

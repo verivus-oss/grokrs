@@ -245,7 +245,7 @@ impl ToolSpec for RunCommandTool {
                 }
                 output.push_str(&stderr_buf);
             }
-            write!(output, "\n[exit code: {exit_code}]").unwrap();
+            write!(output, "\n[exit code: {exit_code}]").expect("String write is infallible");
             Ok(output)
         });
 

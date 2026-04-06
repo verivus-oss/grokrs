@@ -133,7 +133,7 @@ impl ToolSpec for RecallTool {
                 record.access_count,
                 if record.access_count == 1 { "" } else { "s" },
             )
-            .unwrap();
+            .expect("String write is infallible");
         }
 
         Ok(output)
