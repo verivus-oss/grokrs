@@ -691,11 +691,10 @@ impl HttpClient {
             .map(String::from);
 
         match response.bytes().await {
-            Ok(bytes) => match serde_json::from_slice::<ApiErrorResponse>(&bytes) {
-                Ok(api_resp) => {
+            Ok(bytes) => {
+                if let Ok(api_resp) = serde_json::from_slice::<ApiErrorResponse>(&bytes) {
                     TransportError::Api(ApiError::from_response(status, api_resp.error, request_id))
-                }
-                Err(_) => {
+                } else {
                     let fallback = String::from_utf8_lossy(&bytes).to_string();
                     TransportError::Api(ApiError {
                         status_code: status,
@@ -705,7 +704,7 @@ impl HttpClient {
                         request_id,
                     })
                 }
-            },
+            }
             Err(err) => TransportError::Http { source: err },
         }
     }

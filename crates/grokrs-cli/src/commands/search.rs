@@ -209,8 +209,8 @@ pub fn extract_citations_from_output(
 
     for item in output {
         let search_results = match item {
-            OutputItem::WebSearchCall { search_results, .. } => search_results.as_ref(),
-            OutputItem::XSearchCall { search_results, .. } => search_results.as_ref(),
+            OutputItem::WebSearchCall { search_results, .. }
+            | OutputItem::XSearchCall { search_results, .. } => search_results.as_ref(),
             _ => None,
         };
 

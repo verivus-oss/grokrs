@@ -128,49 +128,46 @@ fn run_status(config: &AppConfig, workspace_root: &Path) -> Result<()> {
         .as_ref()
         .map_or(".grokrs/state.db", |s| s.path.as_str());
 
-    match open_store(config, workspace_root)? {
-        Some(store) => {
-            let version = store
-                .schema_version()
-                .context("failed to read schema version")?;
-            let total_sessions = store
-                .sessions()
-                .count_total()
-                .context("failed to count total sessions")?;
-            let active = store
-                .sessions()
-                .list_active()
-                .context("failed to list active sessions")?;
-            let totals = store
-                .usage()
-                .all_totals()
-                .context("failed to compute usage totals")?;
+    if let Some(store) = open_store(config, workspace_root)? {
+        let version = store
+            .schema_version()
+            .context("failed to read schema version")?;
+        let total_sessions = store
+            .sessions()
+            .count_total()
+            .context("failed to count total sessions")?;
+        let active = store
+            .sessions()
+            .list_active()
+            .context("failed to list active sessions")?;
+        let totals = store
+            .usage()
+            .all_totals()
+            .context("failed to compute usage totals")?;
 
-            println!("Store status:");
-            println!("  database:       {}", store.db_path().display());
-            println!("  schema_version: {version}");
-            println!("  journal_mode:   wal");
-            println!(
-                "  sessions:       {total_sessions} total, {} active",
-                active.len()
-            );
-            println!(
-                "  total_cost:     ${:.6} ({} ticks)",
-                ticks_to_usd(totals.total_cost_ticks),
-                totals.total_cost_ticks
-            );
-            println!("  total_requests: {}", totals.request_count);
+        println!("Store status:");
+        println!("  database:       {}", store.db_path().display());
+        println!("  schema_version: {version}");
+        println!("  journal_mode:   wal");
+        println!(
+            "  sessions:       {total_sessions} total, {} active",
+            active.len()
+        );
+        println!(
+            "  total_cost:     ${:.6} ({} ticks)",
+            ticks_to_usd(totals.total_cost_ticks),
+            totals.total_cost_ticks
+        );
+        println!("  total_requests: {}", totals.request_count);
 
-            store.close().ok();
-        }
-        None => {
-            println!("Store status:");
-            println!(
-                "  database: {} (not created yet)",
-                workspace_root.join(store_path).display()
-            );
-            println!("  No store database exists. Run an API command to create one.");
-        }
+        store.close().ok();
+    } else {
+        println!("Store status:");
+        println!(
+            "  database: {} (not created yet)",
+            workspace_root.join(store_path).display()
+        );
+        println!("  No store database exists. Run an API command to create one.");
     }
     Ok(())
 }

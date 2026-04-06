@@ -78,16 +78,15 @@ impl<'a> ChatClient<'a> {
             .send_no_body_with_status(Method::GET, &path, &[200, 202])
             .await?;
 
-        match status {
-            202 => Ok(None),
-            _ => {
-                // 200 or any other 2xx — deserialize as ChatCompletion.
-                let completion: ChatCompletion =
-                    serde_json::from_slice(&body).map_err(|e| TransportError::Deserialization {
-                        message: format!("failed to deserialize deferred completion: {e}"),
-                    })?;
-                Ok(Some(completion))
-            }
+        if status == 202 {
+            Ok(None)
+        } else {
+            // 200 or any other 2xx — deserialize as ChatCompletion.
+            let completion: ChatCompletion =
+                serde_json::from_slice(&body).map_err(|e| TransportError::Deserialization {
+                    message: format!("failed to deserialize deferred completion: {e}"),
+                })?;
+            Ok(Some(completion))
         }
     }
 }

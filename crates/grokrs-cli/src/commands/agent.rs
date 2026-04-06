@@ -81,8 +81,8 @@ impl AgentExitCode {
 #[must_use]
 pub fn exit_code_for_tool_loop_error(err: &ToolLoopError) -> AgentExitCode {
     match err {
-        ToolLoopError::MaxIterationsExceeded { .. } => AgentExitCode::AgentError,
-        ToolLoopError::InvalidConfiguration { .. } => AgentExitCode::AgentError,
+        ToolLoopError::MaxIterationsExceeded { .. }
+        | ToolLoopError::InvalidConfiguration { .. } => AgentExitCode::AgentError,
         ToolLoopError::ExecutionFailed { error, .. } => {
             let msg = error.to_string();
             if msg.contains("policy denied") {

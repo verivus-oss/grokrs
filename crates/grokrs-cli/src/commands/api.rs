@@ -517,19 +517,16 @@ async fn run_tts(
         .context("failed to generate TTS audio")?;
 
     // Write output.
-    match output {
-        Some(path) => {
-            std::fs::write(path, &audio_bytes)
-                .with_context(|| format!("failed to write audio to {}", path.display()))?;
-            eprintln!("Wrote {} bytes to {}", audio_bytes.len(), path.display());
-        }
-        None => {
-            let stdout = std::io::stdout();
-            let mut out = stdout.lock();
-            out.write_all(&audio_bytes)
-                .context("failed to write audio to stdout")?;
-            out.flush().context("failed to flush stdout")?;
-        }
+    if let Some(path) = output {
+        std::fs::write(path, &audio_bytes)
+            .with_context(|| format!("failed to write audio to {}", path.display()))?;
+        eprintln!("Wrote {} bytes to {}", audio_bytes.len(), path.display());
+    } else {
+        let stdout = std::io::stdout();
+        let mut out = stdout.lock();
+        out.write_all(&audio_bytes)
+            .context("failed to write audio to stdout")?;
+        out.flush().context("failed to flush stdout")?;
     }
 
     Ok(())
