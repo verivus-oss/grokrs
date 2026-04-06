@@ -325,6 +325,9 @@ impl ChatBackend for GrokChatBackend {
                         .and_then(|e| e.get("message"))
                         .and_then(|m| m.as_str())
                         .unwrap_or("unknown API error");
+                    // RATIONALE: HTTP status codes are 100–599, well within
+                    // u16 range.  The fallback (500) is also safe.
+                    #[allow(clippy::cast_possible_truncation)]
                     let status = response
                         .get("error")
                         .and_then(|e| e.get("code"))

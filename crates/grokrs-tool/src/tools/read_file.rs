@@ -186,6 +186,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let root = workspace(&dir);
         // Write a file slightly over the limit.
+        // RATIONALE: MAX_READ_BYTES is 1 MiB (1_048_576), well within usize
+        // range on all supported platforms.
+        #[allow(clippy::cast_possible_truncation)]
         let big = vec![b'x'; (MAX_READ_BYTES + 1) as usize];
         fs::write(dir.path().join("big.bin"), &big).unwrap();
 

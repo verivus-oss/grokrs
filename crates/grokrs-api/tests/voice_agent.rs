@@ -336,7 +336,10 @@ async fn voice_received_audio_construction() {
 #[tokio::test]
 async fn audio_data_construction_and_sizing() {
     // 20ms of 16-bit 24kHz mono = 24000 * 0.020 * 2 bytes = 960 bytes
-    let frame_size = (24000.0 * 0.020 * 2.0) as usize;
+    // RATIONALE: the result (960) is a known positive compile-time constant;
+    // the floating-point multiplication is only for readability.
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let frame_size = (24000.0_f64 * 0.020 * 2.0) as usize;
     assert_eq!(frame_size, 960);
 
     let data = AudioData {

@@ -260,7 +260,12 @@ fn run_cost(
 /// The xAI API convention: ticks are cents per 100M tokens. This is a display
 /// helper; the exact conversion semantics depend on the API pricing model.
 fn ticks_to_usd(ticks: i64) -> f64 {
-    ticks as f64 / 1_000_000.0
+    // RATIONALE: precision loss is inherent to f64 display; sub-cent
+    // accuracy beyond ~15 significant digits is irrelevant for USD formatting.
+    #[allow(clippy::cast_precision_loss)]
+    {
+        ticks as f64 / 1_000_000.0
+    }
 }
 
 /// Report store status for the `grokrs doctor` command.

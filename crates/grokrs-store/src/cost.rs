@@ -109,7 +109,13 @@ impl CostSummary {
         if self.session_count == 0 {
             0
         } else {
-            self.total_cost_ticks / self.session_count as i64
+            // RATIONALE: session_count is a small positive u64 from SQL COUNT;
+            // values above i64::MAX are physically impossible (would require
+            // >9.2 quintillion sessions).
+            #[allow(clippy::cast_possible_wrap)]
+            {
+                self.total_cost_ticks / self.session_count as i64
+            }
         }
     }
 
@@ -125,6 +131,9 @@ impl CostSummary {
 /// 1_000_000 ticks = $1.00 USD.
 #[must_use]
 pub fn format_usd(ticks: i64) -> String {
+    // RATIONALE: precision loss is inherent to f64 display; sub-cent
+    // accuracy beyond ~15 significant digits is irrelevant for USD formatting.
+    #[allow(clippy::cast_precision_loss)]
     let dollars = ticks as f64 / 1_000_000.0;
     format!("${dollars:.6}")
 }

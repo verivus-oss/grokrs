@@ -52,14 +52,16 @@ pub fn should_retry(status: u16, attempt: u32, config: &RetryConfig) -> Option<D
     // We use the low bits of the current time in nanoseconds as a simple
     // pseudo-random source. This is NOT cryptographically secure, but we
     // only need approximate randomness to spread out retry timing.
-    let jitter_seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .subsec_nanos() as u64;
+    let jitter_seed = u64::from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO)
+            .subsec_nanos(),
+    );
 
     // Jitter range: 50% to 150% of base jitter component
     // base_jitter = attempt * 100ms
-    let base_jitter_ms = (attempt as u64).saturating_add(1).saturating_mul(100);
+    let base_jitter_ms = u64::from(attempt).saturating_add(1).saturating_mul(100);
     // Scale factor: 0.5 + (seed % 1000) / 1000.0, giving range [0.5, 1.5)
     let scale_permille = 500 + (jitter_seed % 1000);
     let jitter_ms = base_jitter_ms.saturating_mul(scale_permille) / 1000;

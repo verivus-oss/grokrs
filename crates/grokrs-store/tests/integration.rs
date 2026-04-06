@@ -343,7 +343,7 @@ fn usage_session_totals_with_multiple_transcripts() {
                 200,
                 None,
                 &TranscriptUsage {
-                    cost_in_usd_ticks: Some(10 * (i as i64 + 1)),
+                    cost_in_usd_ticks: Some(10 * (i64::from(i) + 1)),
                     input_tokens: Some(100),
                     output_tokens: Some(200),
                     reasoning_tokens: Some(50),

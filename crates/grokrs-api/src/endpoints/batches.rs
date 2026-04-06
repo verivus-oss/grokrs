@@ -195,6 +195,11 @@ impl BatchesClient {
         let mut all_items = Vec::new();
         let mut token: Option<String> = None;
 
+        // RATIONALE: MAX_PAGINATION_PAGES is a compile-time constant (100),
+        // well within u32 range.
+        #[allow(clippy::cast_possible_truncation)]
+        let max_pages_u32 = MAX_PAGINATION_PAGES as u32;
+
         for page_num in 0..MAX_PAGINATION_PAGES {
             let page = self.results(batch_id, token.as_deref()).await?;
 
@@ -207,7 +212,7 @@ impl BatchesClient {
                     if page_num + 1 >= MAX_PAGINATION_PAGES {
                         return Err(BatchError::PaginationLimitExceeded {
                             items_collected: all_items.len(),
-                            max_pages: MAX_PAGINATION_PAGES as u32,
+                            max_pages: max_pages_u32,
                         });
                     }
                     token = Some(next_token);
@@ -218,7 +223,7 @@ impl BatchesClient {
                 (Some(true), _) => {
                     return Err(BatchError::PaginationLimitExceeded {
                         items_collected: all_items.len(),
-                        max_pages: MAX_PAGINATION_PAGES as u32,
+                        max_pages: max_pages_u32,
                     });
                 }
                 // No more results — we have the complete set.

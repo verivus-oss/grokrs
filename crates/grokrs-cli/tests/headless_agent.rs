@@ -222,9 +222,12 @@ fn error_events_carry_correct_exit_codes() {
     for (exit_code, expected_code, message) in test_cases {
         assert_eq!(exit_code.code(), expected_code);
 
+        // RATIONALE: AgentExitCode values are 0–4, always fit in u8.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let code_u8 = exit_code.code() as u8;
         let event = HeadlessEvent::Error {
             message: message.to_owned(),
-            exit_code: exit_code.code() as u8,
+            exit_code: code_u8,
         };
         let json = serde_json::to_string(&event).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();

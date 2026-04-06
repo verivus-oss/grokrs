@@ -151,12 +151,14 @@ pub fn reconnect_delay(attempt: u32, config: &WsClientConfig) -> Duration {
         .saturating_mul(1u64 << attempt.min(20));
 
     // Deterministic jitter from system time nanoseconds.
-    let jitter_seed = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .subsec_nanos() as u64;
+    let jitter_seed = u64::from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO)
+            .subsec_nanos(),
+    );
 
-    let base_jitter_ms = (attempt as u64).saturating_add(1).saturating_mul(100);
+    let base_jitter_ms = u64::from(attempt).saturating_add(1).saturating_mul(100);
     let scale_permille = 500 + (jitter_seed % 1000);
     let jitter_ms = base_jitter_ms.saturating_mul(scale_permille) / 1000;
 
