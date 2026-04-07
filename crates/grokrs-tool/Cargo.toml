@@ -11,7 +11,7 @@ grokrs-store = { path = "../grokrs-store" }
 serde = { workspace = true }
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }
-git2 = "0.19"
+git2 = "0.20"
 
 # Optional: OpenTelemetry instrumentation (behind `otel` feature)
 tracing = { workspace = true, optional = true }
