@@ -15,8 +15,8 @@ use anyhow::{Context, Result, bail};
 use clap::Args;
 use tokio::sync::mpsc;
 
+use grokrs_api::auth::resolve_api_key_with_config;
 use grokrs_api::endpoints::voice::{VoiceAgentClient, VoiceReceived};
-use grokrs_api::transport::auth::resolve_api_key;
 use grokrs_api::transport::policy_bridge::FnPolicyGate;
 use grokrs_api::transport::policy_gate::{PolicyDecision, PolicyGate};
 use grokrs_api::transport::websocket::WsClientConfig;
@@ -185,12 +185,9 @@ pub async fn run(args: &VoiceArgs, config: &AppConfig) -> Result<()> {
 
     check_network_policy(config)?;
 
-    let api_config = config.api.as_ref();
-    let api_key_env = api_config
-        .and_then(|a| a.api_key_env.as_deref())
-        .unwrap_or("XAI_API_KEY");
-    let api_key = resolve_api_key(api_key_env)
-        .map_err(|e| anyhow::anyhow!("failed to resolve API key: {e}"))?;
+    let api_key = resolve_api_key_with_config(config.api.as_ref())
+        .map_err(|e| anyhow::anyhow!("failed to resolve API key: {e}"))?
+        .secret;
 
     let ws_config = build_ws_config(config);
     let gate = build_voice_policy_gate(config);

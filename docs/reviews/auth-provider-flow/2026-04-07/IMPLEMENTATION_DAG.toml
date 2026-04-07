@@ -1,0 +1,248 @@
+[meta]
+title = "grokrs auth provider flow"
+spec = "README.md"
+decomposition = "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md"
+created = "2026-04-07"
+total_units = 6
+tier1_units = ["U01", "U02", "U03"]
+tier2_units = ["U10", "U11"]
+tier3_units = ["U20"]
+
+[units.U01]
+name = "Define auth provider config model"
+summary = "Add typed non-secret auth provider configuration in grokrs-core for env and Azure Key Vault based resolution."
+layer = 0
+tier = 1
+status = "pending"
+depends_on = []
+blocks = ["U02", "U03"]
+estimated_loc = 220
+spec_sections = ["Scope", "Acceptance Shape"]
+spec_anchors = ["scope", "acceptance-shape"]
+files_create = []
+files_modify = [
+  "crates/grokrs-core/src/lib.rs",
+  "configs/grokrs.example.toml",
+  "configs/grokrs.dev.toml",
+]
+acceptance = [
+  "AppConfig supports auth provider metadata without any secret value field",
+  "Existing api_key_env based configs continue to load unchanged",
+  "Config summary shows provider source metadata but never a secret value",
+]
+produces = ["ART:auth-config-model"]
+consumes = []
+critical_decisions = [
+  "Provider metadata lives in grokrs-core because all command surfaces depend on shared config loading.",
+]
+constraints = [
+  "No raw API key field may be added to config.",
+]
+failure_modes = [
+  "A config field or summary path exposes plaintext secret material.",
+]
+rationale = "The provider model has to exist before any secure runtime resolution path can be implemented."
+
+[units.U02]
+name = "Implement runtime credential resolver"
+summary = "Create a resolver in grokrs-api that checks process environment first and then delegated secure providers without persisting secrets."
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U01"]
+blocks = ["U10"]
+estimated_loc = 260
+spec_sections = ["Scope", "Acceptance Shape"]
+spec_anchors = ["scope", "acceptance-shape"]
+files_create = [
+  "crates/grokrs-api/src/auth.rs",
+]
+files_modify = [
+  "crates/grokrs-api/src/lib.rs",
+]
+acceptance = [
+  "Resolver checks the configured env var first",
+  "Resolver returns typed auth errors when no credential source succeeds",
+  "Resolver does not write secret material to disk, logs, or transcript state",
+]
+produces = ["ART:auth-resolver"]
+consumes = ["ART:auth-config-model"]
+critical_decisions = [
+  "Resolution order is explicit: env first, secure provider second.",
+]
+constraints = [
+  "The resolver may keep the secret in process memory only.",
+]
+failure_modes = [
+  "Resolver silently falls back to the wrong source and hides misconfiguration.",
+]
+rationale = "A narrow runtime resolver is the core boundary that keeps secret lookup out of ad hoc wrapper scripts."
+
+[units.U03]
+name = "Implement Azure Key Vault provider"
+summary = "Add Azure Key Vault runtime secret retrieval using provider metadata from config and local Azure identity at execution time."
+layer = 1
+tier = 1
+status = "pending"
+depends_on = ["U01"]
+blocks = ["U10"]
+estimated_loc = 320
+spec_sections = ["Goal", "Scope", "Non-Goals"]
+spec_anchors = ["goal", "scope", "non-goals"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/Cargo.toml",
+  "crates/grokrs-api/src/auth.rs",
+]
+acceptance = [
+  "Azure provider fetches the configured Key Vault secret at runtime",
+  "Provider distinguishes auth failure, missing vault, missing secret, and disabled secret",
+  "Provider does not require any plaintext auth file or repo-local secret file",
+]
+produces = ["ART:azure-key-vault-provider"]
+consumes = ["ART:auth-config-model"]
+critical_decisions = [
+  "Azure Key Vault is the first secure provider because it matches the operator policy already in use.",
+]
+constraints = [
+  "The provider must not persist the fetched secret outside process memory.",
+]
+failure_modes = [
+  "Azure provider logs secret-bearing error details or depends on an unsafe local cache.",
+]
+rationale = "The secure path has to be first-class in code or users will keep rebuilding unsafe shell wrappers."
+
+[units.U10]
+name = "Wire resolver into xAI client construction"
+summary = "Update GrokClient and transport auth wiring so normal commands can use the provider chain transparently."
+layer = 2
+tier = 2
+status = "pending"
+depends_on = ["U02", "U03"]
+blocks = ["U11", "U20"]
+estimated_loc = 180
+spec_sections = ["Scope", "Acceptance Shape"]
+spec_anchors = ["scope", "acceptance-shape"]
+files_create = []
+files_modify = [
+  "crates/grokrs-api/src/client.rs",
+  "crates/grokrs-api/src/transport/client.rs",
+]
+acceptance = [
+  "GrokClient::from_config works with env-based auth and Azure Key Vault auth",
+  "Existing callers do not need to know provider details",
+  "Errors stay fail-closed and do not expose secret material",
+]
+produces = ["ART:client-auth-integration"]
+consumes = ["ART:auth-resolver", "ART:azure-key-vault-provider"]
+critical_decisions = [
+  "The client resolves the key once per command invocation, not once per HTTP request.",
+]
+constraints = [
+  "No wrapper-specific logic may become a required part of normal command execution.",
+]
+failure_modes = [
+  "Client construction triggers repeated Key Vault fetches or leaks secrets in debug output.",
+]
+rationale = "The provider flow only matters if `grokrs` commands can use it directly."
+
+[units.U11]
+name = "Add auth diagnostics and operator commands"
+summary = "Expose operator-safe auth diagnostics such as auth doctor, auth test, and auth source reporting without printing secrets."
+layer = 3
+tier = 2
+status = "pending"
+depends_on = ["U10"]
+blocks = ["U20"]
+estimated_loc = 240
+spec_sections = ["Scope", "Acceptance Shape"]
+spec_anchors = ["scope", "acceptance-shape"]
+files_create = []
+files_modify = [
+  "crates/grokrs-cli/src/main.rs",
+  "crates/grokrs-cli/src/commands/mod.rs",
+]
+acceptance = [
+  "Users can validate auth source and status without exposing the secret",
+  "doctor reports env-vs-key-vault auth source clearly",
+  "Help text explicitly says secrets must remain in Key Vault or environment only",
+]
+produces = ["ART:auth-cli-surface"]
+consumes = ["ART:client-auth-integration"]
+critical_decisions = [
+  "Operator ergonomics belong in the CLI, not in out-of-band wrapper scripts.",
+]
+constraints = [
+  "Diagnostics must not reveal secret values, prefixes, or plaintext cache locations.",
+]
+failure_modes = [
+  "Diagnostic output becomes a covert secret exfiltration path.",
+]
+rationale = "The secure path has to be easy to inspect or users will fall back to unsafe habits."
+
+[units.U20]
+name = "Document secure auth flow"
+summary = "Update docs and config examples so the secure auth-provider flow is the default and plaintext secret storage is explicitly disallowed."
+layer = 4
+tier = 3
+status = "pending"
+depends_on = ["U10", "U11"]
+blocks = []
+estimated_loc = 220
+spec_sections = ["Goal", "Scope", "Non-Goals", "Acceptance Shape"]
+spec_anchors = ["goal", "scope", "non-goals", "acceptance-shape"]
+files_create = []
+files_modify = [
+  "README.md",
+  "CLAUDE.md",
+  "AGENTS.md",
+  "configs/grokrs.example.toml",
+]
+acceptance = [
+  "README documents Azure Key Vault auth as the secure default path",
+  "Config examples contain only provider metadata and no secret material",
+  "Operator docs explain runtime resolution without recommending plaintext auth files",
+]
+produces = ["OUT:secure-auth-provider-flow"]
+consumes = ["ART:client-auth-integration", "ART:auth-cli-surface"]
+critical_decisions = [
+  "The secure path is documented as the default path, not as an advanced option.",
+]
+constraints = [
+  "No documentation may recommend repo-local secret files, checked-in config secrets, or plaintext auth caches.",
+]
+failure_modes = [
+  "Docs drift back toward unsafe wrapper or export-file patterns.",
+]
+rationale = "This feature changes operator behavior as much as code behavior, so the safe workflow must be the best documented workflow."
+
+[computed]
+entry_points = ["U01"]
+leaf_nodes = ["U20"]
+critical_path = ["U01", "U03", "U10", "U11", "U20"]
+critical_path_loc = 1180
+
+[computed.max_parallel]
+layer0 = 1
+layer1 = 2
+layer2 = 1
+layer3 = 1
+layer4 = 1
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/auth.rs"]
+units = ["U02", "U03"]
+
+[[computed.conflict_groups]]
+files = ["crates/grokrs-api/src/client.rs", "crates/grokrs-api/src/transport/client.rs"]
+units = ["U02", "U03", "U10"]
+
+[[computed.conflict_groups]]
+files = ["configs/grokrs.example.toml"]
+units = ["U01", "U20"]
+
+[computed.loc_totals]
+tier1 = 800
+tier2 = 420
+tier3 = 220
+all = 1440

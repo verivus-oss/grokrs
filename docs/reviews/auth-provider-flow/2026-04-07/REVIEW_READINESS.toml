@@ -1,0 +1,131 @@
+[meta]
+title = "grokrs auth provider flow review readiness"
+release_version = "1.0.0"
+template_kind = "readiness-gate"
+source = "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md"
+created = "2026-04-07"
+review_subject = "Auth provider flow for secure runtime xAI credential resolution in grokrs"
+review_stage = "pre_review"
+status = "ready"
+covered_classes = [
+  "planning_pack",
+  "implementation_rereview",
+]
+gate_count = 2
+companion_templates = [
+  "CONTRACT_DECLARATION_TEMPLATE_GENERIC.toml",
+  "EVIDENCE_MATRIX_TEMPLATE_GENERIC.toml",
+]
+
+[[artifact_classes]]
+id = "A01"
+name = "planning_pack"
+description = "Multi-document planning package reviewed before implementation."
+
+[[artifact_classes]]
+id = "A03"
+name = "implementation_rereview"
+description = "Follow-up review after findings have been addressed in code or docs."
+
+[[gates]]
+id = "G01"
+artifact_class = "A01"
+name = "Auth provider planning pack gate"
+purpose = "Block implementation review until the auth-provider planning pack is complete and cross-linked."
+required_documents = [
+  "implementation plan",
+  "implementation DAG",
+  "contract declaration",
+  "evidence matrix",
+]
+required_artifacts = [
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md",
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_DAG.toml",
+  "docs/reviews/auth-provider-flow/2026-04-07/CONTRACT_DECLARATION.toml",
+  "docs/reviews/auth-provider-flow/2026-04-07/EVIDENCE_MATRIX.toml",
+]
+required_links = [
+  "implementation plan <-> implementation DAG",
+  "implementation DAG <-> contract declaration",
+  "contract declaration <-> evidence matrix",
+]
+required_contracts = [
+  "credential resolution order is explicit",
+  "Key Vault remains the source of truth for secret material",
+  "config shape excludes raw secret values",
+]
+required_evidence = [
+  "evidence matrix exists for any strong claims in the bundle",
+]
+conditional_artifacts = [
+  "implementation rereview gate after code lands",
+]
+pass_conditions = [
+  "all required artifacts exist",
+  "the bundle is cross-linked",
+  "core auth semantics are declared explicitly",
+]
+block_conditions = [
+  "missing planning artifact",
+  "missing contract declaration",
+  "missing evidence matrix",
+]
+next_step = "open implementation review against the planning pack"
+
+[[gates]]
+id = "G03"
+artifact_class = "A03"
+name = "Auth provider implementation rereview gate"
+purpose = "Block rereview until code changes, findings responses, and validation proof are attached."
+required_documents = [
+  "changed files list",
+  "prior findings responses",
+  "proof artifacts",
+  "test results",
+]
+required_artifacts = [
+  "changed files list",
+  "proof artifacts",
+  "test results",
+]
+required_links = [
+  "changed files <-> proof artifacts",
+  "findings responses <-> proof artifacts",
+]
+required_contracts = [
+  "credential resolution order",
+  "source of truth for secret material",
+]
+required_evidence = [
+  "updated evidence matrix after implementation",
+]
+conditional_artifacts = [
+  "negative tests for missing secret and disabled secret cases",
+  "operator diagnostic output samples",
+]
+pass_conditions = [
+  "changed files are listed",
+  "auth diagnostics are tested without leaking secrets",
+  "provider behavior is validated for env and Key Vault paths",
+]
+block_conditions = [
+  "missing changed file list",
+  "missing runtime proof",
+  "missing tests for failure behavior",
+]
+next_step = "attach implementation proof and request rereview"
+
+[computed]
+gate_ids = [
+  "G01",
+  "G03",
+]
+gates_by_class = [
+  "planning_pack",
+  "implementation_rereview",
+]
+blocked_without_companion_docs = true
+mandatory_companion_templates = [
+  "CONTRACT_DECLARATION_TEMPLATE_GENERIC.toml",
+  "EVIDENCE_MATRIX_TEMPLATE_GENERIC.toml",
+]

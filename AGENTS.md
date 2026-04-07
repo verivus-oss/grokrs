@@ -41,4 +41,4 @@ cargo run -p grokrs-cli -- show-config configs/grokrs.example.toml
 - Keep shell and network access behind policy evaluation and explicit future approval surfaces.
 - Preserve the separation between capabilities, policy, session, tool, and CLI crates.
 - Keep review artifacts and docs aligned when changing safety posture or crate responsibilities.
-
+- Do not store API keys in repo files, checked-in config, or plaintext local auth files. Secrets must remain in approved secret managers or the process environment only.

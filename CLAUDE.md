@@ -102,6 +102,15 @@ Profiles overlay environment-specific settings on top of the base config:
 - Profile values merge over base config. CLI flags override both.
 - Resolved via `resolve_profile()` in `grokrs-core`.
 
+### Auth Provider Flow
+
+- `api_key_env` remains the compatibility path for env-based auth.
+- `[api.auth]` may declare a non-secret runtime provider such as Azure Key Vault.
+- `management_key_env` remains the compatibility path for management API auth.
+- `[management_api.auth]` may declare the same non-secret runtime provider pattern.
+- Config stores only provider metadata like `vault_name` and `secret_name`, never the key value itself.
+- Use `grokrs auth doctor`, `grokrs auth show-source`, and `grokrs auth test` to inspect auth safely.
+
 ### MCP Server Configuration
 
 ```toml

@@ -1,0 +1,189 @@
+[meta]
+title = "grokrs auth provider flow contracts"
+release_version = "1.0.0"
+template_kind = "contract-declaration"
+source = "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md"
+created = "2026-04-07"
+review_subject = "Auth provider flow for secure runtime xAI credential resolution in grokrs"
+status = "draft"
+contract_count = 5
+required_for = [
+  "planning_pack",
+  "implementation_rereview",
+]
+companion_templates = [
+  "REVIEW_READINESS_TEMPLATE_GENERIC.toml",
+  "EVIDENCE_MATRIX_TEMPLATE_GENERIC.toml",
+]
+
+[[contracts]]
+id = "C01"
+domain = "ordering_and_determinism"
+statement = "Credential resolution order is explicit and deterministic: process environment via api_key_env wins first, Azure Key Vault provider is second, and failure is terminal if no source succeeds."
+applies_to = [
+  "planning_pack",
+  "implementation_rereview",
+]
+scope = [
+  "runtime auth resolution",
+  "operator diagnostics",
+]
+must_name = [
+  "resolution order",
+  "failure rule",
+  "compatibility default",
+]
+must_not_leave_implicit = [
+  "provider priority",
+  "silent fallback order",
+  "tie-breaking between providers",
+]
+source_artifacts = [
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md",
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_DAG.toml",
+]
+reviewer_checks = [
+  "resolution order is stated exactly once and reused consistently",
+  "fail-closed behavior is explicit in both code and docs",
+]
+
+[[contracts]]
+id = "C02"
+domain = "compatibility_fallback_and_normalization"
+statement = "Existing env-based auth remains compatible. The new provider flow adds Azure Key Vault as a secure runtime source without removing api_key_env behavior."
+applies_to = [
+  "planning_pack",
+  "implementation_rereview",
+]
+scope = [
+  "AppConfig loading",
+  "GrokClient construction",
+]
+must_name = [
+  "legacy env path",
+  "secure provider path",
+  "error mode when neither source works",
+]
+must_not_leave_implicit = [
+  "automatic shell-profile exports",
+  "wrapper scripts as required behavior",
+]
+source_artifacts = [
+  "configs/grokrs.example.toml",
+  "crates/grokrs-core/src/lib.rs",
+]
+reviewer_checks = [
+  "env-based setups still work unchanged",
+  "missing-credential behavior is explicit and actionable",
+]
+
+[[contracts]]
+id = "C03"
+domain = "canonical_schema_and_serialization_shape"
+statement = "The canonical config shape may contain provider metadata only. It must never contain a raw xAI secret, token prefix, or plaintext auth cache path as part of normal configuration."
+applies_to = [
+  "planning_pack",
+  "implementation_rereview",
+]
+scope = [
+  "config schema",
+  "config examples",
+  "diagnostic output",
+]
+must_name = [
+  "provider metadata fields",
+  "fields that are intentionally absent",
+  "diagnostic redaction rule",
+]
+must_not_leave_implicit = [
+  "raw api key field",
+  "plaintext auth.json analogue",
+  "secret-bearing config examples",
+]
+source_artifacts = [
+  "configs/grokrs.example.toml",
+  "README.md",
+]
+reviewer_checks = [
+  "config examples contain no secret material",
+  "diagnostics identify source without exposing a value",
+]
+
+[[contracts]]
+id = "C04"
+domain = "precedence_override_and_waiver"
+statement = "A process-level XAI_API_KEY override is allowed as the highest-precedence fast path. It is an execution-time override only and does not weaken the rule that secrets must not be stored in repo files or local plaintext auth files."
+applies_to = [
+  "planning_pack",
+  "implementation_rereview",
+]
+scope = [
+  "operator usage",
+  "runtime auth resolution",
+]
+must_name = [
+  "winner",
+  "override scope",
+  "lifetime of override",
+]
+must_not_leave_implicit = [
+  "persistent local storage",
+  "global shell-profile mutation as a requirement",
+]
+source_artifacts = [
+  "README.md",
+  "crates/grokrs-api/src/auth.rs",
+]
+reviewer_checks = [
+  "process env override is documented as ephemeral",
+  "no waiver permits checked-in or plaintext local secret storage",
+]
+
+[[contracts]]
+id = "C05"
+domain = "source_of_truth_and_authority"
+statement = "Azure Key Vault remains the source of truth for the xAI secret. Local config and CLI diagnostics describe how to find it, but they are not authoritative stores for the secret value."
+applies_to = [
+  "planning_pack",
+  "implementation_rereview",
+]
+scope = [
+  "secret ownership",
+  "docs",
+  "runtime provider implementation",
+]
+must_name = [
+  "authoritative store",
+  "derived metadata",
+  "staleness rule",
+]
+must_not_leave_implicit = [
+  "repo config as secret authority",
+  "wrapper script as canonical auth system",
+]
+source_artifacts = [
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md",
+  "README.md",
+]
+reviewer_checks = [
+  "Key Vault is named as the authority for secret material",
+  "local metadata is clearly described as non-secret and derived",
+]
+
+[computed]
+contract_ids = [
+  "C01",
+  "C02",
+  "C03",
+  "C04",
+  "C05",
+]
+covered_domains = [
+  "ordering_and_determinism",
+  "compatibility_fallback_and_normalization",
+  "canonical_schema_and_serialization_shape",
+  "precedence_override_and_waiver",
+  "source_of_truth_and_authority",
+]
+missing_domains = []
+

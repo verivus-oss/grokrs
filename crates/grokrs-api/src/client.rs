@@ -22,7 +22,7 @@ use crate::endpoints::tokenize::TokenizeClient;
 use crate::endpoints::tts::TtsClient;
 use crate::endpoints::videos::VideosClient;
 use crate::endpoints::voice::VoiceAgentClient;
-use crate::transport::auth::resolve_api_key;
+use crate::auth::resolve_api_key_with_config;
 use crate::transport::client::{HttpClient, HttpClientConfig};
 use crate::transport::error::TransportError;
 use crate::transport::policy_gate::PolicyGate;
@@ -77,11 +77,11 @@ impl GrokClient {
         policy_gate: Option<Arc<dyn PolicyGate>>,
     ) -> Result<Self, TransportError> {
         let api_config = config.api.as_ref();
-
+        let resolved = resolve_api_key_with_config(api_config)?;
         let api_key_env = api_config
             .and_then(|a| a.api_key_env.as_deref())
             .unwrap_or("XAI_API_KEY");
-        let api_key = resolve_api_key(api_key_env)?;
+        let api_key = resolved.secret;
 
         let base_url = api_config
             .and_then(|a| a.base_url.clone())
@@ -273,6 +273,7 @@ mod tests {
                 base_url: Some("https://api.x.ai".into()),
                 timeout_secs: Some(60),
                 max_retries: Some(2),
+                auth: None,
             }),
             management_api: None,
             store: None,
@@ -344,6 +345,7 @@ mod tests {
             base_url: Some("https://api.x.ai".into()),
             timeout_secs: Some(60),
             max_retries: Some(2),
+            auth: None,
         });
         // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
         // concurrent writes to the same env var are UB. The `#[serial]`
@@ -489,6 +491,7 @@ mod tests {
             base_url: Some("https://custom.example.com".into()),
             timeout_secs: Some(30),
             max_retries: Some(5),
+            auth: None,
         });
         // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
         // concurrent writes to the same env var are UB. The `#[serial]`
@@ -516,6 +519,7 @@ mod tests {
             base_url: None,
             timeout_secs: None,
             max_retries: None,
+            auth: None,
         });
         // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
         // concurrent writes to the same env var are UB. The `#[serial]`
