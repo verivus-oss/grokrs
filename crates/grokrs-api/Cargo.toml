@@ -8,6 +8,8 @@ homepage.workspace = true
 description = "xAI Grok API client, streaming, MCP, and transport layer for grokrs."
 
 [dependencies]
+azure_identity = "0.30.0"
+azure_security_keyvault_secrets = "0.9"
 grokrs-core.workspace = true
 serde.workspace = true
 serde_json = { workspace = true }
@@ -32,6 +34,7 @@ otel = ["tracing", "tracing-opentelemetry"]
 serial_test.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread"] }
 serde_json = { workspace = true }
+tempfile = "3"
 wiremock = "0.6"
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

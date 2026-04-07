@@ -47,6 +47,43 @@ pub struct ApiConfig {
     pub timeout_secs: Option<u64>,
     /// Maximum number of retries on 429/503 (default: 3).
     pub max_retries: Option<u32>,
+    /// Optional auth provider metadata for runtime credential resolution.
+    ///
+    /// This stores only non-secret metadata, such as the provider kind and
+    /// Azure Key Vault lookup fields. Secret values are never stored in config.
+    pub auth: Option<ApiAuthConfig>,
+}
+
+/// Runtime auth provider metadata for xAI API access.
+///
+/// This configuration never contains the secret itself. It only describes how
+/// the application should resolve the secret at runtime.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ApiAuthConfig {
+    /// Which provider should be used when the process environment does not
+    /// already contain the API key. Supported values:
+    /// - `env`
+    /// - `azure_key_vault`
+    pub provider: Option<ApiAuthProvider>,
+    /// Azure Key Vault lookup metadata.
+    pub azure_key_vault: Option<AzureKeyVaultAuthConfig>,
+}
+
+/// Supported auth providers for xAI API access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiAuthProvider {
+    Env,
+    AzureKeyVault,
+}
+
+/// Non-secret Azure Key Vault metadata used to resolve the xAI API key.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AzureKeyVaultAuthConfig {
+    /// Azure Key Vault name, for example `verivus-dev-secrets-kv`.
+    pub vault_name: String,
+    /// Secret name within the Key Vault.
+    pub secret_name: String,
 }
 
 /// Configuration for the xAI Collections Management API.
@@ -66,6 +103,11 @@ pub struct ManagementApiConfig {
     pub timeout_secs: Option<u64>,
     /// Maximum number of retries on 429/503 (default: 3).
     pub max_retries: Option<u32>,
+    /// Optional auth provider metadata for runtime credential resolution.
+    ///
+    /// This stores only non-secret metadata, such as the provider kind and
+    /// Azure Key Vault lookup fields. Secret values are never stored in config.
+    pub auth: Option<ApiAuthConfig>,
 }
 
 /// Configuration for the `SQLite` persistence store.
@@ -534,6 +576,24 @@ impl AppConfig {
             write!(s,
                 " api_key_env={key_env} base_url={base_url} timeout_secs={timeout} max_retries={retries}"
             ).expect("String write is infallible");
+            if let Some(ref auth) = api.auth {
+                if let Some(provider) = auth.provider {
+                    let provider_name = match provider {
+                        ApiAuthProvider::Env => "env",
+                        ApiAuthProvider::AzureKeyVault => "azure_key_vault",
+                    };
+                    write!(s, " api_auth_provider={provider_name}")
+                        .expect("String write is infallible");
+                }
+                if let Some(ref kv) = auth.azure_key_vault {
+                    write!(
+                        s,
+                        " api_auth_vault_name={} api_auth_secret_name={}",
+                        kv.vault_name, kv.secret_name
+                    )
+                    .expect("String write is infallible");
+                }
+            }
         }
         if let Some(ref mgmt) = self.management_api {
             let key_env = mgmt
@@ -549,6 +609,24 @@ impl AppConfig {
             write!(s,
                 " management_key_env={key_env} management_base_url={base_url} management_timeout_secs={timeout} management_max_retries={retries}"
             ).expect("String write is infallible");
+            if let Some(ref auth) = mgmt.auth {
+                if let Some(provider) = auth.provider {
+                    let provider_name = match provider {
+                        ApiAuthProvider::Env => "env",
+                        ApiAuthProvider::AzureKeyVault => "azure_key_vault",
+                    };
+                    write!(s, " management_auth_provider={provider_name}")
+                        .expect("String write is infallible");
+                }
+                if let Some(ref kv) = auth.azure_key_vault {
+                    write!(
+                        s,
+                        " management_auth_vault_name={} management_auth_secret_name={}",
+                        kv.vault_name, kv.secret_name
+                    )
+                    .expect("String write is infallible");
+                }
+            }
         }
         if let Some(ref store) = self.store {
             write!(s, " store_path={}", store.path).expect("String write is infallible");
@@ -598,7 +676,7 @@ impl AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::AppConfig;
+    use super::{ApiAuthProvider, AppConfig};
 
     /// Base config sections shared by all tests.
     const BASE_CONFIG: &str = r#"
@@ -629,12 +707,36 @@ mod tests {
         max_retries = 3
     "#;
 
+    const API_AUTH_SECTION: &str = r#"
+        [api]
+        api_key_env = "XAI_API_KEY"
+
+        [api.auth]
+        provider = "azure_key_vault"
+
+        [api.auth.azure_key_vault]
+        vault_name = "verivus-dev-secrets-kv"
+        secret_name = "forge-xai-api-key"
+    "#;
+
     const MANAGEMENT_API_SECTION: &str = r#"
         [management_api]
         management_key_env = "XAI_MANAGEMENT_API_KEY"
         base_url = "https://management-api.x.ai"
         timeout_secs = 60
         max_retries = 2
+    "#;
+
+    const MANAGEMENT_API_AUTH_SECTION: &str = r#"
+        [management_api]
+        management_key_env = "XAI_MANAGEMENT_API_KEY"
+
+        [management_api.auth]
+        provider = "azure_key_vault"
+
+        [management_api.auth.azure_key_vault]
+        vault_name = "verivus-dev-secrets-kv"
+        secret_name = "forge-xai-management-api-key"
     "#;
 
     #[test]
@@ -650,6 +752,7 @@ mod tests {
         assert_eq!(api.base_url.as_deref(), Some("https://api.x.ai"));
         assert_eq!(api.timeout_secs, Some(120));
         assert_eq!(api.max_retries, Some(3));
+        assert!(api.auth.is_none());
     }
 
     #[test]
@@ -669,6 +772,28 @@ mod tests {
         assert!(summary.contains("base_url=https://api.x.ai"));
         assert!(summary.contains("timeout_secs=120"));
         assert!(summary.contains("max_retries=3"));
+    }
+
+    #[test]
+    fn parses_config_with_api_auth_provider() {
+        let raw = format!("{BASE_CONFIG}{API_AUTH_SECTION}");
+        let config: AppConfig = toml::from_str(&raw).expect("config should parse");
+        let api = config.api.expect("api section should be present");
+        let auth = api.auth.expect("auth section should be present");
+        assert_eq!(auth.provider, Some(ApiAuthProvider::AzureKeyVault));
+        let kv = auth.azure_key_vault.expect("azure key vault config should exist");
+        assert_eq!(kv.vault_name, "verivus-dev-secrets-kv");
+        assert_eq!(kv.secret_name, "forge-xai-api-key");
+    }
+
+    #[test]
+    fn summary_includes_api_auth_provider_metadata() {
+        let raw = format!("{BASE_CONFIG}{API_AUTH_SECTION}");
+        let config: AppConfig = toml::from_str(&raw).unwrap();
+        let summary = config.summary();
+        assert!(summary.contains("api_auth_provider=azure_key_vault"));
+        assert!(summary.contains("api_auth_vault_name=verivus-dev-secrets-kv"));
+        assert!(summary.contains("api_auth_secret_name=forge-xai-api-key"));
     }
 
     #[test]
@@ -710,6 +835,7 @@ mod tests {
         );
         assert_eq!(mgmt.timeout_secs, Some(60));
         assert_eq!(mgmt.max_retries, Some(2));
+        assert!(mgmt.auth.is_none());
     }
 
     #[test]
@@ -728,6 +854,30 @@ mod tests {
         assert!(summary.contains("management_base_url=https://management-api.x.ai"));
         assert!(summary.contains("management_timeout_secs=60"));
         assert!(summary.contains("management_max_retries=2"));
+    }
+
+    #[test]
+    fn parses_config_with_management_api_auth_provider() {
+        let raw = format!("{BASE_CONFIG}{MANAGEMENT_API_AUTH_SECTION}");
+        let config: AppConfig = toml::from_str(&raw).expect("config should parse");
+        let mgmt = config
+            .management_api
+            .expect("management_api section should be present");
+        let auth = mgmt.auth.expect("auth section should be present");
+        assert_eq!(auth.provider, Some(ApiAuthProvider::AzureKeyVault));
+        let kv = auth.azure_key_vault.expect("azure key vault config should exist");
+        assert_eq!(kv.vault_name, "verivus-dev-secrets-kv");
+        assert_eq!(kv.secret_name, "forge-xai-management-api-key");
+    }
+
+    #[test]
+    fn summary_includes_management_api_auth_provider_metadata() {
+        let raw = format!("{BASE_CONFIG}{MANAGEMENT_API_AUTH_SECTION}");
+        let config: AppConfig = toml::from_str(&raw).unwrap();
+        let summary = config.summary();
+        assert!(summary.contains("management_auth_provider=azure_key_vault"));
+        assert!(summary.contains("management_auth_vault_name=verivus-dev-secrets-kv"));
+        assert!(summary.contains("management_auth_secret_name=forge-xai-management-api-key"));
     }
 
     #[test]

@@ -11,6 +11,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use commands::agent::AgentArgs;
+use commands::auth::AuthCommand;
 use commands::api::ApiCommand;
 use commands::chat::ChatArgs;
 use commands::collections::CollectionsCommand;
@@ -72,6 +73,11 @@ enum Command {
     ShowConfig {
         /// Path to the config file (overrides --config)
         path: Option<PathBuf>,
+    },
+    /// Inspect runtime authentication configuration and health
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
     },
     /// Evaluate a policy decision for an effect
     Eval {
@@ -161,6 +167,10 @@ fn main() -> Result<()> {
         Command::ShowConfig { ref path } => {
             let config_path = path.clone().unwrap_or_else(|| cli.config.clone());
             show_config(&cli, &config_path)
+        }
+        Command::Auth { ref command } => {
+            let config = load_config(&cli)?;
+            commands::auth::run(command, &config)
         }
         Command::Eval { ref effect } => evaluate_effect(effect, &cli),
         Command::Chat(ref args) => {
@@ -269,12 +279,33 @@ fn doctor(cli: &Cli) -> Result<()> {
     match load_config(cli) {
         Ok(config) => {
             commands::store::doctor_report(&config, &cwd);
+            doctor_auth(&config);
             doctor_features(&config, cli.otel_endpoint.as_deref(), &cwd);
         }
         Err(_) => println!("store=unconfigured (config not loaded)"),
     }
 
     Ok(())
+}
+
+fn doctor_auth(config: &AppConfig) {
+    let source = grokrs_api::auth::configured_api_key_source(config.api.as_ref());
+    println!("auth_source={source}");
+    match grokrs_api::auth::resolve_api_key_with_config(config.api.as_ref()) {
+        Ok(resolved) => println!("auth=ready ({})", resolved.source.summary()),
+        Err(err) => println!("auth=blocked: {err}"),
+    }
+    if config.management_api.is_some() {
+        let source =
+            grokrs_api::auth::configured_management_api_key_source(config.management_api.as_ref());
+        println!("management_auth_source={source}");
+        match grokrs_api::auth::resolve_management_api_key_with_config(
+            config.management_api.as_ref(),
+        ) {
+            Ok(resolved) => println!("management_auth=ready ({})", resolved.source.summary()),
+            Err(err) => println!("management_auth=blocked: {err}"),
+        }
+    }
 }
 
 /// Check core feature readiness (chat, agent, search, generate, models, sessions).

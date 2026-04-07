@@ -30,3 +30,12 @@ enable_search = true
 [chat]
 # Server-side conversation chaining for development continuity.
 stateful = true
+
+[api.auth]
+# Resolve the xAI API key at runtime from Azure Key Vault.
+# This file stores only lookup metadata -- never the key itself.
+provider = "azure_key_vault"
+
+[api.auth.azure_key_vault]
+vault_name = "verivus-dev-secrets-kv"
+secret_name = "forge-xai-api-key"

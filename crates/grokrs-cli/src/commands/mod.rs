@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod auth;
 pub mod api;
 pub mod chat;
 pub mod collections;

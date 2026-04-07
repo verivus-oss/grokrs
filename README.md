@@ -88,6 +88,7 @@ cargo build --release --features audio,otel  # Both
 ```bash
 # Verify your environment
 grokrs doctor
+grokrs auth doctor
 
 # Interactive chat
 grokrs chat
@@ -135,6 +136,39 @@ grokrs sessions transcript <id>
 grokrs --otel-endpoint http://localhost:4317 agent 'task'
 GROKRS_OTEL_ENDPOINT=http://localhost:4317 grokrs chat
 ```
+
+## Authentication
+
+`grokrs` never stores the xAI API key in repository config files.
+
+Supported runtime auth paths:
+- `XAI_API_KEY` in the process environment
+- Azure Key Vault metadata configured under `[api.auth]`
+
+For the Azure Key Vault path, store only non-secret metadata in config:
+
+```toml
+[api]
+api_key_env = "XAI_API_KEY"
+
+[api.auth]
+provider = "azure_key_vault"
+
+[api.auth.azure_key_vault]
+vault_name = "verivus-dev-secrets-kv"
+secret_name = "forge-xai-api-key"
+```
+
+Then verify the source and resolution path with:
+
+```bash
+grokrs auth show-source
+grokrs auth test
+grokrs auth doctor
+```
+
+The same pattern can be used for the Collections Management API under
+`[management_api.auth]`, with its own secret name and key source.
 
 ## Headless Exit Codes
 

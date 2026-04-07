@@ -93,6 +93,18 @@ base_url = "https://api.x.ai"
 timeout_secs = 120
 max_retries = 3
 
+# Optional runtime auth provider metadata.
+# Store only non-secret lookup information here. The xAI API key itself must
+# stay in your environment or in a secret manager such as Azure Key Vault.
+#
+# Example Azure Key Vault setup:
+# [api.auth]
+# provider = "azure_key_vault"
+#
+# [api.auth.azure_key_vault]
+# vault_name = "verivus-dev-secrets-kv"
+# secret_name = "forge-xai-api-key"
+
 # [management_api]
 # # Collections Management API configuration.
 # # Uses a different base URL and authentication key than the inference API.
@@ -101,6 +113,14 @@ max_retries = 3
 # base_url = "https://management-api.x.ai"
 # timeout_secs = 120
 # max_retries = 3
+#
+# # Optional secure runtime auth metadata for the management API key.
+# [management_api.auth]
+# provider = "azure_key_vault"
+#
+# [management_api.auth.azure_key_vault]
+# vault_name = "verivus-dev-secrets-kv"
+# secret_name = "forge-xai-management-api-key"
 
 # [store]
 # # SQLite WAL-backed persistence for runtime state.
@@ -178,4 +198,3 @@ max_retries = 3
 # #
 # # Ad-hoc servers can also be connected via the CLI:
 # #   grokrs agent 'task' --mcp-server http://localhost:8080/mcp
-

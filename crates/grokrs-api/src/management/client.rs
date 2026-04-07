@@ -7,8 +7,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::auth::resolve_management_api_key_with_config;
 use crate::management::collections::CollectionsClient;
-use crate::transport::auth::resolve_api_key;
 use crate::transport::client::{HttpClient, HttpClientConfig};
 use crate::transport::error::TransportError;
 use crate::transport::policy_gate::PolicyGate;
@@ -56,7 +56,7 @@ impl ManagementClient {
         let key_env = mgmt_config
             .and_then(|m| m.management_key_env.as_deref())
             .unwrap_or(DEFAULT_MANAGEMENT_KEY_ENV);
-        let api_key = resolve_api_key(key_env)?;
+        let api_key = resolve_management_api_key_with_config(mgmt_config)?.secret;
 
         let base_url = mgmt_config
             .and_then(|m| m.base_url.clone())
@@ -134,6 +134,7 @@ mod tests {
                 base_url: Some("https://management-api.x.ai".into()),
                 timeout_secs: Some(60),
                 max_retries: Some(2),
+                auth: None,
             }),
         }
     }
@@ -169,6 +170,7 @@ mod tests {
             base_url: None,
             timeout_secs: None,
             max_retries: None,
+            auth: None,
         });
         // SAFETY: `set_var`/`remove_var` are unsafe in edition 2024 because
         // concurrent writes to the same env var are UB. The `#[serial]`

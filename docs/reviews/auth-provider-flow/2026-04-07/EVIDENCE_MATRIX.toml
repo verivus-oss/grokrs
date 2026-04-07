@@ -1,0 +1,157 @@
+[meta]
+title = "grokrs auth provider flow evidence matrix"
+release_version = "1.0.0"
+template_kind = "evidence-matrix"
+source = "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md"
+created = "2026-04-07"
+review_subject = "Auth provider flow for secure runtime xAI credential resolution in grokrs"
+status = "draft"
+claim_count = 5
+strong_claims = [
+  "ready_for_implementation",
+  "production_ready",
+  "complete",
+  "all_findings_resolved",
+  "no_behavior_changes",
+]
+companion_templates = [
+  "REVIEW_READINESS_TEMPLATE_GENERIC.toml",
+  "CONTRACT_DECLARATION_TEMPLATE_GENERIC.toml",
+]
+
+[[claims]]
+id = "E01"
+claim = "ready_for_implementation"
+proof_artifacts = [
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_DAG.toml",
+  "docs/reviews/auth-provider-flow/2026-04-07/CONTRACT_DECLARATION.toml",
+]
+scope_covered = [
+  "execution DAG exists",
+  "core auth contracts are declared",
+]
+known_exclusions = [
+  "does not prove the implementation is already complete",
+  "does not prove Azure provider code exists yet",
+]
+status = "draft"
+
+[[claims]]
+id = "E02"
+claim = "production_ready"
+proof_artifacts = [
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md",
+]
+scope_covered = [
+  "target operator workflow and security posture are described",
+]
+known_exclusions = [
+  "does not prove live Azure identity behavior across all environments",
+  "does not prove release-readiness by itself",
+]
+status = "draft"
+
+[[claims]]
+id = "E03"
+claim = "complete"
+proof_artifacts = [
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_DAG.toml",
+  "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md",
+]
+scope_covered = [
+  "all planned units and outputs are enumerated",
+]
+known_exclusions = [
+  "does not prove downstream tasks such as OS keyring support",
+]
+status = "draft"
+
+[[claims]]
+id = "E04"
+claim = "all_findings_resolved"
+proof_artifacts = []
+scope_covered = []
+known_exclusions = [
+  "no implementation rereview has occurred yet",
+]
+status = "draft"
+
+[[claims]]
+id = "E05"
+claim = "no_behavior_changes"
+proof_artifacts = []
+scope_covered = []
+known_exclusions = [
+  "the change intentionally affects auth behavior and diagnostics",
+]
+status = "draft"
+
+[[evidence]]
+id = "EV01"
+artifact_path = "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_DAG.toml"
+summary = "Machine-readable dependency graph for implementation sequencing."
+
+[[evidence]]
+id = "EV02"
+artifact_path = "docs/reviews/auth-provider-flow/2026-04-07/CONTRACT_DECLARATION.toml"
+summary = "Explicit auth-provider semantics and source-of-truth rules."
+
+[[evidence]]
+id = "EV03"
+artifact_path = "docs/reviews/auth-provider-flow/2026-04-07/IMPLEMENTATION_PLAN.md"
+summary = "Human-readable scope, non-goals, and acceptance framing for the auth-provider flow."
+
+[[matrix]]
+id = "M01"
+claim_id = "E01"
+evidence_id = "EV01"
+scope_covered = "execution DAG exists"
+known_exclusions = ["does not prove code has landed"]
+
+[[matrix]]
+id = "M02"
+claim_id = "E01"
+evidence_id = "EV02"
+scope_covered = "core auth contracts are declared"
+known_exclusions = ["does not prove runtime tests pass"]
+
+[[matrix]]
+id = "M03"
+claim_id = "E02"
+evidence_id = "EV03"
+scope_covered = "operator workflow and security posture are described"
+known_exclusions = ["does not prove operational stability"]
+
+[[matrix]]
+id = "M04"
+claim_id = "E03"
+evidence_id = "EV01"
+scope_covered = "all planned units and outputs are enumerated"
+known_exclusions = ["does not prove optional future providers"]
+
+[[matrix]]
+id = "M05"
+claim_id = "E03"
+evidence_id = "EV03"
+scope_covered = "scope and non-goals are bounded"
+known_exclusions = ["does not prove implementation completeness"]
+
+[computed]
+claim_ids = [
+  "E01",
+  "E02",
+  "E03",
+  "E04",
+  "E05",
+]
+supported_claims = []
+partial_claims = [
+  "E01",
+  "E03",
+]
+blocked_claims = [
+  "E02",
+  "E04",
+  "E05",
+]
+
