@@ -33,7 +33,7 @@ bytes = "1"
 pin-project-lite = "0.2"
 url = "2"
 tracing = "0.1"
-tracing-opentelemetry = "0.28"
+tracing-opentelemetry = "0.32"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 opentelemetry = "0.27"
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
