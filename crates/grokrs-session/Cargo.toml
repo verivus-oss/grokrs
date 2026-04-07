@@ -3,9 +3,12 @@ name = "grokrs-session"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Typed session lifecycle state for grokrs."
 
 [dependencies]
-grokrs-cap = { path = "../grokrs-cap" }
+grokrs-cap.workspace = true
 
 # Optional: OpenTelemetry instrumentation (behind `otel` feature)
 tracing = { workspace = true, optional = true }
@@ -13,4 +16,3 @@ tracing = { workspace = true, optional = true }
 [features]
 default = []
 otel = ["tracing"]
-

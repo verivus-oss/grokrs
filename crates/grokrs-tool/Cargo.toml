@@ -3,11 +3,14 @@ name = "grokrs-tool"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Tool registry, built-in tools, and effect declarations for grokrs."
 
 [dependencies]
-grokrs-policy = { path = "../grokrs-policy" }
-grokrs-cap = { path = "../grokrs-cap" }
-grokrs-store = { path = "../grokrs-store" }
+grokrs-policy.workspace = true
+grokrs-cap.workspace = true
+grokrs-store.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }
@@ -26,6 +29,6 @@ tempfile = "3"
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-grokrs-api = { path = "../grokrs-api" }
-grokrs-cli = { path = "../grokrs-cli" }
+grokrs-api.workspace = true
+grokrs-cli.workspace = true
 wiremock = "0.6"

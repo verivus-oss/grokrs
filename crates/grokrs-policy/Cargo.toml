@@ -3,8 +3,10 @@ name = "grokrs-policy"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Effect classification and deny-by-default policy evaluation for grokrs."
 
 [dependencies]
-grokrs-cap = { path = "../grokrs-cap" }
-grokrs-core = { path = "../grokrs-core" }
-
+grokrs-cap.workspace = true
+grokrs-core.workspace = true

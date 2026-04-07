@@ -3,6 +3,9 @@ name = "grokrs-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "User-facing CLI for grokrs chat, agent, voice, model, and generation workflows."
 
 [lib]
 name = "grokrs_cli"
@@ -16,13 +19,13 @@ path = "src/main.rs"
 anyhow.workspace = true
 base64 = "0.22"
 clap.workspace = true
-grokrs-api = { path = "../grokrs-api" }
-grokrs-cap = { path = "../grokrs-cap" }
-grokrs-core = { path = "../grokrs-core" }
-grokrs-policy = { path = "../grokrs-policy" }
-grokrs-session = { path = "../grokrs-session" }
-grokrs-tool = { path = "../grokrs-tool" }
-grokrs-store = { path = "../grokrs-store" }
+grokrs-api.workspace = true
+grokrs-cap.workspace = true
+grokrs-core.workspace = true
+grokrs-policy.workspace = true
+grokrs-session.workspace = true
+grokrs-tool.workspace = true
+grokrs-store.workspace = true
 futures.workspace = true
 reqwest.workspace = true
 serde = { workspace = true, features = ["derive"] }
@@ -61,4 +64,3 @@ otel = [
 serial_test.workspace = true
 tempfile = "3"
 wiremock = "0.6"
-

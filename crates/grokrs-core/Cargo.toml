@@ -3,6 +3,9 @@ name = "grokrs-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Shared config and core domain types for the grokrs workspace."
 
 [dependencies]
 serde.workspace = true
@@ -12,4 +15,3 @@ toml.workspace = true
 [dev-dependencies]
 serial_test.workspace = true
 tempfile = "3"
-

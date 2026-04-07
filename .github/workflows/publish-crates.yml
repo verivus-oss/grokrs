@@ -1,0 +1,62 @@
+name: Publish Crates
+
+on:
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: "Workspace crate to publish"
+        required: true
+        type: choice
+        options:
+          - grokrs-core
+          - grokrs-cap
+          - grokrs-policy
+          - grokrs-session
+          - grokrs-store
+          - grokrs-tool
+          - grokrs-api
+          - grokrs-cli
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-crates-${{ github.event.inputs.crate }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify package
+        run: cargo package -p ${{ github.event.inputs.crate }} --allow-dirty --no-verify
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    environment: release
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish crate
+        run: cargo publish -p ${{ github.event.inputs.crate }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}

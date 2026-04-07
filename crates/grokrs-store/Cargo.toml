@@ -3,9 +3,12 @@ name = "grokrs-store"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "SQLite-backed runtime state, memory, transcript, and usage store for grokrs."
 
 [dependencies]
-grokrs-core = { path = "../grokrs-core" }
+grokrs-core.workspace = true
 rusqlite = { version = "0.31", features = ["bundled"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -15,6 +18,6 @@ thiserror.workspace = true
 test-support = []
 
 [dev-dependencies]
-grokrs-store = { path = ".", features = ["test-support"] }
+grokrs-store = { version = "0.1.0-alpha.1", path = ".", features = ["test-support"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 tempfile = "3"

@@ -18,6 +18,7 @@ rust-version = "1.85"
 license = "MIT"
 authors = ["Verivus Labs"]
 repository = "https://github.com/verivus-oss/grokrs"
+homepage = "https://github.com/verivus-oss/grokrs"
 
 [workspace.dependencies]
 anyhow = "1.0"
@@ -39,4 +40,11 @@ opentelemetry = "0.27"
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.27", features = ["tonic"] }
 serial_test = "3"
-
+grokrs-core = { version = "0.1.0-alpha.1", path = "crates/grokrs-core" }
+grokrs-cap = { version = "0.1.0-alpha.1", path = "crates/grokrs-cap" }
+grokrs-policy = { version = "0.1.0-alpha.1", path = "crates/grokrs-policy" }
+grokrs-session = { version = "0.1.0-alpha.1", path = "crates/grokrs-session" }
+grokrs-tool = { version = "0.1.0-alpha.1", path = "crates/grokrs-tool" }
+grokrs-api = { version = "0.1.0-alpha.1", path = "crates/grokrs-api" }
+grokrs-store = { version = "0.1.0-alpha.1", path = "crates/grokrs-store" }
+grokrs-cli = { version = "0.1.0-alpha.1", path = "crates/grokrs-cli" }

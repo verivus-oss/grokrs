@@ -1,0 +1,111 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: release-binaries-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: grokrs
+  CLI_PACKAGE: grokrs-cli
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive_ext: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_ext: zip
+            exe_suffix: .exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release -p ${{ env.CLI_PACKAGE }} --target ${{ matrix.target }}
+
+      - name: Package archive (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${BIN_NAME}${{ matrix.exe_suffix || '' }}" "dist/${BIN_NAME}${{ matrix.exe_suffix || '' }}"
+          archive="${BIN_NAME}-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}"
+          tar -C dist -czf "$archive" "${BIN_NAME}${{ matrix.exe_suffix || '' }}"
+          shasum -a 256 "$archive" > "$archive.sha256"
+
+      - name: Package archive (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${env:BIN_NAME}${{ matrix.exe_suffix }}" "dist/${env:BIN_NAME}${{ matrix.exe_suffix }}"
+          $archive = "${env:BIN_NAME}-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}"
+          Compress-Archive -Path "dist/${env:BIN_NAME}${{ matrix.exe_suffix }}" -DestinationPath $archive -Force
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "$archive.sha256" -Value "$hash  $archive"
+
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: |
+            ${{ env.BIN_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}
+            ${{ env.BIN_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
+
+      - name: Attest archive provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ env.BIN_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}
+            ${{ env.BIN_NAME }}-${{ github.ref_name }}-${{ matrix.target }}.${{ matrix.archive_ext }}.sha256
+
+  publish-release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**/*
+          generate_release_notes: true
+

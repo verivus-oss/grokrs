@@ -3,9 +3,12 @@ name = "grokrs-api"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "xAI Grok API client, streaming, MCP, and transport layer for grokrs."
 
 [dependencies]
-grokrs-core = { path = "../grokrs-core" }
+grokrs-core.workspace = true
 serde.workspace = true
 serde_json = { workspace = true }
 thiserror.workspace = true
