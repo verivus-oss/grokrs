@@ -97,3 +97,23 @@ jobs:
 
       - name: grokrs show-config
         run: cargo run -p grokrs-cli -- show-config configs/grokrs.example.toml
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny
+
+      - name: cargo deny
+        run: cargo deny check
