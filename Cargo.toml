@@ -37,6 +37,6 @@ tracing-opentelemetry = "0.28"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 opentelemetry = "0.27"
 opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.27", features = ["tonic"] }
+opentelemetry-otlp = { version = "0.31", features = ["tonic"] }
 serial_test = "3"
 
