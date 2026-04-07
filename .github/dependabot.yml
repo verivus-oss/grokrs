@@ -5,16 +5,27 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
     labels:
       - "dependencies"
       - "rust"
+    groups:
+      cargo-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
     labels:
       - "dependencies"
       - "github-actions"
-
+    groups:
+      github-actions:
+        patterns:
+          - "*"
