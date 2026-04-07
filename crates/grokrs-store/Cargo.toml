@@ -6,7 +6,7 @@ license.workspace = true
 
 [dependencies]
 grokrs-core = { path = "../grokrs-core" }
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
@@ -16,5 +16,5 @@ test-support = []
 
 [dev-dependencies]
 grokrs-store = { path = ".", features = ["test-support"] }
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
 tempfile = "3"
