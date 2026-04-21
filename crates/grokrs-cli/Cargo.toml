@@ -33,7 +33,7 @@ serde_json.workspace = true
 url.workspace = true
 uuid = { version = "1", features = ["v4"] }
 libc = "0.2"
-rustyline = "15"
+rustyline = "18"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread", "io-util", "io-std"] }
 
